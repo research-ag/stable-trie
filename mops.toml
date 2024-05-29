@@ -1,9 +1,9 @@
 [package]
-name = ""
+name = "stable_trie_enumeration"
 version = "0.0.1"
 description = ""
-repository = "https://github.com/research-ag/..."
-keywords = [ ]
+repository = "https://github.com/research-ag/stable_trie_enumeration"
+keywords = [ "stable", "trie", "enumeration"]
 license = "Apache-2.0"
 
 [dependencies]
@@ -11,8 +11,8 @@ base = "0.11.1"
 
 [dev-dependencies]
 test = "2.0.0"
-bench = "1.0.0"
+prng = "0.0.3"
 
 [toolchain]
 moc = "0.11.1"
-pocket-ic = "1.0.0"
+wasmtime = "20.0.2"
