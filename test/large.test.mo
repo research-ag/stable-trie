@@ -35,7 +35,13 @@ do {
   };
 };
 
-let trie = StableTrieEnumeration.StableTrieEnumeration(pointer_size, k, k, key_size, 0);
+let trie = StableTrieEnumeration.StableTrieEnumeration({
+    pointer_size;
+    aridity = k;
+    root_aridity = null;
+    key_size;
+    value_size = 0;
+  });
 
 let max = 512;
 var n1 = max;

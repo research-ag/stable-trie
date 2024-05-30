@@ -1,8 +1,8 @@
 /// Stable trie enumeration.
 ///
 /// Copyright: 2023-2024 MR Research AG
-/// Main author: 
-/// Contributors: 
+/// Main author:
+/// Contributors:
 
 import Blob "mo:base/Blob";
 import Region "mo:base/Region";
@@ -14,6 +14,7 @@ import Nat "mo:base/Nat";
 import Nat32 "mo:base/Nat32";
 import Array "mo:base/Array";
 import Iter "mo:base/Iter";
+import Option "mo:base/Option";
 
 module {
   public type Region = {
@@ -28,7 +29,13 @@ module {
     leaf_count : Nat64;
   };
 
-  public class StableTrieEnumeration(pointer_size : Nat, aridity : Nat, root_aridity : Nat, key_size : Nat, value_size : Nat) {
+  public class StableTrieEnumeration({
+    pointer_size : Nat;
+    aridity : Nat;
+    root_aridity : ?Nat;
+    key_size : Nat;
+    value_size : Nat;
+  }) {
     assert switch (pointer_size) {
       case (2 or 4 or 5 or 6 or 8) true;
       case (_) false;
@@ -43,7 +50,7 @@ module {
     let key_size_ = Nat64.fromNat(key_size);
     let value_size_ = Nat64.fromNat(value_size);
     let pointer_size_ = Nat64.fromNat(pointer_size);
-    let root_aridity_ = Nat64.fromNat(root_aridity);
+    let root_aridity_ = Nat64.fromNat(Option.get(root_aridity, aridity));
 
     let loadMask = if (pointer_size == 8) 0xffff_ffff_ffff_ffff : Nat64 else (1 << (pointer_size_ << 3)) - 1;
 
@@ -455,4 +462,3 @@ module {
     };
   };
 };
-
