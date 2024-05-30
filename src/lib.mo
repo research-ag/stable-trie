@@ -175,6 +175,7 @@ module {
     };
 
     public func setValue(region : Region, index : Nat64, value : Blob) {
+      assert value.size() == value_size;
       if (empty_values) return;
       Region.storeBlob(region.region, index *% leaf_size +% key_size_, value);
     };
@@ -200,8 +201,8 @@ module {
       return Nat64.fromIntWrap(ret);
     };
 
-    func put_(nodes : Region, leaves : Region, key : Blob, value : Blob) : ?Nat64 {
-      assert key.size() == key_size and value.size() == value_size;
+    func put_(nodes : Region, leaves : Region, key : Blob) : ?Nat64 {
+      assert key.size() == key_size;
 
       var node : Nat64 = 0;
       var old_leaf : Nat64 = 0;
@@ -263,7 +264,7 @@ module {
     public func put(key : Blob, value : Blob) : ?Nat {
       let { leaves; nodes } = regions();
 
-      let ?leaf = put_(nodes, leaves, key, value) else return null;
+      let ?leaf = put_(nodes, leaves, key) else return null;
       setValue(leaves, leaf, value);
       ?Nat64.toNat(leaf);
     };
@@ -271,7 +272,7 @@ module {
     public func replace(key : Blob, value : Blob) : ?(Blob, Nat) {
       let { leaves; nodes } = regions();
 
-      let ?leaf = put_(nodes, leaves, key, value) else return null;
+      let ?leaf = put_(nodes, leaves, key) else return null;
       let ret_value = if (leaf == leaf_count - 1) {
         setValue(leaves, leaf, value);
         value;
@@ -286,7 +287,7 @@ module {
     public func lookupOrPut(key : Blob, value : Blob) : ?(Blob, Nat) {
       let { leaves; nodes } = regions();
 
-      let ?leaf = put_(nodes, leaves, key, value) else return null;
+      let ?leaf = put_(nodes, leaves, key) else return null;
       let ret_value = if (leaf == leaf_count - 1) {
         setValue(leaves, leaf, value);
         value;
