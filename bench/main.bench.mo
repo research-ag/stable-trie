@@ -5,12 +5,8 @@ import Blob "mo:base/Blob";
 import Nat8 "mo:base/Nat8";
 import Nat64 "mo:base/Nat64";
 import Iter "mo:base/Iter";
-import Buffer "mo:base/Buffer";
 import Nat "mo:base/Nat";
-import Float "mo:base/Float";
-import Debug "mo:base/Debug";
 import Text "mo:base/Text";
-import Option "mo:base/Option";
 import Bench "mo:bench";
 
 module {
@@ -23,34 +19,53 @@ module {
     bench.cols(["2", "4", "16", "256"]);
     bench.rows(Array.tabulate<Text>(n, func(i) = Nat.toText(i)));
 
-    var trie = Array.tabulate<StableTrie.StableTrieEnumeration>(cols, func(i) = StableTrie.StableTrieEnumeration(2 ** (2 ** i), key_size, 0));
+    var tries = Array.tabulate<StableTrie.StableTrieEnumeration>(
+      cols,
+      func(i) {
+        StableTrie.StableTrieEnumeration({
+          pointer_size = 2;
+          aridity = 2 ** (2 ** i);
+          root_aridity = null;
+          key_size;
+          value_size = 0;
+        });
+      },
+    );
 
     let rng = Prng.Seiran128();
     rng.init(0);
     let keys = Array.tabulate<Blob>(
       2 ** n,
       func(i) {
-        Blob.fromArray(Array.tabulate<Nat8>(key_size, func(j) = Nat8.fromNat(Nat64.toNat(rng.next()) % 256)));
+        Blob.fromArray(
+          Array.tabulate<Nat8>(
+            key_size,
+            func(j) {
+              Nat8.fromNat(Nat64.toNat(rng.next()) % 256);
+            },
+          )
+        );
       },
     );
 
-    var k = 0;
+    var aridity = 0;
     bench.runner(
       func(row, col) {
-        let r = Option.unwrap(Nat.fromText(row));
+        let ?r = Nat.fromText(row) else return;
 
-        let tr = trie[k];
+        let trie = tries[aridity];
 
         if (r == 0) {
-          ignore tr.add(keys[0], "");
+          ignore trie.put(keys[0], "");
         } else {
           for (j in Iter.range(2 ** (r - 1), 2 ** r - 1)) {
-            assert tr.add(keys[j], "");
+            ignore trie.put(keys[j], "");
           };
         };
-        k += 1;
-        if (k == cols) {
-          k := 0;
+
+        aridity += 1;
+        if (aridity == cols) {
+          aridity := 0;
         };
       }
     );
