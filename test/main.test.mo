@@ -18,10 +18,16 @@ let n = 2 ** 11;
 let key_size = 5;
 
 func gen(n : Nat, size : Nat) : [Blob] {
+  var prev : [Nat8] = [];
   Array.tabulate<Blob>(
     n,
     func(i) {
-      Blob.fromArray(Array.tabulate<Nat8>(size, func(j) = Nat8.fromNat(Nat64.toNat(rng.next()) % 256)));
+      if (i % 2 == 0) {
+        prev := Array.tabulate<Nat8>(size, func(j) = Nat8.fromNat(Nat64.toNat(rng.next()) % 256));
+        Blob.fromArray(prev);
+      } else {
+        Blob.fromArray(Array.tabulate<Nat8>(size, func(j) = if (j + 1 < size) prev[j] else if (prev[j] == 255) 0 else prev[j] + 1));
+      };
     },
   );
 };
