@@ -51,7 +51,7 @@ module {
   ///
   /// Arguments:
   /// + `pointer_size` is size of pointer of address space, first bit is reserved for internal use,
-  ///   so max amount of nodes in stable trie is 2 ** (pointer_size * 8 - 1). Should be one of 2, 4, 5, 6, 8.
+  ///   so max amount of nodes in stable trie is `2 ** (pointer_size * 8 - 1)`. Should be one of 2, 4, 5, 6, 8.
   /// + `aridity` is amount of children of any non leaf node except in trie. Should be one of 2, 4, 16, 256.
   /// + `root_aridity` is amount of children of root node.
   /// + `key_size` and `value_size` are sizes of key and value which should be constant per one instance of `StableTrieEnumeration`
@@ -363,7 +363,6 @@ module {
       };
       ?(ret_value, Nat64.toNat(leaf));
     };
-
     
     /// Add `key` and `value` to enumeration. 
     /// Returns null if pointer size limit exceeded.
@@ -416,7 +415,6 @@ module {
     /// assert(e.lookup("bbb") == null);
     /// ```
     /// Runtime: O(key_size) acesses to stable memeory.
-
     public func lookup(key : Blob) : ?(Blob, Nat) {
       assert key.size() == key_size;
       let { leaves; nodes } = regions();
@@ -462,7 +460,6 @@ module {
     /// assert(e.get(1) == ("aaa", "b"));
     /// ```
     /// Runtime: O(1) accesses to stable memory.
-
     public func get(index : Nat) : ?(Blob, Blob) {
       let { leaves } = regions();
       let index_ = Nat64.fromNat(index);
