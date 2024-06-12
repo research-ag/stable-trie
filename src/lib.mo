@@ -23,6 +23,7 @@ import Nat64 "mo:base/Nat64";
 import Nat "mo:base/Nat";
 import Array "mo:base/Array";
 import Iter "mo:base/Iter";
+import Option "mo:base/Option";
 
 import Base "base";
 
@@ -396,6 +397,34 @@ module {
     /// Runtime: O(key_size) acesses to stable memeory.
     public func lookup(key : Blob) : ?(Blob, Nat) {
       base.lookup(key);
+    };
+
+    public func delete(key : Blob) : ?Blob {
+      let { leaves; nodes; } = base.regions();
+      let bytes = Blob.toArray(key);
+      
+      let idx = base.keyToRootIndex(bytes);
+      let child = base.getChild(nodes, 0, idx);
+      delete_rec(nodes, leaves, bytes, child, base.root_bitlength).0;
+    };
+
+    func delete_rec(nodes : Region, leaves : Region, bytes : [Nat8], node : Nat64, pos : Nat16) : (?Blob, Bool) {
+      if (node == 0) return (null, false);
+      if (node & 1 == 1) {
+        return (?base.getValue(leaves, node >> 1), true);
+      };
+
+      let idx = base.keyToIndex(bytes, pos);
+      let child = base.getChild(nodes, node, idx);
+      let ret = delete_rec(nodes, leaves, bytes, child, pos +% base.bitlength);
+      let (value, empty) = ret;
+      
+      if (empty) {
+        base.setChild(node, idx, 0);
+        return (value, base.emptyChilds(nodes, node));
+      };
+
+      ret;
     };
 
     public func entries() : Iter.Iter<(Blob, Blob)> {

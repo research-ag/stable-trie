@@ -52,7 +52,7 @@ module {
 
     let loadMask = if (args.pointer_size == 8) 0xffff_ffff_ffff_ffff : Nat64 else (1 << (pointer_size_ << 3)) - 1;
 
-    let bitlength = Nat16.bitcountTrailingZero(Nat16.fromNat(args.aridity));
+    public let bitlength = Nat16.bitcountTrailingZero(Nat16.fromNat(args.aridity));
     let bitshift = Nat16.toNat8(8 - bitlength);
     let bitlength_ = Nat32.toNat64(Nat16.toNat32(bitlength));
 
@@ -64,9 +64,10 @@ module {
     assert root_bitlength_ <= key_size_ * 8;
 
     let root_depth = Nat32.toNat16(Nat64.toNat32(root_bitlength_ / bitlength_));
-    let root_bitlength = Nat32.toNat16(Nat64.toNat32(root_bitlength_));
+    public let root_bitlength = Nat32.toNat16(Nat64.toNat32(root_bitlength_));
 
     let node_size : Nat64 = aridity_ * pointer_size_;
+    let node_size_ : Nat = Nat64.toNat(node_size);
     let leaf_size : Nat64 = key_size_ + value_size_;
     let root_size : Nat64 = root_aridity_ * pointer_size_;
     let offset_base : Nat64 = root_size - node_size;
@@ -165,6 +166,14 @@ module {
       Region.loadNat64(region.region, getOffset(node, index)) & loadMask;
     };
 
+    public func emptyChilds(region : Region, node : Nat64) : Bool {
+      let blob = Region.loadBlob(region.region, getOffset(node, 0), node_size_);
+      for (val in blob.vals()) {
+        if (val != 0) return false;
+      };
+      true;
+    };
+
     public func setChild(node : Nat64, index : Nat64, child : Nat64) {
       let offset = getOffset(node, index);
       storePointer(offset, child);
@@ -185,7 +194,7 @@ module {
       Region.storeBlob(region.region, index *% leaf_size +% key_size_, value);
     };
 
-    func keyToRootIndex(bytes : [Nat8]) : Nat64 {
+    public func keyToRootIndex(bytes : [Nat8]) : Nat64 {
       var result : Nat64 = 0;
       var i = 0;
       let iters = Nat64.toNat(root_bitlength_ >> 3);
@@ -200,7 +209,7 @@ module {
       return result;
     };
 
-    func keyToIndex(bytes : [Nat8], pos : Nat16) : Nat64 {
+    public func keyToIndex(bytes : [Nat8], pos : Nat16) : Nat64 {
       let bit_pos = Nat8.fromNat16(pos & 7);
       let ret = Nat8.toNat((bytes[Nat16.toNat(pos >> 3)] << bit_pos) >> bitshift);
       return Nat64.fromIntWrap(ret);
@@ -211,16 +220,16 @@ module {
       var pos = root_bitlength;
       var node : Nat64 = 0;
       var old_leaf : Nat64 = 0;
-      var last = label l : Nat64 loop {
+      loop {
         switch (getChild(nodes, node, idx)) {
           case (0) {
             old_leaf := 0;
-            break l idx;
+              return (node, idx, old_leaf, pos);
           };
           case (n) {
             if (n & 1 == 1) {
               old_leaf := n;
-              break l idx;
+              return (node, idx, old_leaf, pos);
             };
             node := n;
           };
@@ -228,13 +237,13 @@ module {
         idx := keyToIndex(bytes, pos);
         pos +%= bitlength;
       };
-      (node, last, old_leaf, pos);
+      Debug.trap("Unreacheable");
     };
 
     public func put_(nodes : Region, leaves : Region, key : Blob) : ?Nat64 {
       assert key.size() == args.key_size;
       let bytes = Blob.toArray(key);
-      
+
       let (node_, last_, old_leaf, pos_) = find(nodes, bytes);
 
       var last = last_;
@@ -282,27 +291,11 @@ module {
       let { leaves; nodes } = regions();
 
       let bytes = Blob.toArray(key);
-      var idx = keyToRootIndex(bytes);
-      var pos = root_bitlength;
-      var node : Nat64 = 0;
-      loop {
-        node := switch (getChild(nodes, node, idx)) {
-          case (0) {
-            return null;
-          };
-          case (n) {
-            if (n & 1 == 1) {
-              let index = n >> 1;
-              return if (getKey(leaves, index) == key) ?(getValue(leaves, index), Nat64.toNat(index)) else null;
-            };
-            n;
-          };
-        };
-        idx := keyToIndex(bytes, pos);
-        pos +%= bitlength;
-      };
 
-      Debug.trap("Unreacheable");
+      let (_, _, old_leaf, _) = find(nodes, bytes);
+      if (old_leaf == 0) return null;
+      let index = old_leaf >> 1;
+      return if (getKey(leaves, index) == key) ?(getValue(leaves, index), Nat64.toNat(index)) else null;
     };
 
     class Iterator(nodes : Region, forward : Bool) {

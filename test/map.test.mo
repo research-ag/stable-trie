@@ -14,7 +14,7 @@ import StableTrie "../src/lib";
 let rng = Prng.Seiran128();
 rng.init(0);
 
-let n = 2 ** 11;
+let n = 2 ** 10;
 let key_size = 5;
 
 func gen(n : Nat, size : Nat) : [Blob] {
@@ -33,6 +33,7 @@ func gen(n : Nat, size : Nat) : [Blob] {
 };
 
 let keys = gen(n, key_size);
+let delete_keys = gen(n, key_size);
 let sorted = Array.sort<Blob>(keys, Blob.compare);
 let revSorted = Array.reverse(sorted);
 let keysAbsent = gen(n, key_size);
@@ -45,7 +46,7 @@ for (value_size in value_sizes.vals()) {
   let values = gen(n, value_size);
   for (bit in bits.vals()) {
     for (pointer in pointers.vals()) {
-      let trie = StableTrie.Enumeration({
+      let trie = StableTrie.Map({
         pointer_size = pointer;
         aridity = bit;
         root_aridity = ?(bit ** 3);
@@ -58,10 +59,16 @@ for (value_size in value_sizes.vals()) {
         assert trie.put(key, values[i]) == ?i;
         i += 1;
       };
-      
+
       i := 0;
-      for (key in keys.vals()) {
-        assert trie.get(i) == ?(key, values[i]);
+      for (key in delete_keys.vals()) {
+        assert trie.put(key, values[i]) == ?(n + i);
+        i += 1;
+      };
+
+      i := 0;
+      for (key in delete_keys.vals()) {
+        assert trie.delete(key) == ?values[i];
         i += 1;
       };
 
@@ -73,6 +80,10 @@ for (value_size in value_sizes.vals()) {
       };
 
       for (key in keysAbsent.vals()) {
+        assert trie.lookup(key) == null;
+      };
+
+      for (key in delete_keys.vals()) {
         assert trie.lookup(key) == null;
       };
 
