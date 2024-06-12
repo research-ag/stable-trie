@@ -18,10 +18,16 @@ let n = 2 ** 11;
 let key_size = 5;
 
 func gen(n : Nat, size : Nat) : [Blob] {
+  var prev : [Nat8] = [];
   Array.tabulate<Blob>(
     n,
     func(i) {
-      Blob.fromArray(Array.tabulate<Nat8>(size, func(j) = Nat8.fromNat(Nat64.toNat(rng.next()) % 256)));
+      if (i % 2 == 0) {
+        prev := Array.tabulate<Nat8>(size, func(j) = Nat8.fromNat(Nat64.toNat(rng.next()) % 256));
+        Blob.fromArray(prev);
+      } else {
+        Blob.fromArray(Array.tabulate<Nat8>(size, func(j) = if (j + 1 < size) prev[j] else if (prev[j] == 255) 0 else prev[j] + 1));
+      };
     },
   );
 };
@@ -39,7 +45,13 @@ for (value_size in value_sizes.vals()) {
   let values = gen(n, value_size);
   for (bit in bits.vals()) {
     for (pointer in pointers.vals()) {
-      let trie = StableTrieEnumeration.StableTrieEnumeration(pointer, bit, bit * bit * bit, key_size, value_size);
+      let trie = StableTrieEnumeration.StableTrieEnumeration({
+        pointer_size = pointer;
+        aridity = bit;
+        root_aridity = ?(bit ** 3);
+        key_size;
+        value_size;
+      });
 
       var i = 0;
       for (key in keys.vals()) {
@@ -74,7 +86,13 @@ for (value_size in value_sizes.vals()) {
 };
 
 func pointerMaxSizeTest() {
-  let trie = StableTrieEnumeration.StableTrieEnumeration(2, 2, 2, 2, 0);
+  let trie = StableTrieEnumeration.StableTrieEnumeration({
+    pointer_size = 2;
+    aridity = 2;
+    root_aridity = null;
+    key_size = 2;
+    value_size = 0;
+  });
   for (i in Iter.range(0, 32_000)) {
     let key = Blob.fromArray([Nat8.fromNat(i % 256), Nat8.fromNat(i / 256)]);
     if (trie.put(key, "") != ?i) {
@@ -103,7 +121,13 @@ func profile() {
     children_number.vals(),
     func(k) {
       let first = Nat.toText(k);
-      let trie = StableTrieEnumeration.StableTrieEnumeration(8, k, k, key_size, 0);
+      let trie = StableTrieEnumeration.StableTrieEnumeration({
+        pointer_size = 8;
+        aridity = k;
+        root_aridity = ?k;
+        key_size;
+        value_size = 0;
+      });
       let second = Iter.map<Nat, Text>(
         Iter.range(0, n),
         func(i) {
