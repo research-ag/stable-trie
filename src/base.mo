@@ -78,14 +78,14 @@ module {
 
     var storePointer : (offset : Nat64, child : Nat64) -> () = func(_, _) {};
 
-    type StableTrieEnumerationState = {
+    type State = {
       nodes : Region;
       leaves : Region;
     };
 
-    var regions_ : ?StableTrieEnumerationState = null;
+    var regions_ : ?State = null;
 
-    public func regions() : StableTrieEnumerationState {
+    public func regions() : State {
       switch (regions_) {
         case (?r) r;
         case (null) {
@@ -206,23 +206,16 @@ module {
       return Nat64.fromIntWrap(ret);
     };
 
-    public func put_(nodes : Region, leaves : Region, key : Blob) : ?Nat64 {
-      assert key.size() == args.key_size;
-
-      var node : Nat64 = 0;
-      var old_leaf : Nat64 = 0;
-      var depth : Nat16 = root_depth;
-
-      let bytes = Blob.toArray(key);
+    public func find(nodes : Region, bytes : [Nat8]) : (Nat64, Nat64, Nat64, Nat16) {
       var idx = keyToRootIndex(bytes);
       var pos = root_bitlength;
+      var node : Nat64 = 0;
+      var old_leaf : Nat64 = 0;
       var last = label l : Nat64 loop {
         switch (getChild(nodes, node, idx)) {
           case (0) {
-            let ?leaf = newLeaf(leaves, key) else return null;
-
-            setChild(node, idx, leaf);
-            return ?(leaf >> 1);
+            old_leaf := 0;
+            break l idx;
           };
           case (n) {
             if (n & 1 == 1) {
@@ -230,11 +223,28 @@ module {
               break l idx;
             };
             node := n;
-            depth +%= 1;
           };
         };
         idx := keyToIndex(bytes, pos);
         pos +%= bitlength;
+      };
+      (node, last, old_leaf, pos);
+    };
+
+    public func put_(nodes : Region, leaves : Region, key : Blob) : ?Nat64 {
+      assert key.size() == args.key_size;
+      let bytes = Blob.toArray(key);
+      
+      let (node_, last_, old_leaf, pos_) = find(nodes, bytes);
+
+      var last = last_;
+      var node = node_;
+
+      if (old_leaf == 0) {
+        let ?leaf = newLeaf(leaves, key) else return null;
+
+        setChild(node, last, leaf);
+        return ?(leaf >> 1);
       };
 
       let index = old_leaf >> 1;
@@ -244,6 +254,7 @@ module {
       };
 
       let old_bytes = Blob.toArray(old_key);
+      var pos = pos_;
       label l loop {
         let ?add = newInternalNode(nodes) else {
           setChild(node, last, old_leaf);
