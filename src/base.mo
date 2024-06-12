@@ -1,23 +1,3 @@
-/// Stable trie enumeration.
-///
-/// `StableTrieEnumeration` is a "set enumeration" of elements of `Blob`s called "keys" 
-/// interface implemented in stable memory using trie.
-///
-/// A typical application is to assign permanent user numbers to princpals.
-///
-/// The data structure is a map `Nat -> Blob` with the following properties:
-/// * keys are not repeated, i.e. the map is injective
-/// * keys are consecutively numbered (no gaps), i.e. if n keys are stored
-///   then `[0,n) -> Blob` is bijective
-/// * keys are numbered in the order they are added to the data structure
-/// * keys cannot be deleted
-/// * efficient inverse lookup `Blob -> Nat`
-/// * doubles as a set implementation (without deletion)
-///
-/// Copyright: 2023-2024 MR Research AG
-/// Main author: Andrii Stepanov (AStepanov25)
-/// Contributors: Timo Hanke (timohanke)
-
 import Blob "mo:base/Blob";
 import Region "mo:base/Region";
 import Nat64 "mo:base/Nat64";
@@ -45,53 +25,34 @@ module {
     leaf_count : Nat64;
   };
 
-  /// Bidirectional enumeration of any keys s in the order they are added.
-  /// For a map from keys to index `Nat` it is implemented as trie in stable memory.
-  /// for a map from index `Nat` to keys the implementation is a consecutive interval of stable memory.
-  ///
-  /// Arguments:
-  /// + `pointer_size` is size of pointer of address space, first bit is reserved for internal use,
-  ///   so max amount of nodes in stable trie is `2 ** (pointer_size * 8 - 1)`. Should be one of 2, 4, 5, 6, 8.
-  /// + `aridity` is amount of children of any non leaf node except in trie. Should be one of 2, 4, 16, 256.
-  /// + `root_aridity` is amount of children of root node.
-  /// + `key_size` and `value_size` are sizes of key and value which should be constant per one instance of `StableTrieEnumeration`
-  ///
-  /// Example:
-  /// ```motoko
-  /// let e = StableTrie.StableTrieEnumeration({
-  ///   pointer_size = 2;
-  ///   aridity = 2;
-  ///   root_aridity = null;
-  ///   key_size = 2;
-  ///   value_size = 0;
-  /// });
-  /// ```
-  public class StableTrieEnumeration({
+  public type Args = {
     pointer_size : Nat;
     aridity : Nat;
     root_aridity : ?Nat;
     key_size : Nat;
     value_size : Nat;
-  }) {
-    assert switch (pointer_size) {
+  };
+
+  public class StableTrieBase(args : Args) {
+    assert switch (args.pointer_size) {
       case (2 or 4 or 5 or 6 or 8) true;
       case (_) false;
     };
-    assert switch (aridity) {
+    assert switch (args.aridity) {
       case (2 or 4 or 16 or 256) true;
       case (_) false;
     };
-    assert key_size >= 1 and key_size + value_size <= 2 ** 16;
+    assert args.key_size >= 1 and args.key_size + args.value_size <= 2 ** 16;
 
-    let aridity_ = Nat64.fromNat(aridity);
-    let key_size_ = Nat64.fromNat(key_size);
-    let value_size_ = Nat64.fromNat(value_size);
-    let pointer_size_ = Nat64.fromNat(pointer_size);
-    let root_aridity_ = Nat64.fromNat(Option.get(root_aridity, aridity));
+    let aridity_ = Nat64.fromNat(args.aridity);
+    let key_size_ = Nat64.fromNat(args.key_size);
+    let value_size_ = Nat64.fromNat(args.value_size);
+    let pointer_size_ = Nat64.fromNat(args.pointer_size);
+    let root_aridity_ = Nat64.fromNat(Option.get(args.root_aridity, args.aridity));
 
-    let loadMask = if (pointer_size == 8) 0xffff_ffff_ffff_ffff : Nat64 else (1 << (pointer_size_ << 3)) - 1;
+    let loadMask = if (args.pointer_size == 8) 0xffff_ffff_ffff_ffff : Nat64 else (1 << (pointer_size_ << 3)) - 1;
 
-    let bitlength = Nat16.bitcountTrailingZero(Nat16.fromNat(aridity));
+    let bitlength = Nat16.bitcountTrailingZero(Nat16.fromNat(args.aridity));
     let bitshift = Nat16.toNat8(8 - bitlength);
     let bitlength_ = Nat32.toNat64(Nat16.toNat32(bitlength));
 
@@ -110,10 +71,10 @@ module {
     let root_size : Nat64 = root_aridity_ * pointer_size_;
     let offset_base : Nat64 = root_size - node_size;
     let padding : Nat64 = 8 - pointer_size_;
-    let empty_values : Bool = value_size == 0;
+    let empty_values : Bool = args.value_size == 0;
 
-    var leaf_count : Nat64 = 0;
-    var node_count : Nat64 = 0;
+    public var leaf_count : Nat64 = 0;
+    public var node_count : Nat64 = 0;
 
     var storePointer : (offset : Nat64, child : Nat64) -> () = func(_, _) {};
 
@@ -124,7 +85,7 @@ module {
 
     var regions_ : ?StableTrieEnumerationState = null;
 
-    func regions() : StableTrieEnumerationState {
+    public func regions() : StableTrieEnumerationState {
       switch (regions_) {
         case (?r) r;
         case (null) {
@@ -183,7 +144,7 @@ module {
       ?(nc << 1);
     };
 
-    func newLeaf(region : Region, key : Blob) : ?Nat64 {
+    public func newLeaf(region : Region, key : Blob) : ?Nat64 {
       if (leaf_count == max_address) return null;
 
       allocate(region, leaf_size);
@@ -200,26 +161,26 @@ module {
       (offset_base +% (node >> 1) *% node_size) +% delta;
     };
 
-    func getChild(region : Region, node : Nat64, index : Nat64) : Nat64 {
+    public func getChild(region : Region, node : Nat64, index : Nat64) : Nat64 {
       Region.loadNat64(region.region, getOffset(node, index)) & loadMask;
     };
 
-    func setChild(node : Nat64, index : Nat64, child : Nat64) {
+    public func setChild(node : Nat64, index : Nat64, child : Nat64) {
       let offset = getOffset(node, index);
       storePointer(offset, child);
     };
 
-    func getKey(region : Region, index : Nat64) : Blob {
-      Region.loadBlob(region.region, index *% leaf_size, key_size);
+    public func getKey(region : Region, index : Nat64) : Blob {
+      Region.loadBlob(region.region, index *% leaf_size, args.key_size);
     };
 
-    func getValue(region : Region, index : Nat64) : Blob {
+    public func getValue(region : Region, index : Nat64) : Blob {
       if (empty_values) return "";
-      Region.loadBlob(region.region, index *% leaf_size +% key_size_, value_size);
+      Region.loadBlob(region.region, index *% leaf_size +% key_size_, args.value_size);
     };
 
-    func setValue(region : Region, index : Nat64, value : Blob) {
-      assert value.size() == value_size;
+    public func setValue(region : Region, index : Nat64, value : Blob) {
+      assert value.size() == args.value_size;
       if (empty_values) return;
       Region.storeBlob(region.region, index *% leaf_size +% key_size_, value);
     };
@@ -245,8 +206,8 @@ module {
       return Nat64.fromIntWrap(ret);
     };
 
-    func put_(nodes : Region, leaves : Region, key : Blob) : ?Nat64 {
-      assert key.size() == key_size;
+    public func put_(nodes : Region, leaves : Region, key : Blob) : ?Nat64 {
+      assert key.size() == args.key_size;
 
       var node : Nat64 = 0;
       var old_leaf : Nat64 = 0;
@@ -305,118 +266,8 @@ module {
       Debug.trap("Unreacheable");
     };
 
-    /// Add `key` and `value` to enumeration. Returns null if pointer size limit exceeded. Returns `size` if the key in new to the enumeration
-    /// or rewrites value and returns index of key in enumeration otherwise.
-    ///
-    /// Example:
-    /// ```motoko
-    /// let e = StableTrie.StableTrieEnumeration({
-    ///   pointer_size = 2;
-    ///   aridity = 2;
-    ///   root_aridity = null;
-    ///   key_size = 2;
-    ///   value_size = 1;
-    /// });    
-    /// assert(e.put("abc", "a") == ?0);
-    /// assert(e.put("aaa", "b") == ?1);
-    /// assert(e.put("abc", "c") == ?0);
-    /// ```
-    /// Runtime: O(key_size) acesses to stable memeory.
-    public func put(key : Blob, value : Blob) : ?Nat {
-      let { leaves; nodes } = regions();
-
-      let ?leaf = put_(nodes, leaves, key) else return null;
-      setValue(leaves, leaf, value);
-      ?Nat64.toNat(leaf);
-    };
-
-    /// Add `key` and `value` to enumeration. 
-    /// Returns null if pointer size limit exceeded.
-    /// Rewrites value if key is already present. First return value `size` is if the key in new to the enumeration
-    /// or index of key in enumeration otherwise. Second return is old value if new wasn't added or a new one otherwise.
-    ///
-    /// Example:
-    /// ```motoko
-    /// let e = StableTrie.StableTrieEnumeration({
-    ///   pointer_size = 2;
-    ///   aridity = 2;
-    ///   root_aridity = null;
-    ///   key_size = 2;
-    ///   value_size = 1;
-    /// });    
-    /// assert(e.replace("abc", "a") == ?("a", 0);
-    /// assert(e.replace("aaa", "b") == ?("b", 1));
-    /// assert(e.replace("abc", "c") == ?("a", 0);
-    /// ```
-    /// Runtime: O(key_size) acesses to stable memeory.
-    public func replace(key : Blob, value : Blob) : ?(Blob, Nat) {
-      let { leaves; nodes } = regions();
-
-      let ?leaf = put_(nodes, leaves, key) else return null;
-      let ret_value = if (leaf == leaf_count - 1) {
-        setValue(leaves, leaf, value);
-        value;
-      } else {
-        let old_value = getValue(leaves, leaf);
-        setValue(leaves, leaf, value);
-        old_value;
-      };
-      ?(ret_value, Nat64.toNat(leaf));
-    };
-    
-    /// Add `key` and `value` to enumeration. 
-    /// Returns null if pointer size limit exceeded.
-    /// Lookup value if key is already present. First return value `size` is if the key in new to the enumeration
-    /// or index of key in enumeration otherwise. Second return is old value if new wasn't added or a new one otherwise.
-    ///
-    /// Example:
-    /// ```motoko
-    /// let e = StableTrie.StableTrieEnumeration({
-    ///   pointer_size = 2;
-    ///   aridity = 2;
-    ///   root_aridity = null;
-    ///   key_size = 2;
-    ///   value_size = 1;
-    /// });    
-    /// assert(e.lookupOrPut("abc", "a") == ?("a", 0);
-    /// assert(e.lookupOrPut("aaa", "b") == ?("b", 1));
-    /// assert(e.lookupOrPut("abc", "c") == ?("a", 0);
-    /// ```
-    /// Runtime: O(key_size) acesses to stable memeory.
-    public func lookupOrPut(key : Blob, value : Blob) : ?(Blob, Nat) {
-      let { leaves; nodes } = regions();
-
-      let ?leaf = put_(nodes, leaves, key) else return null;
-      let ret_value = if (leaf == leaf_count - 1) {
-        setValue(leaves, leaf, value);
-        value;
-      } else {
-        getValue(leaves, leaf);
-      };
-      ?(ret_value, Nat64.toNat(leaf));
-    };
-
-    /// Returns `?(index, value)` where `index` is the index of `key` in order it was added to enumeration and `value` is corresponding value to the `key`,
-    /// or `null` it `key` wasn't added.
-    ///
-    /// Example:
-    /// ```motoko
-    /// let e = StableTrie.StableTrieEnumeration({
-    ///   pointer_size = 2;
-    ///   aridity = 2;
-    ///   root_aridity = null;
-    ///   key_size = 2;
-    ///   value_size = 1;
-    /// });    
-    /// assert(e.put("abc", "a") == ?0);
-    /// assert(e.put("aaa", "b") == ?1);
-    /// assert(e.lookup("abc") == ?("a", 0);
-    /// assert(e.lookup("aaa") == ?("b", 1));
-    /// assert(e.lookup("bbb") == null);
-    /// ```
-    /// Runtime: O(key_size) acesses to stable memeory.
     public func lookup(key : Blob) : ?(Blob, Nat) {
-      assert key.size() == key_size;
+      assert key.size() == args.key_size;
       let { leaves; nodes } = regions();
 
       let bytes = Blob.toArray(key);
@@ -443,62 +294,8 @@ module {
       Debug.trap("Unreacheable");
     };
 
-    /// Returns `key` and `value` with index `index` or null if index is out of bounds.
-    ///
-    /// Example:
-    /// ```motoko
-    /// let e = StableTrie.StableTrieEnumeration({
-    ///   pointer_size = 2;
-    ///   aridity = 2;
-    ///   root_aridity = null;
-    ///   key_size = 2;
-    ///   value_size = 1;
-    /// });    
-    /// assert(e.put("abc", "a") == ?0);
-    /// assert(e.put("aaa", "b") == ?1);
-    /// assert(e.get(0) == ("abc", "a"));
-    /// assert(e.get(1) == ("aaa", "b"));
-    /// ```
-    /// Runtime: O(1) accesses to stable memory.
-    public func get(index : Nat) : ?(Blob, Blob) {
-      let { leaves } = regions();
-      let index_ = Nat64.fromNat(index);
-      if (index_ >= leaf_count) return null;
-      ?(getKey(leaves, index_), getValue(leaves, index_));
-    };
-
-    /// Returns slice `key` and `value` with indices from `left` to `right` or trpas if `left` or `right` are out of bounds.
-    ///
-    /// Example:
-    /// ```motoko
-    /// let e = StableTrie.StableTrieEnumeration({
-    ///   pointer_size = 2;
-    ///   aridity = 2;
-    ///   root_aridity = null;
-    ///   key_size = 2;
-    ///   value_size = 1;
-    /// });    
-    /// assert(e.put("abc", "a") == ?0);
-    /// assert(e.put("aaa", "b") == ?1);
-    /// assert(e.slice(0, 2) == [("abc", "a"), ("aaa", "b")]);
-    /// ```
-    /// Runtime: O(right - left) accesses to stable memory.
-    public func slice(left : Nat, right : Nat) : [(Blob, Blob)] {
-      let { leaves } = regions();
-      let l = Nat64.fromNat(left);
-      let r = Nat64.fromNat(right);
-      assert l <= r and r <= leaf_count;
-      Array.tabulate<(Blob, Blob)>(
-        right - left,
-        func(i) {
-          let index = Nat64.fromNat(i);
-          (getKey(leaves, index), getValue(leaves, index));
-        },
-      );
-    };
-
     class Iterator(nodes : Region, forward : Bool) {
-      let stack = Array.init<(Nat64, Nat64)>(key_size * 8 / Nat16.toNat(bitlength), (0, 0));
+      let stack = Array.init<(Nat64, Nat64)>(args.key_size * 8 / Nat16.toNat(bitlength), (0, 0));
       var depth = 1;
       stack[0] := if (forward) (0, 0) else (0, root_aridity_ - 1);
 
