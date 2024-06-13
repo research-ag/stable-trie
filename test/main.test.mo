@@ -9,7 +9,7 @@ import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Option "mo:base/Option";
 import Debug "mo:base/Debug";
-import StableTrie "../src/lib";
+import StableTrie "../src/enumeration";
 
 let rng = Prng.Seiran128();
 rng.init(0);

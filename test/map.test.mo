@@ -9,7 +9,7 @@ import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Option "mo:base/Option";
 import Debug "mo:base/Debug";
-import StableTrie "../src/lib";
+import StableTrie "../src/map";
 
 let rng = Prng.Seiran128();
 rng.init(0);
@@ -97,7 +97,7 @@ for (value_size in value_sizes.vals()) {
 };
 
 func pointerMaxSizeTest() {
-  let trie = StableTrie.Enumeration({
+  let trie = StableTrie.Map({
     pointer_size = 2;
     aridity = 2;
     root_aridity = null;
@@ -132,7 +132,7 @@ func profile() {
     children_number.vals(),
     func(k) {
       let first = Nat.toText(k);
-      let trie = StableTrie.Enumeration({
+      let trie = StableTrie.Map({
         pointer_size = 8;
         aridity = k;
         root_aridity = ?k;

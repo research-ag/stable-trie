@@ -6,7 +6,7 @@ import Region "mo:base/Region";
 import Debug "mo:base/Debug";
 import Float "mo:base/Float";
 import Option "mo:base/Option";
-import StableTrie "../src/lib";
+import StableTrie "../src/enumeration";
 
 let key_size = 8;
 let pointer_size = 6;
