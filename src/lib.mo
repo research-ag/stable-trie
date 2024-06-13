@@ -29,6 +29,7 @@ import Nat8 "mo:base/Nat8";
 import Nat16 "mo:base/Nat16";
 import Debug "mo:base/Debug";
 import Nat32 "mo:base/Nat32";
+import Int "mo:base/Int";
 
 module {
   /// Stable region with `freeSpace` variable.
@@ -64,42 +65,42 @@ module {
     };
     assert args.key_size >= 1 and args.key_size + args.value_size <= 2 ** 16;
 
-    let aridity_ = Nat64.fromNat(args.aridity);
-    let key_size_ = Nat64.fromNat(args.key_size);
-    let value_size_ = Nat64.fromNat(args.value_size);
-    let pointer_size_ = Nat64.fromNat(args.pointer_size);
-    let root_aridity_ = Nat64.fromNat(Option.get(args.root_aridity, args.aridity));
+    public let aridity_ = Nat64.fromNat(args.aridity);
+    public let key_size_ = Nat64.fromNat(args.key_size);
+    public let value_size_ = Nat64.fromNat(args.value_size);
+    public let pointer_size_ = Nat64.fromNat(args.pointer_size);
+    public let root_aridity_ = Nat64.fromNat(Option.get(args.root_aridity, args.aridity));
 
-    let loadMask = if (args.pointer_size == 8) 0xffff_ffff_ffff_ffff : Nat64 else (1 << (pointer_size_ << 3)) - 1;
+    public let loadMask = if (args.pointer_size == 8) 0xffff_ffff_ffff_ffff : Nat64 else (1 << (pointer_size_ << 3)) - 1;
 
     public let bitlength = Nat16.bitcountTrailingZero(Nat16.fromNat(args.aridity));
-    let bitshift = Nat16.toNat8(8 - bitlength);
-    let bitlength_ = Nat32.toNat64(Nat16.toNat32(bitlength));
+    public let bitshift = Nat16.toNat8(8 - bitlength);
+    public let bitlength_ = Nat32.toNat64(Nat16.toNat32(bitlength));
 
-    let max_address = 2 ** (pointer_size_ * 8 - 1);
+    public let max_address = 2 ** (pointer_size_ * 8 - 1);
 
     assert Nat64.bitcountNonZero(root_aridity_) == 1; // 2-power
-    let root_bitlength_ = Nat64.bitcountTrailingZero(root_aridity_);
+    public let root_bitlength_ = Nat64.bitcountTrailingZero(root_aridity_);
     assert root_bitlength_ > 0 and root_bitlength_ % bitlength_ == 0; // => root_bitlength_ >= bitlength_
     assert root_bitlength_ <= key_size_ * 8;
 
     let root_depth = Nat32.toNat16(Nat64.toNat32(root_bitlength_ / bitlength_));
     public let root_bitlength = Nat32.toNat16(Nat64.toNat32(root_bitlength_));
 
-    let node_size : Nat64 = aridity_ * pointer_size_;
-    let node_size_ : Nat = Nat64.toNat(node_size);
-    let leaf_size : Nat64 = key_size_ + value_size_;
-    let root_size : Nat64 = root_aridity_ * pointer_size_;
-    let offset_base : Nat64 = root_size - node_size;
-    let padding : Nat64 = 8 - pointer_size_;
-    let empty_values : Bool = args.value_size == 0;
+    public let node_size : Nat64 = aridity_ * pointer_size_;
+    public let node_size_ : Nat = Nat64.toNat(node_size);
+    public let leaf_size : Nat64 = key_size_ + value_size_;
+    public let root_size : Nat64 = root_aridity_ * pointer_size_;
+    public let offset_base : Nat64 = root_size - node_size;
+    public let padding : Nat64 = 8 - pointer_size_;
+    public let empty_values : Bool = args.value_size == 0;
 
     public var leaf_count : Nat64 = 0;
     public var node_count : Nat64 = 0;
 
-    var storePointer : (offset : Nat64, child : Nat64) -> () = func(_, _) {};
+    public var storePointer : (offset : Nat64, child : Nat64) -> () = func(_, _) {};
 
-    type State = {
+    public type State = {
       nodes : Region;
       leaves : Region;
     };
@@ -176,7 +177,7 @@ module {
       ?((lc << 1) | 1);
     };
 
-    func getOffset(node : Nat64, index : Nat64) : Nat64 {
+    public func getOffset(node : Nat64, index : Nat64) : Nat64 {
       let delta = index *% pointer_size_;
       if (node == 0) return delta; // root node
       (offset_base +% (node >> 1) *% node_size) +% delta;
@@ -184,14 +185,6 @@ module {
 
     public func getChild(region : Region, node : Nat64, index : Nat64) : Nat64 {
       Region.loadNat64(region.region, getOffset(node, index)) & loadMask;
-    };
-
-    public func emptyChilds(region : Region, node : Nat64) : Bool {
-      let blob = Region.loadBlob(region.region, getOffset(node, 0), node_size_);
-      for (val in blob.vals()) {
-        if (val != 0) return false;
-      };
-      true;
     };
 
     public func setChild(node : Nat64, index : Nat64, child : Nat64) {
@@ -798,26 +791,61 @@ module {
       
       let idx = base.keyToRootIndex(bytes);
       let child = base.getChild(nodes, 0, idx);
-      delete_rec(nodes, leaves, bytes, child, base.root_bitlength).0;
+      deleteRec(nodes, leaves, bytes, child, base.root_bitlength).0;
     };
 
-    func delete_rec(nodes : Region, leaves : Region, bytes : [Nat8], node : Nat64, pos : Nat16) : (?Blob, Bool) {
-      if (node == 0) return (null, false);
+    type DeleteRes = {
+      #empty;
+      #multiple;
+      #single : Nat64;
+    };
+
+    public func singleLeaf(region : Region, node : Nat64) : DeleteRes {
+      let blob = Region.loadBlob(region.region, base.getOffset(node, 0), base.node_size_);
+      let bytes = Blob.toArray(blob);
+
+      var lastNode : Nat64 = 0;
+      for (i in Iter.range(0, args.aridity - 1)) {
+        var x : Nat64 = 0;
+        for (i in Iter.revRange(i * args.pointer_size + args.pointer_size - 1, i * args.pointer_size)) {
+          x := x * 256 + Nat64.fromNat(Nat8.toNat(bytes[Int.abs(i)]));
+        };
+        if (x > 0) {
+          if (lastNode != 0) return #multiple;
+          lastNode := x;
+        };
+      };
+      if (lastNode == 0) return #empty;
+      if (lastNode & 1 == 0) return #multiple;
+      return #single lastNode;
+    };
+
+    func deleteRec(nodes : Region, leaves : Region, bytes : [Nat8], node : Nat64, pos : Nat16) : (?Blob, DeleteRes) {
+      if (node == 0) return (null, #empty);
       if (node & 1 == 1) {
-        return (?base.getValue(leaves, node >> 1), true);
+        return (?base.getValue(leaves, node >> 1), #empty);
       };
 
       let idx = base.keyToIndex(bytes, pos);
       let child = base.getChild(nodes, node, idx);
-      let ret = delete_rec(nodes, leaves, bytes, child, pos +% base.bitlength);
-      let (value, empty) = ret;
-      
-      if (empty) {
-        base.setChild(node, idx, 0);
-        return (value, base.emptyChilds(nodes, node));
-      };
+      let ret = deleteRec(nodes, leaves, bytes, child, pos +% base.bitlength);
+      let (value, leaf_opt) = ret;
+      if (Option.isNull(value)) return ret;
 
-      ret;
+      let ret_leaf = switch (leaf_opt) {
+        case (#empty) {
+          base.setChild(node, idx, 0);
+          singleLeaf(nodes, node);
+        };
+        case(#multiple) {
+          #multiple;
+        };
+        case (#single(leaf)) {
+          base.setChild(node, idx, leaf);
+          singleLeaf(nodes, node);
+        };
+      };
+      (value, ret_leaf);
     };
 
     public func entries() : Iter.Iter<(Blob, Blob)> {
