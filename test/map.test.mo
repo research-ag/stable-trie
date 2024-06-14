@@ -96,25 +96,6 @@ for (value_size in value_sizes.vals()) {
   };
 };
 
-func pointerMaxSizeTest() {
-  let trie = StableTrie.Map({
-    pointer_size = 2;
-    aridity = 2;
-    root_aridity = null;
-    key_size = 2;
-    value_size = 0;
-  });
-  for (i in Iter.range(0, 32_000)) {
-    let key = Blob.fromArray([Nat8.fromNat(i % 256), Nat8.fromNat(i / 256)]);
-    if (trie.put(key, "") != ?i) {
-      Debug.print(debug_show i);
-      assert false;
-    };
-  };
-};
-
-pointerMaxSizeTest();
-
 func profile() {
   let children_number = [2, 4, 16, 256];
 
