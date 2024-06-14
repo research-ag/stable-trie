@@ -189,7 +189,14 @@ module {
 
       let idx = base.keyToRootIndex(bytes);
       let child = base.getChild(nodes, 0, idx);
-      deleteRec(nodes, leaves, bytes, child, base.root_bitlength).0;
+      let (value, leaf_opt) = deleteRec(nodes, leaves, bytes, child, base.root_bitlength);
+      switch (leaf_opt) {
+        case (#single leaf) {
+          base.setChild(0, idx, leaf);
+        };
+        case (_) {};
+      };
+      value;
     };
 
     type DeleteRes = {
@@ -223,7 +230,7 @@ module {
       if (node & 1 == 1) {
         let leaf = node >> 1;
         let ret = (?base.getValue(leaves, leaf), #empty);
-        pushEmptyLeaf(leaves, leaf);
+        //pushEmptyLeaf(leaves, leaf);
         return ret;
       };
 
@@ -247,7 +254,7 @@ module {
         };
       };
       let #single _ = ret_leaf else return (value, ret_leaf);
-      pushEmptyNode(node);
+      //pushEmptyNode(node);
       (value, ret_leaf);
     };
 
