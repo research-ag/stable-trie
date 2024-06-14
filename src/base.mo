@@ -192,19 +192,21 @@ module {
       storePointer(offset, child);
     };
 
+    public func getLeafOffset(index : Nat64) : Nat64 = index *% leaf_size;
+
     public func getKey(region : Region, index : Nat64) : Blob {
-      Region.loadBlob(region.region, index *% leaf_size, args.key_size);
+      Region.loadBlob(region.region, getLeafOffset(index), args.key_size);
     };
 
     public func getValue(region : Region, index : Nat64) : Blob {
       if (empty_values) return "";
-      Region.loadBlob(region.region, index *% leaf_size +% key_size_, args.value_size);
+      Region.loadBlob(region.region, getLeafOffset(index) +% key_size_, args.value_size);
     };
 
     public func setValue(region : Region, index : Nat64, value : Blob) {
       assert value.size() == args.value_size;
       if (empty_values) return;
-      Region.storeBlob(region.region, index *% leaf_size +% key_size_, value);
+      Region.storeBlob(region.region, getLeafOffset(index) +% key_size_, value);
     };
 
     public func keyToRootIndex(bytes : [Nat8]) : Nat64 {

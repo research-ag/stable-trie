@@ -39,35 +39,35 @@ module {
   /// ```
   public class Map(args : Base.Args) {
     let base : Base.StableTrieBase = Base.StableTrieBase(args);
-    var last_empty_node : Nat64 = base.pointer_size_;
-    var last_empty_leaf : Nat64 = base.pointer_size_;
+    assert args.key_size + args.value_size >= 8;
 
-    // public func setLeaf(region : Base.Region, leaf : Nat64, value : Nat64) {
-    // };
+    var last_empty_node : Nat64 = base.loadMask;
+    var last_empty_leaf : Nat64 = base.loadMask;
 
-    // func pushEmptyLeaf(node : Nat64) {
-    //   base.setLeaf(node, 0, last_empty_node);
-    //   last_empty_node := node;
-    // };
+    func pushEmptyLeaf(leaves : Base.Region, leaf : Nat64) {
+      Region.storeNat64(leaves.region, base.getLeafOffset(leaf), last_empty_leaf);
+      last_empty_leaf := leaf;
+    };
 
-    // func popEmptyLeaf(nodes : Base.Region) : ?Nat64 {
-    //   if (last_empty_node == base.pointer_size_) return null;
-    //   let ret = last_empty_node;
-    //   last_empty_node := base.getLeaf(nodes, last_empty_node, 0);
-    //   ?ret;
-    // };
+    func popEmptyLeaf(leaves : Base.Region) : ?Nat64 {
+      if (last_empty_leaf == base.loadMask) return null;
+      let ret = last_empty_leaf;
 
-    // func pushEmptyNode(node : Nat64) {
-    //   base.setChild(node, 0, last_empty_node);
-    //   last_empty_node := node;
-    // };
+      last_empty_leaf := Region.loadNat64(leaves.region, base.getLeafOffset(last_empty_leaf));
+      ?ret;
+    };
 
-    // func popEmptyNode(nodes : Base.Region) : ?Nat64 {
-    //   if (last_empty_node == base.pointer_size_) return null;
-    //   let ret = last_empty_node;
-    //   last_empty_node := base.getChild(nodes, last_empty_node, 0);
-    //   ?ret;
-    // };
+    func pushEmptyNode(node : Nat64) {
+      base.setChild(node, 0, last_empty_node);
+      last_empty_node := node;
+    };
+
+    func popEmptyNode(nodes : Base.Region) : ?Nat64 {
+      if (last_empty_node == base.loadMask) return null;
+      let ret = last_empty_node;
+      last_empty_node := base.getChild(nodes, last_empty_node, 0);
+      ?ret;
+    };
 
     /// Add `key` and `value` to enumeration. Returns null if pointer size limit exceeded. Returns `size` if the key in new to the enumeration
     /// or rewrites value and returns index of key in enumeration otherwise.
@@ -221,7 +221,10 @@ module {
     func deleteRec(nodes : Base.Region, leaves : Base.Region, bytes : [Nat8], node : Nat64, pos : Nat16) : (?Blob, DeleteRes) {
       if (node == 0) return (null, #empty);
       if (node & 1 == 1) {
-        return (?base.getValue(leaves, node >> 1), #empty);
+        let leaf = node >> 1;
+        let ret = (?base.getValue(leaves, leaf), #empty);
+        pushEmptyLeaf(leaves, leaf);
+        return ret;
       };
 
       let idx = base.keyToIndex(bytes, pos);
@@ -243,6 +246,8 @@ module {
           singleLeaf(nodes, node);
         };
       };
+      let #single _ = ret_leaf else return (value, ret_leaf);
+      pushEmptyNode(node);
       (value, ret_leaf);
     };
 
