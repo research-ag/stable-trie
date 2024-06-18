@@ -55,13 +55,13 @@ for (value_size in value_sizes.vals()) {
 
       var i = 0;
       for (key in keys.vals()) {
-        assert trie.put(key, values[i]) == ?i;
+        assert trie.put(key, values[i]) == ?true;
         i += 1;
       };
 
       i := 0;
       for (key in delete_keys.vals()) {
-        assert trie.put(key, values[i]) == ?(n + i);
+        assert trie.put(key, values[i]) == ?true;
         i += 1;
       };
 
@@ -74,7 +74,7 @@ for (value_size in value_sizes.vals()) {
       i := 0;
 
       for (key in keys.vals()) {
-        assert (trie.lookup(key) == ?(values[i], i));
+        assert (trie.lookup(key) == ?values[i]);
         i += 1;
       };
 

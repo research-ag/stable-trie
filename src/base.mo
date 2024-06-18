@@ -277,7 +277,7 @@ module {
       Debug.trap("Unreacheable");
     };
 
-    public func put_(nodes : Region, leaves : Region, key : Blob) : ?Nat64 {
+    public func put_(nodes : Region, leaves : Region, key : Blob) : ?(Bool, Nat64) {
       assert key.size() == args.key_size;
       let bytes = Blob.toArray(key);
 
@@ -290,13 +290,13 @@ module {
         let ?leaf = newLeaf(leaves, key) else return null;
 
         setChild(nodes, node, last, leaf);
-        return ?(leaf >> 1);
+        return ?(true, (leaf >> 1));
       };
 
       let index = old_leaf >> 1;
       let old_key = getKey(leaves, index);
       if (key == old_key) {
-        return ?index;
+        return ?(false, index);
       };
 
       let old_bytes = Blob.toArray(old_key);
@@ -317,7 +317,7 @@ module {
           setChild(nodes, node, b, old_leaf);
           let ?leaf = newLeaf(leaves, key) else return null;
           setChild(nodes, node, a, leaf);
-          return ?(leaf >> 1);
+          return ?(true, (leaf >> 1));
         };
       };
       Debug.trap("Unreacheable");

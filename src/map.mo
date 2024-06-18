@@ -6,6 +6,7 @@ import Region "mo:base/Region";
 import Nat8 "mo:base/Nat8";
 import Nat16 "mo:base/Nat16";
 import Int "mo:base/Int";
+import Option "mo:base/Option";
 
 import Base "base";
 
@@ -87,13 +88,13 @@ module {
     /// assert(e.put("aaa", "b") == ?1);
     /// assert(e.put("abc", "c") == ?0);
     /// ```
-    /// Runtime: O(key_size) acesses to stable memeory.
-    public func put(key : Blob, value : Blob) : ?Nat {
+    /// Runtime: O(key_size) acesses to stable memory.
+    public func put(key : Blob, value : Blob) : ?Bool {
       let { leaves; nodes } = base.regions();
 
-      let ?leaf = base.put_(nodes, leaves, key) else return null;
+      let ?(added, leaf) = base.put_(nodes, leaves, key) else return null;
       base.setValue(leaves, leaf, value);
-      ?Nat64.toNat(leaf);
+      ?added;
     };
 
     /// Add `key` and `value` to enumeration.
@@ -114,12 +115,12 @@ module {
     /// assert(e.replace("aaa", "b") == ?("b", 1));
     /// assert(e.replace("abc", "c") == ?("a", 0);
     /// ```
-    /// Runtime: O(key_size) acesses to stable memeory.
+    /// Runtime: O(key_size) acesses to stable memory.
     public func replace(key : Blob, value : Blob) : ?(Blob, Nat) {
       let { leaves; nodes } = base.regions();
 
-      let ?leaf = base.put_(nodes, leaves, key) else return null;
-      let ret_value = if (leaf == base.leaf_count - 1) {
+      let ?(added, leaf) = base.put_(nodes, leaves, key) else return null;
+      let ret_value = if (added) {
         base.setValue(leaves, leaf, value);
         value;
       } else {
@@ -148,12 +149,12 @@ module {
     /// assert(e.lookupOrPut("aaa", "b") == ?("b", 1));
     /// assert(e.lookupOrPut("abc", "c") == ?("a", 0);
     /// ```
-    /// Runtime: O(key_size) acesses to stable memeory.
+    /// Runtime: O(key_size) acesses to stable memory.
     public func lookupOrPut(key : Blob, value : Blob) : ?(Blob, Nat) {
       let { leaves; nodes } = base.regions();
 
-      let ?leaf = base.put_(nodes, leaves, key) else return null;
-      let ret_value = if (leaf == base.leaf_count - 1) {
+      let ?(added, leaf) = base.put_(nodes, leaves, key) else return null;
+      let ret_value = if (added) {
         base.setValue(leaves, leaf, value);
         value;
       } else {
@@ -180,9 +181,9 @@ module {
     /// assert(e.lookup("aaa") == ?("b", 1));
     /// assert(e.lookup("bbb") == null);
     /// ```
-    /// Runtime: O(key_size) acesses to stable memeory.
-    public func lookup(key : Blob) : ?(Blob, Nat) {
-      base.lookup(key);
+    /// Runtime: O(key_size) acesses to stable memory.
+    public func lookup(key : Blob) : ?Blob {
+      Option.map<(Blob, Nat), Blob>(base.lookup(key), func (a) = a.0);
     };
 
     public func delete(key : Blob) : ?Blob {
