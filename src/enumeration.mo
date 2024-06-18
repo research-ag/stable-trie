@@ -171,7 +171,7 @@ module {
       ?(base.getKey(leaves, index_), base.getValue(leaves, index_));
     };
 
-    /// Returns slice `key` and `value` with indices from `left` to `right` or trpas if `left` or `right` are out of bounds.
+    /// Returns slice `key` and `value` with indices from `left` to `right` or traps if `left` or `right` are out of bounds.
     ///
     /// Example:
     /// ```motoko

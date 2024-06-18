@@ -189,7 +189,7 @@ module {
 
       let idx = base.keyToRootIndex(bytes);
       let child = base.getChild(nodes, 0, idx);
-      let (value, leaf_opt) = deleteRec(nodes, leaves, bytes, child, base.root_bitlength);
+      let (value, leaf_opt) = deleteRec(nodes, leaves, key, bytes, child, base.root_bitlength);
       switch (leaf_opt) {
         case (#single leaf) {
           base.setChild(0, idx, leaf);
@@ -208,7 +208,7 @@ module {
       #single : Nat64;
     };
 
-    public func singleLeaf(region : Base.Region, node : Nat64) : DeleteRes {
+    func singleLeaf(region : Base.Region, node : Nat64) : DeleteRes {
       let blob = Region.loadBlob(region.region, base.getOffset(node, 0), base.node_size_);
       let bytes = Blob.toArray(blob);
 
@@ -228,20 +228,23 @@ module {
       return #single lastNode;
     };
 
-    func deleteRec(nodes : Base.Region, leaves : Base.Region, bytes : [Nat8], node : Nat64, pos : Nat16) : (?Blob, DeleteRes) {
-      if (node == 0) return (null, #empty);
+    func deleteRec(nodes : Base.Region, leaves : Base.Region, key : Blob, bytes : [Nat8], node : Nat64, pos : Nat16) : (?Blob, DeleteRes) {
+      if (node == 0) return (null, #multiple);
       if (node & 1 == 1) {
         let leaf = node >> 1;
-        let ret = (?base.getValue(leaves, leaf), #empty);
-        pushEmptyLeaf(leaves, leaf);
-        return ret;
+        if (base.getKey(leaves, leaf) == key) {
+          let ret = (?base.getValue(leaves, leaf), #empty);
+          pushEmptyLeaf(leaves, leaf);
+          return ret;
+        } else {
+          return (null, #multiple)
+        }
       };
 
       let idx = base.keyToIndex(bytes, pos);
       let child = base.getChild(nodes, node, idx);
-      let ret = deleteRec(nodes, leaves, bytes, child, pos +% base.bitlength);
+      let ret = deleteRec(nodes, leaves, key, bytes, child, pos +% base.bitlength);
       let (value, leaf_opt) = ret;
-      if (Option.isNull(value)) return ret;
 
       let ret_leaf = switch (leaf_opt) {
         case (#empty) {

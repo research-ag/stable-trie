@@ -84,7 +84,6 @@ module {
     assert root_bitlength_ > 0 and root_bitlength_ % bitlength_ == 0; // => root_bitlength_ >= bitlength_
     assert root_bitlength_ <= key_size_ * 8;
 
-    let root_depth = Nat32.toNat16(Nat64.toNat32(root_bitlength_ / bitlength_));
     public let root_bitlength = Nat32.toNat16(Nat64.toNat32(root_bitlength_));
 
     public let node_size : Nat64 = aridity_ * pointer_size_;
@@ -313,13 +312,15 @@ module {
       return if (getKey(leaves, index) == key) ?(getValue(leaves, index), Nat64.toNat(index)) else null;
     };
 
-    class Iterator(nodes : Region, forward : Bool) {
+    type Dir = { #forward; #reverse; };
+
+    class Iterator(nodes : Region, dir : Dir) {
       let stack = Array.init<(Nat64, Nat64)>(args.key_size * 8 / Nat16.toNat(bitlength), (0, 0));
       var depth = 1;
-      stack[0] := if (forward) (0, 0) else (0, root_aridity_ - 1);
+      stack[0] := if (dir == #forward) (0, 0) else (0, root_aridity_ - 1);
 
       func next_step(i : Nat64) : Nat64 {
-        if (forward) {
+        if (dir == #forward) {
           i + 1;
         } else {
           if (i != 0) i - 1 else root_aridity_;
@@ -340,7 +341,7 @@ module {
               stack[depth - 1] := (node, next_step(i));
               break l(?(child >> 1));
             };
-            stack[depth] := (child, if (forward) 0 else aridity_ - 1);
+            stack[depth] := (child, if (dir == #forward) 0 else aridity_ - 1);
             depth += 1;
           } else {
             if (depth == 1) break l null;
@@ -353,49 +354,49 @@ module {
       };
     };
 
-    func entries_(forward : Bool) : Iter.Iter<(Blob, Blob)> {
+    func entries_(dir : Dir) : Iter.Iter<(Blob, Blob)> {
       let state = regions();
       let { nodes; leaves } = state;
 
-      Iter.map<Nat64, (Blob, Blob)>(Iterator(nodes, forward), func(leaf) = (getKey(leaves, leaf), getValue(leaves, leaf)));
+      Iter.map<Nat64, (Blob, Blob)>(Iterator(nodes, dir), func(leaf) = (getKey(leaves, leaf), getValue(leaves, leaf)));
     };
 
-    func vals_(forward : Bool) : Iter.Iter<Blob> {
+    func vals_(dir : Dir) : Iter.Iter<Blob> {
       let state = regions();
       let { nodes; leaves } = state;
 
-      Iter.map<Nat64, Blob>(Iterator(nodes, forward), func(leaf) = getValue(leaves, leaf));
+      Iter.map<Nat64, Blob>(Iterator(nodes, dir), func(leaf) = getValue(leaves, leaf));
     };
 
-    func keys_(forward : Bool) : Iter.Iter<Blob> {
+    func keys_(dir : Dir) : Iter.Iter<Blob> {
       let state = regions();
       let { nodes; leaves } = state;
 
-      Iter.map<Nat64, Blob>(Iterator(nodes, forward), func(leaf) = getKey(leaves, leaf));
+      Iter.map<Nat64, Blob>(Iterator(nodes, dir), func(leaf) = getKey(leaves, leaf));
     };
 
     public func entries() : Iter.Iter<(Blob, Blob)> {
-      entries_(true);
+      entries_(#forward);
     };
 
     public func entriesRev() : Iter.Iter<(Blob, Blob)> {
-      entries_(false);
+      entries_(#reverse);
     };
 
     public func vals() : Iter.Iter<Blob> {
-      vals_(true);
+      vals_(#forward);
     };
 
     public func valsRev() : Iter.Iter<Blob> {
-      vals_(false);
+      vals_(#reverse);
     };
 
     public func keys() : Iter.Iter<Blob> {
-      keys_(true);
+      keys_(#forward);
     };
 
     public func keysRev() : Iter.Iter<Blob> {
-      keys_(false);
+      keys_(#reverse);
     };
 
     public func size() : Nat = Nat64.toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size);
