@@ -2,7 +2,6 @@ import Blob "mo:base/Blob";
 import Nat64 "mo:base/Nat64";
 import Nat "mo:base/Nat";
 import Iter "mo:base/Iter";
-import Option "mo:base/Option";
 import Region "mo:base/Region";
 import Nat8 "mo:base/Nat8";
 import Nat16 "mo:base/Nat16";
@@ -39,13 +38,14 @@ module {
   /// ```
   public class Map(args : Base.Args) {
     let base : Base.StableTrieBase = Base.StableTrieBase(args);
-    assert args.key_size + args.value_size >= 8;
+
+    assert args.key_size + args.value_size >= args.pointer_size;
 
     var last_empty_node : Nat64 = base.loadMask;
     var last_empty_leaf : Nat64 = base.loadMask;
 
     func pushEmptyLeaf(leaves : Base.Region, leaf : Nat64) {
-      Region.storeNat64(leaves.region, base.getLeafOffset(leaf), last_empty_leaf);
+      base.storePointer(leaves.region, base.getLeafOffset(leaf), last_empty_leaf);
       last_empty_leaf := leaf;
     };
 
@@ -53,12 +53,12 @@ module {
       if (last_empty_leaf == base.loadMask) return null;
       let ret = last_empty_leaf;
 
-      last_empty_leaf := Region.loadNat64(leaves.region, base.getLeafOffset(last_empty_leaf));
+      last_empty_leaf := base.loadPointer(leaves, base.getLeafOffset(last_empty_leaf));
       ?ret;
     };
 
-    func pushEmptyNode(node : Nat64) {
-      base.setChild(node, 0, last_empty_node);
+    func pushEmptyNode(nodes : Base.Region, node : Nat64) {
+      base.setChild(nodes, node, 0, last_empty_node);
       last_empty_node := node;
     };
 
@@ -68,6 +68,8 @@ module {
       last_empty_node := base.getChild(nodes, last_empty_node, 0);
       ?ret;
     };
+
+    base.setCallbacks(popEmptyNode, popEmptyLeaf);
 
     /// Add `key` and `value` to enumeration. Returns null if pointer size limit exceeded. Returns `size` if the key in new to the enumeration
     /// or rewrites value and returns index of key in enumeration otherwise.
@@ -192,10 +194,10 @@ module {
       let (value, leaf_opt) = deleteRec(nodes, leaves, key, bytes, child, base.root_bitlength);
       switch (leaf_opt) {
         case (#single leaf) {
-          base.setChild(0, idx, leaf);
+          base.setChild(nodes, 0, idx, leaf);
         };
         case (#empty) {
-          base.setChild(0, idx, 0);
+          base.setChild(nodes, 0, idx, 0);
         };
         case (_) {};
       };
@@ -248,19 +250,19 @@ module {
 
       let ret_leaf = switch (leaf_opt) {
         case (#empty) {
-          base.setChild(node, idx, 0);
+          base.setChild(nodes, node, idx, 0);
           singleLeaf(nodes, node);
         };
         case (#multiple) {
           #multiple;
         };
         case (#single(leaf)) {
-          base.setChild(node, idx, leaf);
+          base.setChild(nodes, node, idx, leaf);
           singleLeaf(nodes, node);
         };
       };
       let #single _ = ret_leaf else return (value, ret_leaf);
-      pushEmptyNode(node);
+      pushEmptyNode(nodes, node);
       (value, ret_leaf);
     };
 

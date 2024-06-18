@@ -29,7 +29,6 @@ import Nat8 "mo:base/Nat8";
 import Nat16 "mo:base/Nat16";
 import Debug "mo:base/Debug";
 import Nat32 "mo:base/Nat32";
-import Int "mo:base/Int";
 
 module {
   /// Stable region with `freeSpace` variable.
@@ -97,7 +96,20 @@ module {
     public var leaf_count : Nat64 = 0;
     public var node_count : Nat64 = 0;
 
-    public var storePointer : (offset : Nat64, child : Nat64) -> () = func(_, _) {};
+    public let storePointer : (region : Region.Region, offset : Nat64, child : Nat64) -> () = switch (pointer_size_) {
+      case (8) func(region, offset, child) = Region.storeNat64(region, offset, child);
+      case (6) func(region, offset, child) {
+        Region.storeNat32(region, offset, Nat32.fromNat64(child & 0xffff_ffff));
+        Region.storeNat16(region, offset +% 4, Nat16.fromNat32(Nat32.fromNat64(child >> 32)));
+      };
+      case (5) func(region, offset, child) {
+        Region.storeNat32(region, offset, Nat32.fromNat64(child & 0xffff_ffff));
+        Region.storeNat8(region, offset +% 4, Nat8.fromNat16(Nat16.fromNat32(Nat32.fromNat64(child >> 32))));
+      };
+      case (4) func(region, offset, child) = Region.storeNat32(region, offset, Nat32.fromNat64(child));
+      case (2) func(region, offset, child) = Region.storeNat16(region, offset, Nat16.fromNat32(Nat32.fromNat64(child)));
+      case (_) Debug.trap("Can never happen");
+    };
 
     public type State = {
       nodes : Region;
@@ -127,24 +139,18 @@ module {
 
           let ret = { nodes = nodes; leaves = leaves };
           regions_ := ?ret;
-          storePointer := switch (pointer_size_) {
-            case (8) func(offset, child) = Region.storeNat64(nodes_region, offset, child);
-            case (6) func(offset, child) {
-              Region.storeNat32(nodes_region, offset, Nat32.fromNat64(child & 0xffff_ffff));
-              Region.storeNat16(nodes_region, offset +% 4, Nat16.fromNat32(Nat32.fromNat64(child >> 32)));
-            };
-            case (5) func(offset, child) {
-              Region.storeNat32(nodes_region, offset, Nat32.fromNat64(child & 0xffff_ffff));
-              Region.storeNat8(nodes_region, offset +% 4, Nat8.fromNat16(Nat16.fromNat32(Nat32.fromNat64(child >> 32))));
-            };
-            case (4) func(offset, child) = Region.storeNat32(nodes_region, offset, Nat32.fromNat64(child));
-            case (2) func(offset, child) = Region.storeNat16(nodes_region, offset, Nat16.fromNat32(Nat32.fromNat64(child)));
-            case (_) Debug.trap("Can never happen");
-          };
 
           ret;
         };
       };
+    };
+
+    var pop_node : (Region) -> ?Nat64 = func(_) = null;
+    var pop_leaf : (Region) -> ?Nat64 = func(_) = null;
+
+    public func setCallbacks(node : (Region) -> ?Nat64, leaf : (Region) -> ?Nat64) {
+      pop_node := node;
+      pop_leaf := leaf;
     };
 
     // allocate can only be used for n <= 65536
@@ -157,23 +163,36 @@ module {
     };
 
     func newInternalNode(region : Region) : ?Nat64 {
-      if (node_count == max_address) return null;
+      let node = switch (pop_node(region)) {
+        case (?node) node;
+        case (null) {
+          if (node_count != max_address) {
+            allocate(region, node_size);
+            let nc = node_count;
+            node_count +%= 1;
+            nc << 1;
+          } else return null;
+        };
+      };
 
-      allocate(region, node_size);
-      let nc = node_count;
-      node_count +%= 1;
-      ?(nc << 1);
+      ?node;
     };
 
     public func newLeaf(region : Region, key : Blob) : ?Nat64 {
-      if (leaf_count == max_address) return null;
+      let leaf = switch (pop_leaf(region)) {
+        case (?leaf) leaf;
+        case (null) {
+          if (leaf_count != max_address) {
+            allocate(region, leaf_size);
+            let lc = leaf_count;
+            leaf_count +%= 1;
+            lc;
+          } else return null;
+        };
+      };
 
-      allocate(region, leaf_size);
-      let lc = leaf_count;
-      let pos = leaf_count *% leaf_size;
-      leaf_count +%= 1;
-      Region.storeBlob(region.region, pos, key);
-      ?((lc << 1) | 1);
+      Region.storeBlob(region.region, leaf *% leaf_size, key);
+      ?((leaf << 1) | 1);
     };
 
     public func getOffset(node : Nat64, index : Nat64) : Nat64 {
@@ -182,13 +201,17 @@ module {
       (offset_base +% (node >> 1) *% node_size) +% delta;
     };
 
-    public func getChild(region : Region, node : Nat64, index : Nat64) : Nat64 {
-      Region.loadNat64(region.region, getOffset(node, index)) & loadMask;
+    public func loadPointer(region : Region, offset : Nat64) : Nat64 {
+      Region.loadNat64(region.region, offset) & loadMask;
     };
 
-    public func setChild(node : Nat64, index : Nat64, child : Nat64) {
+    public func getChild(region : Region, node : Nat64, index : Nat64) : Nat64 {
+      loadPointer(region, getOffset(node, index));
+    };
+
+    public func setChild(region : Region, node : Nat64, index : Nat64, child : Nat64) {
       let offset = getOffset(node, index);
-      storePointer(offset, child);
+      storePointer(region.region, offset, child);
     };
 
     public func getLeafOffset(index : Nat64) : Nat64 = index *% leaf_size;
@@ -266,7 +289,7 @@ module {
       if (old_leaf == 0) {
         let ?leaf = newLeaf(leaves, key) else return null;
 
-        setChild(node, last, leaf);
+        setChild(nodes, node, last, leaf);
         return ?(leaf >> 1);
       };
 
@@ -280,10 +303,10 @@ module {
       var pos = pos_;
       label l loop {
         let ?add = newInternalNode(nodes) else {
-          setChild(node, last, old_leaf);
+          setChild(nodes, node, last, old_leaf);
           return null;
         };
-        setChild(node, last, add);
+        setChild(nodes, node, last, add);
         node := add;
 
         let (a, b) = (keyToIndex(bytes, pos), keyToIndex(old_bytes, pos));
@@ -291,9 +314,9 @@ module {
         if (a == b) {
           last := a;
         } else {
-          setChild(node, b, old_leaf);
+          setChild(nodes, node, b, old_leaf);
           let ?leaf = newLeaf(leaves, key) else return null;
-          setChild(node, a, leaf);
+          setChild(nodes, node, a, leaf);
           return ?(leaf >> 1);
         };
       };
@@ -312,7 +335,7 @@ module {
       return if (getKey(leaves, index) == key) ?(getValue(leaves, index), Nat64.toNat(index)) else null;
     };
 
-    type Dir = { #forward; #reverse; };
+    type Dir = { #forward; #reverse };
 
     class Iterator(nodes : Region, dir : Dir) {
       let stack = Array.init<(Nat64, Nat64)>(args.key_size * 8 / Nat16.toNat(bitlength), (0, 0));
