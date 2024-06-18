@@ -26,7 +26,8 @@ func gen(n : Nat, size : Nat) : [Blob] {
         prev := Array.tabulate<Nat8>(size, func(j) = Nat8.fromNat(Nat64.toNat(rng.next()) % 256));
         Blob.fromArray(prev);
       } else {
-        Blob.fromArray(Array.tabulate<Nat8>(size, func(j) = if (j + 1 < size) prev[j] else if (prev[j] == 255) 0 else prev[j] + 1));
+        let t = Nat64.toNat(rng.next()) % key_size;
+        Blob.fromArray(Array.tabulate<Nat8>(size, func(j) = if (j < t) prev[j] else Nat8.fromNat(Nat64.toNat(rng.next()) % 256)));
       };
     },
   );
