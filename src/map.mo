@@ -192,9 +192,9 @@ module {
 
       let idx = base.keyToRootIndex(bytes);
       let child = base.getChild(nodes, 0, idx);
-      let (value, leaf) = deleteRec(nodes, leaves, key, bytes, child, base.root_bitlength);
-      if (leaf != child) {
-        base.setChild(nodes, 0, idx, leaf);
+      let (value, branch_root) = deleteRec(nodes, leaves, key, bytes, child, base.root_bitlength);
+      if (branch_root != child) {
+        base.setChild(nodes, 0, idx, branch_root);
       };
       value;
     };
@@ -233,17 +233,17 @@ module {
       let idx = base.keyToIndex(bytes, pos);
       let child = base.getChild(nodes, node, idx);
       let ret = deleteRec(nodes, leaves, key, bytes, child, pos +% base.bitlength);
-      let (value, leaf) = ret;
+      let (value, branch_root) = ret;
 
-      let ret_leaf = if (leaf != child) {
-        base.setChild(nodes, node, idx, leaf);
+      let ret_branch_root = if (branch_root != child) {
+        base.setChild(nodes, node, idx, branch_root);
         singleLeaf(nodes, node);
       } else node;
 
-      if (ret_leaf & 1 == 1) {
+      if (ret_branch_root & 1 == 1) {
         pushEmptyNode(nodes, node);
       };
-      (value, ret_leaf);
+      (value, ret_branch_root);
     };
 
     public func entries() : Iter.Iter<(Blob, Blob)> {
