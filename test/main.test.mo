@@ -9,7 +9,7 @@ import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Option "mo:base/Option";
 import Debug "mo:base/Debug";
-import StableTrie "../src/enumeration";
+import StableTrie "../src/Enumeration";
 
 let rng = Prng.Seiran128();
 rng.init(0);
@@ -105,7 +105,7 @@ func pointerMaxSizeTest() {
 
 pointerMaxSizeTest();
 
-func profile() {
+func _profile() {
   let children_number = [2, 4, 16, 256];
 
   let key_size = 8;
@@ -118,7 +118,7 @@ func profile() {
       Blob.fromArray(Array.tabulate<Nat8>(key_size, func(j) = Nat8.fromNat(Nat64.toNat(rng.next()) % 256)));
     },
   );
-  let rows = Iter.map<Nat, (Text, Iter.Iter<Text>)>(
+  let _rows = Iter.map<Nat, (Text, Iter.Iter<Text>)>(
     children_number.vals(),
     func(k) {
       let first = Nat.toText(k);

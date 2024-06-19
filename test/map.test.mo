@@ -8,7 +8,7 @@ import Nat64 "mo:base/Nat64";
 import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Option "mo:base/Option";
-import StableTrie "../src/map";
+import StableTrie "../src/Map";
 
 let rng = Prng.Seiran128();
 rng.init(0);
