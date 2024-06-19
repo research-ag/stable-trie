@@ -199,7 +199,7 @@ module {
       value;
     };
 
-    func singleLeaf(region : Base.Region, node : Nat64) : Nat64 {
+    func branchRoot(region : Base.Region, node : Nat64) : Nat64 {
       let blob = Region.loadBlob(region.region, base.getOffset(node, 0), base.node_size_);
       let bytes = Blob.toArray(blob);
 
@@ -237,7 +237,7 @@ module {
 
       let ret_branch_root = if (branch_root != child) {
         base.setChild(nodes, node, idx, branch_root);
-        singleLeaf(nodes, node);
+        branchRoot(nodes, node);
       } else node;
 
       if (ret_branch_root & 1 == 1) {
