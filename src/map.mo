@@ -183,7 +183,7 @@ module {
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
     public func lookup(key : Blob) : ?Blob {
-      Option.map<(Blob, Nat), Blob>(base.lookup(key), func (a) = a.0);
+      Option.map<(Blob, Nat), Blob>(base.lookup(key), func(a) = a.0);
     };
 
     public func delete(key : Blob) : ?Blob {
@@ -192,26 +192,14 @@ module {
 
       let idx = base.keyToRootIndex(bytes);
       let child = base.getChild(nodes, 0, idx);
-      let (value, leaf_opt) = deleteRec(nodes, leaves, key, bytes, child, base.root_bitlength);
-      switch (leaf_opt) {
-        case (#single leaf) {
-          base.setChild(nodes, 0, idx, leaf);
-        };
-        case (#empty) {
-          base.setChild(nodes, 0, idx, 0);
-        };
-        case (_) {};
+      let (value, leaf) = deleteRec(nodes, leaves, key, bytes, child, base.root_bitlength);
+      if (leaf != child) {
+        base.setChild(nodes, 0, idx, leaf);
       };
       value;
     };
 
-    type DeleteRes = {
-      #empty;
-      #multiple;
-      #single : Nat64;
-    };
-
-    func singleLeaf(region : Base.Region, node : Nat64) : DeleteRes {
+    func singleLeaf(region : Base.Region, node : Nat64) : Nat64 {
       let blob = Region.loadBlob(region.region, base.getOffset(node, 0), base.node_size_);
       let bytes = Blob.toArray(blob);
 
@@ -222,48 +210,39 @@ module {
           x := x * 256 + Nat64.fromNat(Nat8.toNat(bytes[Int.abs(i)]));
         };
         if (x > 0) {
-          if (lastNode != 0) return #multiple;
+          if (lastNode != 0) return node;
           lastNode := x;
         };
       };
-      if (lastNode == 0) return #empty;
-      if (lastNode & 1 == 0) return #multiple;
-      return #single lastNode;
+      if (lastNode & 1 == 0) node else lastNode;
     };
 
-    func deleteRec(nodes : Base.Region, leaves : Base.Region, key : Blob, bytes : [Nat8], node : Nat64, pos : Nat16) : (?Blob, DeleteRes) {
-      if (node == 0) return (null, #multiple);
+    func deleteRec(nodes : Base.Region, leaves : Base.Region, key : Blob, bytes : [Nat8], node : Nat64, pos : Nat16) : (?Blob, Nat64) {
+      if (node == 0) return (null, node);
       if (node & 1 == 1) {
         let leaf = node >> 1;
         if (base.getKey(leaves, leaf) == key) {
-          let ret = (?base.getValue(leaves, leaf), #empty);
+          let ret = (?base.getValue(leaves, leaf), 0 : Nat64);
           pushEmptyLeaf(leaves, leaf);
           return ret;
         } else {
-          return (null, #multiple)
-        }
+          return (null, node);
+        };
       };
 
       let idx = base.keyToIndex(bytes, pos);
       let child = base.getChild(nodes, node, idx);
       let ret = deleteRec(nodes, leaves, key, bytes, child, pos +% base.bitlength);
-      let (value, leaf_opt) = ret;
+      let (value, leaf) = ret;
 
-      let ret_leaf = switch (leaf_opt) {
-        case (#empty) {
-          base.setChild(nodes, node, idx, 0);
-          singleLeaf(nodes, node);
-        };
-        case (#multiple) {
-          #multiple;
-        };
-        case (#single(leaf)) {
-          base.setChild(nodes, node, idx, leaf);
-          singleLeaf(nodes, node);
-        };
+      let ret_leaf = if (leaf != child) {
+        base.setChild(nodes, node, idx, leaf);
+        singleLeaf(nodes, node);
+      } else node;
+
+      if (ret_leaf & 1 == 1) {
+        pushEmptyNode(nodes, node);
       };
-      let #single _ = ret_leaf else return (value, ret_leaf);
-      pushEmptyNode(nodes, node);
       (value, ret_leaf);
     };
 

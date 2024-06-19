@@ -1,4 +1,4 @@
-import StableTrie "../src/enumeration";
+import StableTrie "../src/map";
 import Prng "mo:prng";
 import Array "mo:base/Array";
 import Blob "mo:base/Blob";
@@ -19,10 +19,10 @@ module {
     bench.cols(["2", "4", "16", "256"]);
     bench.rows(Array.tabulate<Text>(n, func(i) = Nat.toText(i)));
 
-    var tries = Array.tabulate<StableTrie.Enumeration>(
+    var tries = Array.tabulate<StableTrie.Map>(
       cols,
       func(i) {
-        StableTrie.Enumeration({
+        StableTrie.Map({
           pointer_size = 2;
           aridity = 2 ** (2 ** i);
           root_aridity = null;
@@ -58,6 +58,12 @@ module {
         if (r == 0) {
           ignore trie.put(keys[0], "");
         } else {
+          for (j in Iter.range(2 ** (r - 1), 2 ** r - 1)) {
+            ignore trie.put(keys[j], "");
+          };
+          for (j in Iter.range(2 ** (r - 1), 2 ** r - 1)) {
+            ignore trie.delete(keys[j]);
+          };
           for (j in Iter.range(2 ** (r - 1), 2 ** r - 1)) {
             ignore trie.put(keys[j], "");
           };
