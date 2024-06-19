@@ -116,7 +116,7 @@ module {
     /// assert(e.replace("abc", "c") == ?("a", 0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func replace(key : Blob, value : Blob) : ?(Blob, Nat) {
+    public func replace(key : Blob, value : Blob) : ?(Blob, Bool) {
       let { leaves; nodes } = base.regions();
 
       let ?(added, leaf) = base.put_(nodes, leaves, key) else return null;
@@ -128,7 +128,7 @@ module {
         base.setValue(leaves, leaf, value);
         old_value;
       };
-      ?(ret_value, Nat64.toNat(leaf));
+      ?(ret_value, added);
     };
 
     /// Add `key` and `value` to enumeration.
@@ -150,7 +150,7 @@ module {
     /// assert(e.lookupOrPut("abc", "c") == ?("a", 0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func lookupOrPut(key : Blob, value : Blob) : ?(Blob, Nat) {
+    public func lookupOrPut(key : Blob, value : Blob) : ?(Blob, Bool) {
       let { leaves; nodes } = base.regions();
 
       let ?(added, leaf) = base.put_(nodes, leaves, key) else return null;
@@ -160,7 +160,7 @@ module {
       } else {
         base.getValue(leaves, leaf);
       };
-      ?(ret_value, Nat64.toNat(leaf));
+      ?(ret_value, added);
     };
 
     /// Returns `?(index, value)` where `index` is the index of `key` in order it was added to enumeration and `value` is corresponding value to the `key`,
