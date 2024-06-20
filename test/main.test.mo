@@ -9,7 +9,7 @@ import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Option "mo:base/Option";
 import Debug "mo:base/Debug";
-import StableTrieEnumeration "../src/lib";
+import StableTrie "../src/Enumeration";
 
 let rng = Prng.Seiran128();
 rng.init(0);
@@ -26,7 +26,8 @@ func gen(n : Nat, size : Nat) : [Blob] {
         prev := Array.tabulate<Nat8>(size, func(j) = Nat8.fromNat(Nat64.toNat(rng.next()) % 256));
         Blob.fromArray(prev);
       } else {
-        Blob.fromArray(Array.tabulate<Nat8>(size, func(j) = if (j + 1 < size) prev[j] else if (prev[j] == 255) 0 else prev[j] + 1));
+        let t = Nat64.toNat(rng.next()) % key_size;
+        Blob.fromArray(Array.tabulate<Nat8>(size, func(j) = if (j < t) prev[j] else Nat8.fromNat(Nat64.toNat(rng.next()) % 256)));
       };
     },
   );
@@ -45,7 +46,7 @@ for (value_size in value_sizes.vals()) {
   let values = gen(n, value_size);
   for (bit in bits.vals()) {
     for (pointer in pointers.vals()) {
-      let trie = StableTrieEnumeration.StableTrieEnumeration({
+      let trie = StableTrie.Enumeration({
         pointer_size = pointer;
         aridity = bit;
         root_aridity = ?(bit ** 3);
@@ -58,7 +59,7 @@ for (value_size in value_sizes.vals()) {
         assert trie.put(key, values[i]) == ?i;
         i += 1;
       };
-
+      
       i := 0;
       for (key in keys.vals()) {
         assert trie.get(i) == ?(key, values[i]);
@@ -86,7 +87,7 @@ for (value_size in value_sizes.vals()) {
 };
 
 func pointerMaxSizeTest() {
-  let trie = StableTrieEnumeration.StableTrieEnumeration({
+  let trie = StableTrie.Enumeration({
     pointer_size = 2;
     aridity = 2;
     root_aridity = null;
@@ -104,7 +105,7 @@ func pointerMaxSizeTest() {
 
 pointerMaxSizeTest();
 
-func profile() {
+func _profile() {
   let children_number = [2, 4, 16, 256];
 
   let key_size = 8;
@@ -117,11 +118,11 @@ func profile() {
       Blob.fromArray(Array.tabulate<Nat8>(key_size, func(j) = Nat8.fromNat(Nat64.toNat(rng.next()) % 256)));
     },
   );
-  let rows = Iter.map<Nat, (Text, Iter.Iter<Text>)>(
+  let _rows = Iter.map<Nat, (Text, Iter.Iter<Text>)>(
     children_number.vals(),
     func(k) {
       let first = Nat.toText(k);
-      let trie = StableTrieEnumeration.StableTrieEnumeration({
+      let trie = StableTrie.Enumeration({
         pointer_size = 8;
         aridity = k;
         root_aridity = ?k;

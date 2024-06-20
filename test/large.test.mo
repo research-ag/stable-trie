@@ -6,7 +6,7 @@ import Region "mo:base/Region";
 import Debug "mo:base/Debug";
 import Float "mo:base/Float";
 import Option "mo:base/Option";
-import StableTrieEnumeration "../src/lib";
+import StableTrie "../src/Enumeration";
 
 let key_size = 8;
 let pointer_size = 6;
@@ -35,7 +35,7 @@ do {
   };
 };
 
-let trie = StableTrieEnumeration.StableTrieEnumeration({
+let trie = StableTrie.Enumeration({
     pointer_size;
     aridity = k;
     root_aridity = null;
