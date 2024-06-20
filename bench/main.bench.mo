@@ -1,4 +1,4 @@
-import StableTrie "../src/enumeration";
+import StableTrie "../src/Enumeration";
 import Prng "mo:prng";
 import Array "mo:base/Array";
 import Blob "mo:base/Blob";

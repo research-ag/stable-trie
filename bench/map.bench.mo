@@ -1,4 +1,4 @@
-import StableTrie "../src/map";
+import StableTrie "../src/Map";
 import Prng "mo:prng";
 import Array "mo:base/Array";
 import Blob "mo:base/Blob";
@@ -56,16 +56,16 @@ module {
         let trie = tries[aridity];
 
         if (r == 0) {
-          ignore trie.put(keys[0], "");
+          trie.put(keys[0], "");
         } else {
           for (j in Iter.range(2 ** (r - 1), 2 ** r - 1)) {
-            ignore trie.put(keys[j], "");
+            trie.put(keys[j], "");
           };
           for (j in Iter.range(2 ** (r - 1), 2 ** r - 1)) {
-            ignore trie.delete(keys[j]);
+            trie.delete(keys[j]);
           };
           for (j in Iter.range(2 ** (r - 1), 2 ** r - 1)) {
-            ignore trie.put(keys[j], "");
+            trie.put(keys[j], "");
           };
         };
 
