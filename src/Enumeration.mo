@@ -143,9 +143,7 @@ module {
     /// assert(e.lookup("bbb") == null);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func lookup(key : Blob) : ?(Blob, Nat) {
-      base.lookup(key);
-    };
+    public func lookup(key : Blob) : ?(Blob, Nat) = base.lookup(key);
 
     /// Returns `key` and `value` with index `index` or null if index is out of bounds.
     ///
@@ -201,29 +199,17 @@ module {
       );
     };
 
-    public func entries() : Iter.Iter<(Blob, Blob)> {
-      base.entries();
-    };
+    public func entries() : Iter.Iter<(Blob, Blob)> = base.entries();
 
-    public func entriesRev() : Iter.Iter<(Blob, Blob)> {
-      base.entriesRev();
-    };
+    public func entriesRev() : Iter.Iter<(Blob, Blob)> = base.entriesRev();
 
-    public func vals() : Iter.Iter<Blob> {
-      base.vals();
-    };
+    public func vals() : Iter.Iter<Blob> = base.vals();
 
-    public func valsRev() : Iter.Iter<Blob> {
-      base.valsRev();
-    };
+    public func valsRev() : Iter.Iter<Blob> = base.valsRev();
 
-    public func keys() : Iter.Iter<Blob> {
-      base.keys();
-    };
+    public func keys() : Iter.Iter<Blob> = base.keys();
 
-    public func keysRev() : Iter.Iter<Blob> {
-      base.keysRev();
-    };
+    public func keysRev() : Iter.Iter<Blob> = base.keysRev();
 
     public func size() : Nat = base.size();
 
@@ -235,4 +221,4 @@ module {
 
     public func unshare(data : StableData) = base.unshare(data);
   };
-}
+};

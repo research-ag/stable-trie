@@ -197,17 +197,11 @@ module {
     /// assert(e.get("bbb") == null);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func get(key : Blob) : ?Blob {
-      Option.map<(Blob, Nat), Blob>(base.lookup(key), func(a) = a.0);
-    };
+    public func get(key : Blob) : ?Blob = Option.map<(Blob, Nat), Blob>(base.lookup(key), func(a) = a.0);
 
-    public func remove(key : Blob) : ?Blob {
-      removeInternal(key, true);
-    };
+    public func remove(key : Blob) : ?Blob = removeInternal(key, true);
 
-    public func delete(key : Blob) {
-      ignore removeInternal(key, false);
-    };
+    public func delete(key : Blob) = ignore removeInternal(key, false);
 
     func removeInternal(key : Blob, ret : Bool) : ?Blob {
       let { leaves; nodes } = base.regions();
@@ -268,29 +262,17 @@ module {
       (value, ret_branch_root);
     };
 
-    public func entries() : Iter.Iter<(Blob, Blob)> {
-      base.entries();
-    };
+    public func entries() : Iter.Iter<(Blob, Blob)> = base.entries();
 
-    public func entriesRev() : Iter.Iter<(Blob, Blob)> {
-      base.entriesRev();
-    };
+    public func entriesRev() : Iter.Iter<(Blob, Blob)> = base.entriesRev();
 
-    public func vals() : Iter.Iter<Blob> {
-      base.vals();
-    };
+    public func vals() : Iter.Iter<Blob> = base.vals();
 
-    public func valsRev() : Iter.Iter<Blob> {
-      base.valsRev();
-    };
+    public func valsRev() : Iter.Iter<Blob> = base.valsRev();
 
-    public func keys() : Iter.Iter<Blob> {
-      base.keys();
-    };
+    public func keys() : Iter.Iter<Blob> = base.keys();
 
-    public func keysRev() : Iter.Iter<Blob> {
-      base.keysRev();
-    };
+    public func keysRev() : Iter.Iter<Blob> = base.keysRev();
 
     public func size() : Nat = base.size();
 
