@@ -338,12 +338,13 @@ module {
     type Dir = { #forward; #reverse };
 
     class Iterator(nodes : Region, dir : Dir) {
+      let forward = dir == #forward;
       let stack = Array.init<(Nat64, Nat64)>(args.key_size * 8 / Nat16.toNat(bitlength), (0, 0));
       var depth = 1;
-      stack[0] := if (dir == #forward) (0, 0) else (0, root_aridity_ - 1);
+      stack[0] := if (forward) (0, 0) else (0, root_aridity_ - 1);
 
       func next_step(i : Nat64) : Nat64 {
-        if (dir == #forward) {
+        if (forward) {
           i + 1;
         } else {
           if (i != 0) i - 1 else root_aridity_;
@@ -364,7 +365,7 @@ module {
               stack[depth - 1] := (node, next_step(i));
               break l(?(child >> 1));
             };
-            stack[depth] := (child, if (dir == #forward) 0 else aridity_ - 1);
+            stack[depth] := (child, if (forward) 0 else aridity_ - 1);
             depth += 1;
           } else {
             if (depth == 1) break l null;
@@ -398,29 +399,17 @@ module {
       Iter.map<Nat64, Blob>(Iterator(nodes, dir), func(leaf) = getKey(leaves, leaf));
     };
 
-    public func entries() : Iter.Iter<(Blob, Blob)> {
-      entries_(#forward);
-    };
+    public func entries() : Iter.Iter<(Blob, Blob)> = entries_(#forward);
 
-    public func entriesRev() : Iter.Iter<(Blob, Blob)> {
-      entries_(#reverse);
-    };
+    public func entriesRev() : Iter.Iter<(Blob, Blob)> = entries_(#reverse);
 
-    public func vals() : Iter.Iter<Blob> {
-      vals_(#forward);
-    };
+    public func vals() : Iter.Iter<Blob> = vals_(#forward);
 
-    public func valsRev() : Iter.Iter<Blob> {
-      vals_(#reverse);
-    };
+    public func valsRev() : Iter.Iter<Blob> = vals_(#reverse);
 
-    public func keys() : Iter.Iter<Blob> {
-      keys_(#forward);
-    };
+    public func keys() : Iter.Iter<Blob> = keys_(#forward);
 
-    public func keysRev() : Iter.Iter<Blob> {
-      keys_(#reverse);
-    };
+    public func keysRev() : Iter.Iter<Blob> = keys_(#reverse);
 
     public func size() : Nat = Nat64.toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size);
 
