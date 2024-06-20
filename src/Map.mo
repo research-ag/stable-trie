@@ -7,6 +7,8 @@ import Nat8 "mo:base/Nat8";
 import Nat16 "mo:base/Nat16";
 import Int "mo:base/Int";
 import Option "mo:base/Option";
+import Debug "mo:base/Debug";
+import Result "mo:base/Result";
 
 import Base "base";
 
@@ -16,6 +18,7 @@ module {
     last_empty_node : Nat64;
     last_empty_leaf : Nat64;
   };
+
   /// Bidirectional enumeration of any keys s in the order they are added.
   /// For a map from keys to index `Nat` it is implemented as trie in stable memory.
   /// for a map from index `Nat` to keys the implementation is a consecutive interval of stable memory.
@@ -72,6 +75,11 @@ module {
 
     base.setCallbacks(popEmptyNode, popEmptyLeaf);
 
+    func unwrap<T>(r : Result.Result<T, { #LimitExceeded }>) : T {
+      let #ok x = r else Debug.trap("Pointer size overflow");
+      x;
+    };
+
     /// Add `key` and `value` to enumeration. Returns null if pointer size limit exceeded. Returns `size` if the key in new to the enumeration
     /// or rewrites value and returns index of key in enumeration otherwise.
     ///
@@ -89,12 +97,13 @@ module {
     /// assert(e.put("abc", "c") == ?0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func put(key : Blob, value : Blob) : ?Bool {
+    public func put(key : Blob, value : Blob) = unwrap(putSafe(key, value));
+
+    public func putSafe(key : Blob, value : Blob) : Result.Result<(), { #LimitExceeded }> {
       let { leaves; nodes } = base.regions();
 
-      let ?(added, leaf) = base.put_(nodes, leaves, key) else return null;
-      base.setValue(leaves, leaf, value);
-      ?added;
+      let ?(_, leaf) = base.put_(nodes, leaves, key) else return #err(#LimitExceeded);
+      #ok(base.setValue(leaves, leaf, value));
     };
 
     /// Add `key` and `value` to enumeration.
@@ -116,19 +125,22 @@ module {
     /// assert(e.replace("abc", "c") == ?("a", 0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func replace(key : Blob, value : Blob) : ?(Blob, Bool) {
+    public func replace(key : Blob, value : Blob) : ?Blob = unwrap(replaceSafe(key, value));
+
+    public func replaceSafe(key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
       let { leaves; nodes } = base.regions();
 
-      let ?(added, leaf) = base.put_(nodes, leaves, key) else return null;
-      let ret_value = if (added) {
-        base.setValue(leaves, leaf, value);
-        value;
-      } else {
-        let old_value = base.getValue(leaves, leaf);
-        base.setValue(leaves, leaf, value);
-        old_value;
-      };
-      ?(ret_value, added);
+      let ?(added, leaf) = base.put_(nodes, leaves, key) else return #err(#LimitExceeded);
+      #ok(
+        if (added) {
+          base.setValue(leaves, leaf, value);
+          null;
+        } else {
+          let old_value = base.getValue(leaves, leaf);
+          base.setValue(leaves, leaf, value);
+          ?old_value;
+        }
+      );
     };
 
     /// Add `key` and `value` to enumeration.
@@ -145,22 +157,25 @@ module {
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// assert(e.lookupOrPut("abc", "a") == ?("a", 0);
-    /// assert(e.lookupOrPut("aaa", "b") == ?("b", 1));
-    /// assert(e.lookupOrPut("abc", "c") == ?("a", 0);
+    /// assert(e.getOrPut("abc", "a") == ?("a", 0);
+    /// assert(e.getOrPut("aaa", "b") == ?("b", 1));
+    /// assert(e.getOrPut("abc", "c") == ?("a", 0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func lookupOrPut(key : Blob, value : Blob) : ?(Blob, Bool) {
+    public func getOrPut(key : Blob, value : Blob) : ?Blob = unwrap(getOrPutSafe(key, value));
+
+    public func getOrPutSafe(key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
       let { leaves; nodes } = base.regions();
 
-      let ?(added, leaf) = base.put_(nodes, leaves, key) else return null;
-      let ret_value = if (added) {
-        base.setValue(leaves, leaf, value);
-        value;
-      } else {
-        base.getValue(leaves, leaf);
-      };
-      ?(ret_value, added);
+      let ?(added, leaf) = base.put_(nodes, leaves, key) else return #err(#LimitExceeded);
+      #ok(
+        if (added) {
+          base.setValue(leaves, leaf, value);
+          null;
+        } else {
+          ?base.getValue(leaves, leaf);
+        }
+      );
     };
 
     /// Returns `?(index, value)` where `index` is the index of `key` in order it was added to enumeration and `value` is corresponding value to the `key`,
@@ -177,22 +192,30 @@ module {
     /// });
     /// assert(e.put("abc", "a") == ?0);
     /// assert(e.put("aaa", "b") == ?1);
-    /// assert(e.lookup("abc") == ?("a", 0);
-    /// assert(e.lookup("aaa") == ?("b", 1));
-    /// assert(e.lookup("bbb") == null);
+    /// assert(e.get("abc") == ?("a", 0);
+    /// assert(e.get("aaa") == ?("b", 1));
+    /// assert(e.get("bbb") == null);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func lookup(key : Blob) : ?Blob {
+    public func get(key : Blob) : ?Blob {
       Option.map<(Blob, Nat), Blob>(base.lookup(key), func(a) = a.0);
     };
 
-    public func delete(key : Blob) : ?Blob {
+    public func remove(key : Blob) : ?Blob {
+      removeInternal(key, true);
+    };
+
+    public func delete(key : Blob) {
+      ignore removeInternal(key, false);
+    };
+
+    func removeInternal(key : Blob, ret : Bool) : ?Blob {
       let { leaves; nodes } = base.regions();
       let bytes = Blob.toArray(key);
 
       let idx = base.keyToRootIndex(bytes);
       let child = base.getChild(nodes, 0, idx);
-      let (value, branch_root) = deleteRec(nodes, leaves, key, bytes, child, base.root_bitlength);
+      let (value, branch_root) = deleteRec(nodes, leaves, key, bytes, child, base.root_bitlength, ret);
       if (branch_root != child) {
         base.setChild(nodes, 0, idx, branch_root);
       };
@@ -217,14 +240,14 @@ module {
       if (lastNode & 1 == 0) node else lastNode;
     };
 
-    func deleteRec(nodes : Base.Region, leaves : Base.Region, key : Blob, bytes : [Nat8], node : Nat64, pos : Nat16) : (?Blob, Nat64) {
+    func deleteRec(nodes : Base.Region, leaves : Base.Region, key : Blob, bytes : [Nat8], node : Nat64, pos : Nat16, ret : Bool) : (?Blob, Nat64) {
       if (node == 0) return (null, node);
       if (node & 1 == 1) {
         let leaf = node >> 1;
         if (base.getKey(leaves, leaf) == key) {
-          let ret = (?base.getValue(leaves, leaf), 0 : Nat64);
+          let r = (if (ret) ?base.getValue(leaves, leaf) else null, 0 : Nat64);
           pushEmptyLeaf(leaves, leaf);
-          return ret;
+          return r;
         } else {
           return (null, node);
         };
@@ -232,8 +255,7 @@ module {
 
       let idx = base.keyToIndex(bytes, pos);
       let child = base.getChild(nodes, node, idx);
-      let ret = deleteRec(nodes, leaves, key, bytes, child, pos +% base.bitlength);
-      let (value, branch_root) = ret;
+      let (value, branch_root) = deleteRec(nodes, leaves, key, bytes, child, pos +% base.bitlength, ret);
 
       let ret_branch_root = if (branch_root != child) {
         base.setChild(nodes, node, idx, branch_root);

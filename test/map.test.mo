@@ -7,7 +7,6 @@ import Nat8 "mo:base/Nat8";
 import Nat64 "mo:base/Nat64";
 import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
-import Option "mo:base/Option";
 import StableTrie "../src/Map";
 
 let rng = Prng.Seiran128();
@@ -55,35 +54,35 @@ for (value_size in value_sizes.vals()) {
 
       var i = 0;
       for (key in keys.vals()) {
-        assert trie.put(key, values[i]) == ?true;
+        trie.put(key, values[i]);
         i += 1;
       };
 
       i := 0;
       for (key in delete_keys.vals()) {
-        assert trie.put(key, values[i]) == ?true;
+        trie.put(key, values[i]);
         i += 1;
       };
 
       i := 0;
       for (key in delete_keys.vals()) {
-        assert trie.delete(key) == ?values[i];
+        assert trie.remove(key) == ?values[i];
         i += 1;
       };
 
       i := 0;
 
       for (key in keys.vals()) {
-        assert (trie.lookup(key) == ?values[i]);
+        assert (trie.get(key) == ?values[i]);
         i += 1;
       };
 
       for (key in keysAbsent.vals()) {
-        assert trie.lookup(key) == null;
+        assert trie.get(key) == null;
       };
 
       for (key in delete_keys.vals()) {
-        assert trie.lookup(key) == null;
+        assert trie.get(key) == null;
       };
 
       do {
@@ -96,7 +95,7 @@ for (value_size in value_sizes.vals()) {
 
       i := 0;
       for (key in keys.vals()) {
-        assert trie.delete(key) == ?values[i];
+        assert trie.remove(key) == ?values[i];
         i += 1;
       };
       
@@ -111,7 +110,7 @@ for (value_size in value_sizes.vals()) {
       let before = (trie.leafCount(), trie.nodeCount());
       i := 0;
       for (key in keys.vals()) {
-        assert Option.isSome(trie.put(key, values[i]));
+        trie.put(key, values[i]);
         i += 1;
       };
       assert before == (trie.leafCount(), trie.nodeCount());
