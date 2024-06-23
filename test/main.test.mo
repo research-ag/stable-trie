@@ -7,8 +7,8 @@ import Nat8 "mo:base/Nat8";
 import Nat64 "mo:base/Nat64";
 import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
-import Option "mo:base/Option";
 import Debug "mo:base/Debug";
+import Result "mo:base/Result";
 import StableTrie "../src/Enumeration";
 
 let rng = Prng.Seiran128();
@@ -56,7 +56,7 @@ for (value_size in value_sizes.vals()) {
 
       var i = 0;
       for (key in keys.vals()) {
-        assert trie.put(key, values[i]) == ?i;
+        assert trie.add(key, values[i]) == i;
         i += 1;
       };
       
@@ -96,7 +96,7 @@ func pointerMaxSizeTest() {
   });
   for (i in Iter.range(0, 32_000)) {
     let key = Blob.fromArray([Nat8.fromNat(i % 256), Nat8.fromNat(i / 256)]);
-    if (trie.put(key, "") != ?i) {
+    if (trie.addChecked(key, "") != #ok(i)) {
       Debug.print(debug_show i);
       assert false;
     };
@@ -133,10 +133,10 @@ func _profile() {
         Iter.range(0, n),
         func(i) {
           if (i == 0) {
-            ignore trie.put(keys[0], "");
+            ignore trie.add(keys[0], "");
           } else {
             for (j in Iter.range(2 ** (i - 1), 2 ** i - 1)) {
-              assert Option.isSome(trie.put(keys[j], ""));
+              assert Result.isOk(trie.addChecked(keys[j], ""));
             };
           };
           "";

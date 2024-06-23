@@ -29,6 +29,7 @@ import Nat8 "mo:base/Nat8";
 import Nat16 "mo:base/Nat16";
 import Debug "mo:base/Debug";
 import Nat32 "mo:base/Nat32";
+import Result "mo:base/Result";
 
 module {
   /// Stable region with `freeSpace` variable.
@@ -147,6 +148,11 @@ module {
 
     var pop_node : (Region.Region) -> ?Nat64 = func(_) = null;
     var pop_leaf : (Region.Region) -> ?Nat64 = func(_) = null;
+
+    public func unwrap<T>(r : Result.Result<T, { #LimitExceeded }>) : T {
+      let #ok x = r else Debug.trap("Pointer size overflow");
+      x;
+    };
 
     public func setCallbacks(node : (Region.Region) -> ?Nat64, leaf : (Region.Region) -> ?Nat64) {
       pop_node := node;

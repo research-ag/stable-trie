@@ -3,6 +3,7 @@ import Nat64 "mo:base/Nat64";
 import Nat "mo:base/Nat";
 import Array "mo:base/Array";
 import Iter "mo:base/Iter";
+import Result "mo:base/Result";
 
 import Base "base";
 
@@ -50,15 +51,17 @@ module {
     /// assert(e.put("abc", "c") == ?0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func put(key : Blob, value : Blob) : ?Nat {
+    public func addChecked(key : Blob, value : Blob) : Result.Result<Nat, { #LimitExceeded }> {
       let { leaves; nodes } = base.regions();
       let leaves_region = leaves.region;
       let nodes_region = nodes.region;
 
-      let ?(_, leaf) = base.put_(nodes, leaves, nodes_region, leaves_region, key) else return null;
+      let ?(_, leaf) = base.put_(nodes, leaves, nodes_region, leaves_region, key) else return #err(#LimitExceeded);
       base.setValue(leaves_region, leaf, value);
-      ?Nat64.toNat(leaf);
+      #ok(Nat64.toNat(leaf));
     };
+
+    public func add(key : Blob, value : Blob) : Nat = base.unwrap(addChecked(key, value));
 
     /// Add `key` and `value` to enumeration.
     /// Returns null if pointer size limit exceeded.
@@ -79,22 +82,24 @@ module {
     /// assert(e.replace("abc", "c") == ?("a", 0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func replace(key : Blob, value : Blob) : ?(Blob, Nat) {
+    public func replaceChecked(key : Blob, value : Blob) : Result.Result<(?Blob, Nat), {#LimitExceeded}> {
       let { leaves; nodes } = base.regions();
       let leaves_region = leaves.region;
       let nodes_region = nodes.region;
 
-      let ?(added, leaf) = base.put_(nodes, leaves, nodes_region, leaves_region, key) else return null;
+      let ?(added, leaf) = base.put_(nodes, leaves, nodes_region, leaves_region, key) else return #err(#LimitExceeded);
       let ret_value = if (added) {
         base.setValue(leaves_region, leaf, value);
-        value;
+        null;
       } else {
         let old_value = base.getValue(leaves_region, leaf);
         base.setValue(leaves_region, leaf, value);
-        old_value;
+        ?old_value;
       };
-      ?(ret_value, Nat64.toNat(leaf));
+      #ok(ret_value, Nat64.toNat(leaf));
     };
+
+    public func replace(key : Blob, value : Blob) : (?Blob, Nat) = base.unwrap(replaceChecked(key, value));
 
     /// Add `key` and `value` to enumeration.
     /// Returns null if pointer size limit exceeded.
@@ -115,20 +120,22 @@ module {
     /// assert(e.lookupOrPut("abc", "c") == ?("a", 0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func lookupOrPut(key : Blob, value : Blob) : ?(Blob, Nat) {
+    public func lookupOrPutChecked(key : Blob, value : Blob) : Result.Result<(?Blob, Nat), {#LimitExceeded}> {
       let { leaves; nodes } = base.regions();
       let leaves_region = leaves.region;
       let nodes_region = nodes.region;
 
-      let ?(added, leaf) = base.put_(nodes, leaves, nodes_region, leaves_region, key) else return null;
+      let ?(added, leaf) = base.put_(nodes, leaves, nodes_region, leaves_region, key) else return #err(#LimitExceeded);
       let ret_value = if (added) {
         base.setValue(leaves_region, leaf, value);
-        value;
+        null;
       } else {
-        base.getValue(leaves_region, leaf);
+        ?base.getValue(leaves_region, leaf);
       };
-      ?(ret_value, Nat64.toNat(leaf));
+      #ok(ret_value, Nat64.toNat(leaf));
     };
+
+    public func lookupOrPut(key : Blob, value : Blob) : (?Blob, Nat) = base.unwrap(lookupOrPutChecked(key, value));
 
     /// Returns `?(index, value)` where `index` is the index of `key` in order it was added to enumeration and `value` is corresponding value to the `key`,
     /// or `null` it `key` wasn't added.

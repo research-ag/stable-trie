@@ -7,7 +7,6 @@ import Nat8 "mo:base/Nat8";
 import Nat16 "mo:base/Nat16";
 import Int "mo:base/Int";
 import Option "mo:base/Option";
-import Debug "mo:base/Debug";
 import Result "mo:base/Result";
 
 import Base "base";
@@ -75,11 +74,6 @@ module {
 
     base.setCallbacks(popEmptyNode, popEmptyLeaf);
 
-    func unwrap<T>(r : Result.Result<T, { #LimitExceeded }>) : T {
-      let #ok x = r else Debug.trap("Pointer size overflow");
-      x;
-    };
-
     /// Add `key` and `value` to enumeration. Returns null if pointer size limit exceeded. Returns `size` if the key in new to the enumeration
     /// or rewrites value and returns index of key in enumeration otherwise.
     ///
@@ -97,7 +91,7 @@ module {
     /// assert(e.put("abc", "c") == ?0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func put(key : Blob, value : Blob) = unwrap(putChecked(key, value));
+    public func put(key : Blob, value : Blob) = base.unwrap(putChecked(key, value));
 
     public func putChecked(key : Blob, value : Blob) : Result.Result<(), { #LimitExceeded }> {
       let { leaves; nodes } = base.regions();
@@ -105,7 +99,8 @@ module {
       let nodes_region = nodes.region;
 
       let ?(_, leaf) = base.put_(nodes, leaves, nodes_region, leaves_region, key) else return #err(#LimitExceeded);
-      #ok(base.setValue(leaves_region, leaf, value));
+      base.setValue(leaves_region, leaf, value);
+      #ok();
     };
 
     /// Add `key` and `value` to enumeration.
@@ -127,7 +122,7 @@ module {
     /// assert(e.replace("abc", "c") == ?("a", 0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func replace(key : Blob, value : Blob) : ?Blob = unwrap(replaceChecked(key, value));
+    public func replace(key : Blob, value : Blob) : ?Blob = base.unwrap(replaceChecked(key, value));
 
     public func replaceChecked(key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
       let { leaves; nodes } = base.regions();
@@ -166,7 +161,7 @@ module {
     /// assert(e.getOrPut("abc", "c") == ?("a", 0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func getOrPut(key : Blob, value : Blob) : ?Blob = unwrap(getOrPutChecked(key, value));
+    public func getOrPut(key : Blob, value : Blob) : ?Blob = base.unwrap(getOrPutChecked(key, value));
 
     public func getOrPutChecked(key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
       let { leaves; nodes } = base.regions();
