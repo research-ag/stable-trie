@@ -82,7 +82,7 @@ module {
     /// assert(e.replace("abc", "c") == ?("a", 0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func replaceChecked(key : Blob, value : Blob) : Result.Result<(?Blob, Nat), {#LimitExceeded}> {
+    public func replaceChecked(key : Blob, value : Blob) : Result.Result<(?Blob, Nat), { #LimitExceeded }> {
       let { leaves; nodes } = base.regions();
       let leaves_region = leaves.region;
       let nodes_region = nodes.region;
@@ -120,7 +120,7 @@ module {
     /// assert(e.lookupOrPut("abc", "c") == ?("a", 0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func lookupOrPutChecked(key : Blob, value : Blob) : Result.Result<(?Blob, Nat), {#LimitExceeded}> {
+    public func lookupOrPutChecked(key : Blob, value : Blob) : Result.Result<(?Blob, Nat), { #LimitExceeded }> {
       let { leaves; nodes } = base.regions();
       let leaves_region = leaves.region;
       let nodes_region = nodes.region;
