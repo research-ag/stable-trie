@@ -145,10 +145,10 @@ module {
       };
     };
 
-    var pop_node : (Region) -> ?Nat64 = func(_) = null;
-    var pop_leaf : (Region) -> ?Nat64 = func(_) = null;
+    var pop_node : (Region.Region) -> ?Nat64 = func(_) = null;
+    var pop_leaf : (Region.Region) -> ?Nat64 = func(_) = null;
 
-    public func setCallbacks(node : (Region) -> ?Nat64, leaf : (Region) -> ?Nat64) {
+    public func setCallbacks(node : (Region.Region) -> ?Nat64, leaf : (Region.Region) -> ?Nat64) {
       pop_node := node;
       pop_leaf := leaf;
     };
@@ -163,7 +163,7 @@ module {
     };
 
     func newInternalNode(region : Region) : ?Nat64 {
-      let node = switch (pop_node(region)) {
+      let node = switch (pop_node(region.region)) {
         case (?node) node;
         case (null) {
           if (node_count != max_address) {
@@ -179,7 +179,7 @@ module {
     };
 
     public func newLeaf(region : Region, key : Blob) : ?Nat64 {
-      let leaf = switch (pop_leaf(region)) {
+      let leaf = switch (pop_leaf(region.region)) {
         case (?leaf) leaf;
         case (null) {
           if (leaf_count != max_address) {
@@ -201,34 +201,34 @@ module {
       (offset_base +% (node >> 1) *% node_size) +% delta;
     };
 
-    public func loadPointer(region : Region, offset : Nat64) : Nat64 {
-      Region.loadNat64(region.region, offset) & loadMask;
+    public func loadPointer(region : Region.Region, offset : Nat64) : Nat64 {
+      Region.loadNat64(region, offset) & loadMask;
     };
 
-    public func getChild(region : Region, node : Nat64, index : Nat64) : Nat64 {
+    public func getChild(region : Region.Region, node : Nat64, index : Nat64) : Nat64 {
       loadPointer(region, getOffset(node, index));
     };
 
-    public func setChild(region : Region, node : Nat64, index : Nat64, child : Nat64) {
+    public func setChild(region : Region.Region, node : Nat64, index : Nat64, child : Nat64) {
       let offset = getOffset(node, index);
-      storePointer(region.region, offset, child);
+      storePointer(region, offset, child);
     };
 
     public func getLeafOffset(index : Nat64) : Nat64 = index *% leaf_size;
 
-    public func getKey(region : Region, index : Nat64) : Blob {
-      Region.loadBlob(region.region, getLeafOffset(index), args.key_size);
+    public func getKey(region : Region.Region, index : Nat64) : Blob {
+      Region.loadBlob(region, getLeafOffset(index), args.key_size);
     };
 
-    public func getValue(region : Region, index : Nat64) : Blob {
+    public func getValue(region : Region.Region, index : Nat64) : Blob {
       if (empty_values) return "";
-      Region.loadBlob(region.region, getLeafOffset(index) +% key_size_, args.value_size);
+      Region.loadBlob(region, getLeafOffset(index) +% key_size_, args.value_size);
     };
 
-    public func setValue(region : Region, index : Nat64, value : Blob) {
+    public func setValue(region : Region.Region, index : Nat64, value : Blob) {
       assert value.size() == args.value_size;
       if (empty_values) return;
-      Region.storeBlob(region.region, getLeafOffset(index) +% key_size_, value);
+      Region.storeBlob(region, getLeafOffset(index) +% key_size_, value);
     };
 
     public func keyToRootIndex(bytes : [Nat8]) : Nat64 {
@@ -252,7 +252,7 @@ module {
       return Nat64.fromIntWrap(ret);
     };
 
-    public func find(nodes : Region, bytes : [Nat8]) : (Nat64, Nat64, Nat64, Nat16) {
+    public func find(nodes : Region.Region, bytes : [Nat8]) : (Nat64, Nat64, Nat64, Nat16) {
       var idx = keyToRootIndex(bytes);
       var pos = root_bitlength;
       var node : Nat64 = 0;
@@ -277,11 +277,11 @@ module {
       Debug.trap("Unreacheable");
     };
 
-    public func put_(nodes : Region, leaves : Region, key : Blob) : ?(Bool, Nat64) {
+    public func put_(nodes : Region, leaves : Region, nodes_region : Region.Region, leaves_region : Region.Region, key : Blob) : ?(Bool, Nat64) {
       assert key.size() == args.key_size;
       let bytes = Blob.toArray(key);
 
-      let (node_, last_, old_leaf, pos_) = find(nodes, bytes);
+      let (node_, last_, old_leaf, pos_) = find(nodes_region, bytes);
 
       var last = last_;
       var node = node_;
@@ -289,12 +289,12 @@ module {
       if (old_leaf == 0) {
         let ?leaf = newLeaf(leaves, key) else return null;
 
-        setChild(nodes, node, last, leaf);
+        setChild(nodes_region, node, last, leaf);
         return ?(true, (leaf >> 1));
       };
 
       let index = old_leaf >> 1;
-      let old_key = getKey(leaves, index);
+      let old_key = getKey(leaves_region, index);
       if (key == old_key) {
         return ?(false, index);
       };
@@ -303,10 +303,10 @@ module {
       var pos = pos_;
       label l loop {
         let ?add = newInternalNode(nodes) else {
-          setChild(nodes, node, last, old_leaf);
+          setChild(nodes_region, node, last, old_leaf);
           return null;
         };
-        setChild(nodes, node, last, add);
+        setChild(nodes_region, node, last, add);
         node := add;
 
         let (a, b) = (keyToIndex(bytes, pos), keyToIndex(old_bytes, pos));
@@ -314,9 +314,9 @@ module {
         if (a == b) {
           last := a;
         } else {
-          setChild(nodes, node, b, old_leaf);
+          setChild(nodes_region, node, b, old_leaf);
           let ?leaf = newLeaf(leaves, key) else return null;
-          setChild(nodes, node, a, leaf);
+          setChild(nodes_region, node, a, leaf);
           return ?(true, (leaf >> 1));
         };
       };
@@ -329,15 +329,21 @@ module {
 
       let bytes = Blob.toArray(key);
 
-      let (_, _, old_leaf, _) = find(nodes, bytes);
+      let (_, _, old_leaf, _) = find(nodes.region, bytes);
       if (old_leaf == 0) return null;
       let index = old_leaf >> 1;
-      return if (getKey(leaves, index) == key) ?(getValue(leaves, index), Nat64.toNat(index)) else null;
+
+      let leaves_region = leaves.region;
+      return if (getKey(leaves_region, index) == key) {
+        ?(getValue(leaves_region, index), Nat64.toNat(index));
+      } else {
+        null;
+      };
     };
 
     type Dir = { #forward; #reverse };
 
-    class Iterator(nodes : Region, dir : Dir) {
+    class Iterator(nodes : Region.Region, dir : Dir) {
       let forward = dir == #forward;
       let stack = Array.init<(Nat64, Nat64)>(args.key_size * 8 / Nat16.toNat(bitlength), (0, 0));
       var depth = 1;
@@ -378,26 +384,28 @@ module {
       };
     };
 
-    func entries_(dir : Dir) : Iter.Iter<(Blob, Blob)> {
+    func entries_base<T>(dir : Dir, f : (Nat64, Region.Region) -> T) : Iter.Iter<T> {
       let state = regions();
       let { nodes; leaves } = state;
-
-      Iter.map<Nat64, (Blob, Blob)>(Iterator(nodes, dir), func(leaf) = (getKey(leaves, leaf), getValue(leaves, leaf)));
+      let leaves_region = leaves.region;
+      let nodes_region = nodes.region;
+      Iter.map<Nat64, T>(Iterator(nodes_region, dir), func(leaf) = f(leaf, leaves_region));
     };
 
-    func vals_(dir : Dir) : Iter.Iter<Blob> {
-      let state = regions();
-      let { nodes; leaves } = state;
+    func entries_(dir : Dir) : Iter.Iter<(Blob, Blob)> = entries_base<(Blob, Blob)>(
+      dir,
+      func(leaf, leaves) = (getKey(leaves, leaf), getValue(leaves, leaf)),
+    );
 
-      Iter.map<Nat64, Blob>(Iterator(nodes, dir), func(leaf) = getValue(leaves, leaf));
-    };
+    func vals_(dir : Dir) : Iter.Iter<Blob> = entries_base<Blob>(
+      dir,
+      func(leaf, leaves) = getValue(leaves, leaf),
+    );
 
-    func keys_(dir : Dir) : Iter.Iter<Blob> {
-      let state = regions();
-      let { nodes; leaves } = state;
-
-      Iter.map<Nat64, Blob>(Iterator(nodes, dir), func(leaf) = getKey(leaves, leaf));
-    };
+    func keys_(dir : Dir) : Iter.Iter<Blob> = entries_base<Blob>(
+      dir,
+      func(leaf, leaves) = getKey(leaves, leaf),
+    );
 
     public func entries() : Iter.Iter<(Blob, Blob)> = entries_(#forward);
 

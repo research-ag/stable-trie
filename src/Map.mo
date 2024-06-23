@@ -48,12 +48,12 @@ module {
     var last_empty_node : Nat64 = base.loadMask;
     var last_empty_leaf : Nat64 = base.loadMask;
 
-    func pushEmptyLeaf(leaves : Base.Region, leaf : Nat64) {
-      base.storePointer(leaves.region, base.getLeafOffset(leaf), last_empty_leaf);
+    func pushEmptyLeaf(leaves : Region.Region, leaf : Nat64) {
+      base.storePointer(leaves, base.getLeafOffset(leaf), last_empty_leaf);
       last_empty_leaf := leaf;
     };
 
-    func popEmptyLeaf(leaves : Base.Region) : ?Nat64 {
+    func popEmptyLeaf(leaves : Region.Region) : ?Nat64 {
       if (last_empty_leaf == base.loadMask) return null;
       let ret = last_empty_leaf;
 
@@ -61,12 +61,12 @@ module {
       ?ret;
     };
 
-    func pushEmptyNode(nodes : Base.Region, node : Nat64) {
+    func pushEmptyNode(nodes : Region.Region, node : Nat64) {
       base.setChild(nodes, node, 0, last_empty_node);
       last_empty_node := node;
     };
 
-    func popEmptyNode(nodes : Base.Region) : ?Nat64 {
+    func popEmptyNode(nodes : Region.Region) : ?Nat64 {
       if (last_empty_node == base.loadMask) return null;
       let ret = last_empty_node;
       last_empty_node := base.getChild(nodes, last_empty_node, 0);
@@ -97,13 +97,15 @@ module {
     /// assert(e.put("abc", "c") == ?0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func put(key : Blob, value : Blob) = unwrap(putSafe(key, value));
+    public func put(key : Blob, value : Blob) = unwrap(putChecked(key, value));
 
-    public func putSafe(key : Blob, value : Blob) : Result.Result<(), { #LimitExceeded }> {
+    public func putChecked(key : Blob, value : Blob) : Result.Result<(), { #LimitExceeded }> {
       let { leaves; nodes } = base.regions();
+      let leaves_region = leaves.region;
+      let nodes_region = nodes.region;
 
-      let ?(_, leaf) = base.put_(nodes, leaves, key) else return #err(#LimitExceeded);
-      #ok(base.setValue(leaves, leaf, value));
+      let ?(_, leaf) = base.put_(nodes, leaves, nodes_region, leaves_region, key) else return #err(#LimitExceeded);
+      #ok(base.setValue(leaves_region, leaf, value));
     };
 
     /// Add `key` and `value` to enumeration.
@@ -125,19 +127,21 @@ module {
     /// assert(e.replace("abc", "c") == ?("a", 0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func replace(key : Blob, value : Blob) : ?Blob = unwrap(replaceSafe(key, value));
+    public func replace(key : Blob, value : Blob) : ?Blob = unwrap(replaceChecked(key, value));
 
-    public func replaceSafe(key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
+    public func replaceChecked(key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
       let { leaves; nodes } = base.regions();
+      let leaves_region = leaves.region;
+      let nodes_region = nodes.region;
 
-      let ?(added, leaf) = base.put_(nodes, leaves, key) else return #err(#LimitExceeded);
+      let ?(added, leaf) = base.put_(nodes, leaves, nodes_region, leaves_region, key) else return #err(#LimitExceeded);
       #ok(
         if (added) {
-          base.setValue(leaves, leaf, value);
+          base.setValue(leaves_region, leaf, value);
           null;
         } else {
-          let old_value = base.getValue(leaves, leaf);
-          base.setValue(leaves, leaf, value);
+          let old_value = base.getValue(leaves_region, leaf);
+          base.setValue(leaves_region, leaf, value);
           ?old_value;
         }
       );
@@ -162,18 +166,20 @@ module {
     /// assert(e.getOrPut("abc", "c") == ?("a", 0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func getOrPut(key : Blob, value : Blob) : ?Blob = unwrap(getOrPutSafe(key, value));
+    public func getOrPut(key : Blob, value : Blob) : ?Blob = unwrap(getOrPutChecked(key, value));
 
-    public func getOrPutSafe(key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
+    public func getOrPutChecked(key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
       let { leaves; nodes } = base.regions();
+      let leaves_region = leaves.region;
+      let nodes_region = nodes.region;
 
-      let ?(added, leaf) = base.put_(nodes, leaves, key) else return #err(#LimitExceeded);
+      let ?(added, leaf) = base.put_(nodes, leaves, nodes_region, leaves_region, key) else return #err(#LimitExceeded);
       #ok(
         if (added) {
-          base.setValue(leaves, leaf, value);
+          base.setValue(leaves_region, leaf, value);
           null;
         } else {
-          ?base.getValue(leaves, leaf);
+          ?base.getValue(leaves_region, leaf);
         }
       );
     };
@@ -205,19 +211,22 @@ module {
 
     func removeInternal(key : Blob, ret : Bool) : ?Blob {
       let { leaves; nodes } = base.regions();
+      let leaves_region = leaves.region;
+      let nodes_region = nodes.region;
+
       let bytes = Blob.toArray(key);
 
       let idx = base.keyToRootIndex(bytes);
-      let child = base.getChild(nodes, 0, idx);
-      let (value, branch_root) = deleteRec(nodes, leaves, key, bytes, child, base.root_bitlength, ret);
+      let child = base.getChild(nodes_region, 0, idx);
+      let (value, branch_root) = deleteRec(nodes_region, leaves_region, key, bytes, child, base.root_bitlength, ret);
       if (branch_root != child) {
-        base.setChild(nodes, 0, idx, branch_root);
+        base.setChild(nodes_region, 0, idx, branch_root);
       };
       value;
     };
 
-    func branchRoot(region : Base.Region, node : Nat64) : Nat64 {
-      let blob = Region.loadBlob(region.region, base.getOffset(node, 0), base.node_size_);
+    func branchRoot(region : Region.Region, node : Nat64) : Nat64 {
+      let blob = Region.loadBlob(region, base.getOffset(node, 0), base.node_size_);
       let bytes = Blob.toArray(blob);
 
       var lastNode : Nat64 = 0;
@@ -234,7 +243,7 @@ module {
       if (lastNode & 1 == 0) node else lastNode;
     };
 
-    func deleteRec(nodes : Base.Region, leaves : Base.Region, key : Blob, bytes : [Nat8], node : Nat64, pos : Nat16, ret : Bool) : (?Blob, Nat64) {
+    func deleteRec(nodes : Region.Region, leaves : Region.Region, key : Blob, bytes : [Nat8], node : Nat64, pos : Nat16, ret : Bool) : (?Blob, Nat64) {
       if (node == 0) return (null, node);
       if (node & 1 == 1) {
         let leaf = node >> 1;

@@ -52,9 +52,11 @@ module {
     /// Runtime: O(key_size) acesses to stable memory.
     public func put(key : Blob, value : Blob) : ?Nat {
       let { leaves; nodes } = base.regions();
+      let leaves_region = leaves.region;
+      let nodes_region = nodes.region;
 
-      let ?(_, leaf) = base.put_(nodes, leaves, key) else return null;
-      base.setValue(leaves, leaf, value);
+      let ?(_, leaf) = base.put_(nodes, leaves, nodes_region, leaves_region, key) else return null;
+      base.setValue(leaves_region, leaf, value);
       ?Nat64.toNat(leaf);
     };
 
@@ -79,14 +81,16 @@ module {
     /// Runtime: O(key_size) acesses to stable memory.
     public func replace(key : Blob, value : Blob) : ?(Blob, Nat) {
       let { leaves; nodes } = base.regions();
+      let leaves_region = leaves.region;
+      let nodes_region = nodes.region;
 
-      let ?(added, leaf) = base.put_(nodes, leaves, key) else return null;
+      let ?(added, leaf) = base.put_(nodes, leaves, nodes_region, leaves_region, key) else return null;
       let ret_value = if (added) {
-        base.setValue(leaves, leaf, value);
+        base.setValue(leaves_region, leaf, value);
         value;
       } else {
-        let old_value = base.getValue(leaves, leaf);
-        base.setValue(leaves, leaf, value);
+        let old_value = base.getValue(leaves_region, leaf);
+        base.setValue(leaves_region, leaf, value);
         old_value;
       };
       ?(ret_value, Nat64.toNat(leaf));
@@ -113,13 +117,15 @@ module {
     /// Runtime: O(key_size) acesses to stable memory.
     public func lookupOrPut(key : Blob, value : Blob) : ?(Blob, Nat) {
       let { leaves; nodes } = base.regions();
+      let leaves_region = leaves.region;
+      let nodes_region = nodes.region;
 
-      let ?(added, leaf) = base.put_(nodes, leaves, key) else return null;
+      let ?(added, leaf) = base.put_(nodes, leaves, nodes_region, leaves_region, key) else return null;
       let ret_value = if (added) {
-        base.setValue(leaves, leaf, value);
+        base.setValue(leaves_region, leaf, value);
         value;
       } else {
-        base.getValue(leaves, leaf);
+        base.getValue(leaves_region, leaf);
       };
       ?(ret_value, Nat64.toNat(leaf));
     };
@@ -164,9 +170,11 @@ module {
     /// Runtime: O(1) accesses to stable memory.
     public func get(index : Nat) : ?(Blob, Blob) {
       let { leaves } = base.regions();
+      let leaves_region = leaves.region;
+
       let index_ = Nat64.fromNat(index);
       if (index_ >= base.leaf_count) return null;
-      ?(base.getKey(leaves, index_), base.getValue(leaves, index_));
+      ?(base.getKey(leaves_region, index_), base.getValue(leaves_region, index_));
     };
 
     /// Returns slice `key` and `value` with indices from `left` to `right` or traps if `left` or `right` are out of bounds.
@@ -187,6 +195,8 @@ module {
     /// Runtime: O(right - left) accesses to stable memory.
     public func slice(left : Nat, right : Nat) : [(Blob, Blob)] {
       let { leaves } = base.regions();
+      let leaves_region = leaves.region;
+
       let l = Nat64.fromNat(left);
       let r = Nat64.fromNat(right);
       assert l <= r and r <= base.leaf_count;
@@ -194,7 +204,7 @@ module {
         right - left,
         func(i) {
           let index = Nat64.fromNat(i);
-          (base.getKey(leaves, index), base.getValue(leaves, index));
+          (base.getKey(leaves_region, index), base.getValue(leaves_region, index));
         },
       );
     };
