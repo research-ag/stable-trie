@@ -55,7 +55,7 @@ module {
     leaf_count : Nat64;
   };
 
-  /// Base class for stable trie map and enumeration.
+  /// Base class for stable trie map and enumeration. SHOULD NOT BE USED FROM THE USER'S CODE.
   public class StableTrieBase(args : Args) {
     assert switch (args.pointer_size) {
       case (2 or 4 or 5 or 6 or 8) true;
@@ -443,18 +443,23 @@ module {
 
     public func keysRev() : Iter.Iter<Blob> = keys_(#reverse);
 
+    /// Size of used stable memory in bytes.
     public func size() : Nat = Nat64.toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size);
 
+    /// Number of allocated leaves.
     public func leafCount() : Nat = Nat64.toNat(leaf_count);
 
+    /// Number of allocated nodes.
     public func nodeCount() : Nat = Nat64.toNat(node_count);
 
+    /// Convert to stable data.
     public func share() : StableData = {
       regions() with
       node_count;
       leaf_count;
     };
 
+    /// Create from stable data. Must be the first call after constructor.
     public func unshare(data : StableData) {
       switch (regions_) {
         case (null) {

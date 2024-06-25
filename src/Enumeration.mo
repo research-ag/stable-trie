@@ -8,6 +8,7 @@ import Result "mo:base/Result";
 import Base "base";
 
 module {
+  /// Type of stable data.
   public type StableData = Base.StableData;
 
   /// Bidirectional enumeration of any keys s in the order they are added.
@@ -34,7 +35,8 @@ module {
   public class Enumeration(args : Base.Args) {
     let base : Base.StableTrieBase = Base.StableTrieBase(args);
 
-    /// Add `key` and `value` to enumeration. Returns null if pointer size limit exceeded. Returns `size` if the key in new to the enumeration
+    /// Add `key` and `value` to enumeration. 
+    /// Returns `#LimitExceeded` if pointer size limit exceeded. Returns `size` if the key in new to the enumeration
     /// or rewrites value and returns index of key in enumeration otherwise.
     ///
     /// Example:
@@ -46,9 +48,9 @@ module {
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// assert(e.put("abc", "a") == ?0);
-    /// assert(e.put("aaa", "b") == ?1);
-    /// assert(e.put("abc", "c") == ?0);
+    /// assert(e.addChecked("abc", "a") == #ok 0);
+    /// assert(e.addChecked("aaa", "b") == #ok 1);
+    /// assert(e.addChecked("abc", "c") == #ok 0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
     public func addChecked(key : Blob, value : Blob) : Result.Result<Nat, { #LimitExceeded }> {
@@ -61,12 +63,9 @@ module {
       #ok(Nat64.toNat(leaf));
     };
 
-    public func add(key : Blob, value : Blob) : Nat = base.unwrap(addChecked(key, value));
-
-    /// Add `key` and `value` to enumeration.
-    /// Returns null if pointer size limit exceeded.
-    /// Rewrites value if key is already present. First return value `size` is if the key in new to the enumeration
-    /// or index of key in enumeration otherwise. Second return is old value if new wasn't added or a new one otherwise.
+    /// Add `key` and `value` to enumeration. 
+    /// Traps if pointer size limit exceeded. Returns `size` if the key in new to the enumeration
+    /// or rewrites value and returns index of key in enumeration otherwise.
     ///
     /// Example:
     /// ```motoko
@@ -77,9 +76,31 @@ module {
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// assert(e.replace("abc", "a") == ?("a", 0);
-    /// assert(e.replace("aaa", "b") == ?("b", 1));
-    /// assert(e.replace("abc", "c") == ?("a", 0);
+    /// assert(e.add("abc", "a") == 0);
+    /// assert(e.add("aaa", "b") == 1);
+    /// assert(e.add("abc", "c") == 0);
+    /// ```
+    /// Runtime: O(key_size) acesses to stable memory.
+    public func add(key : Blob, value : Blob) : Nat = base.unwrap(addChecked(key, value));
+
+    /// Add `key` and `value` to enumeration.
+    /// Returns `#LimitExceeded` if pointer size limit exceeded.
+    /// Rewrites value if key is already present. First return is old value if new wasn't added or `null` otherwise. 
+    /// Size return value is `size` if the key in new to the enumeration
+    /// or index of key in enumeration otherwise.
+    ///
+    /// Example:
+    /// ```motoko
+    /// let e = StableTrie.Enumeration({
+    ///   pointer_size = 2;
+    ///   aridity = 2;
+    ///   root_aridity = null;
+    ///   key_size = 2;
+    ///   value_size = 1;
+    /// });
+    /// assert(e.replaceChecked("abc", "a") == #ok (null, 0));
+    /// assert(e.replaceChecked("aaa", "b") == #ok (null, 1));
+    /// assert(e.replaceChecked("abc", "c") == #ok ("a", 0));
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
     public func replaceChecked(key : Blob, value : Blob) : Result.Result<(?Blob, Nat), { #LimitExceeded }> {
@@ -99,10 +120,30 @@ module {
       #ok(ret_value, Nat64.toNat(leaf));
     };
 
+    /// Add `key` and `value` to enumeration.
+    /// Traps if pointer size limit exceeded.
+    /// Rewrites value if key is already present. First return is old value if new wasn't added or `null` otherwise.
+    /// Second return value is `size` if the key in new to the enumeration
+    /// or index of key in enumeration otherwise.
+    ///
+    /// Example:
+    /// ```motoko
+    /// let e = StableTrie.Enumeration({
+    ///   pointer_size = 2;
+    ///   aridity = 2;
+    ///   root_aridity = null;
+    ///   key_size = 2;
+    ///   value_size = 1;
+    /// });
+    /// assert(e.replace("abc", "a") == (null, 0));
+    /// assert(e.replace("aaa", "b") == (null, 1));
+    /// assert(e.replace("abc", "c") == (?"a", 0));
+    /// ```
+    /// Runtime: O(key_size) acesses to stable memory.
     public func replace(key : Blob, value : Blob) : (?Blob, Nat) = base.unwrap(replaceChecked(key, value));
 
     /// Add `key` and `value` to enumeration.
-    /// Returns null if pointer size limit exceeded.
+    /// Returns `#LimitExceeded` if pointer size limit exceeded.
     /// Lookup value if key is already present. First return value `size` is if the key in new to the enumeration
     /// or index of key in enumeration otherwise. Second return is old value if new wasn't added or a new one otherwise.
     ///
@@ -115,9 +156,9 @@ module {
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// assert(e.lookupOrPut("abc", "a") == ?("a", 0);
-    /// assert(e.lookupOrPut("aaa", "b") == ?("b", 1));
-    /// assert(e.lookupOrPut("abc", "c") == ?("a", 0);
+    /// assert(e.lookupOrPut("abc", "a") == #ok (null, 0);
+    /// assert(e.lookupOrPut("aaa", "b") == #ok (null, 1));
+    /// assert(e.lookupOrPut("abc", "c") == #ok (?"a", 0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
     public func lookupOrPutChecked(key : Blob, value : Blob) : Result.Result<(?Blob, Nat), { #LimitExceeded }> {
@@ -135,9 +176,28 @@ module {
       #ok(ret_value, Nat64.toNat(leaf));
     };
 
+    /// Add `key` and `value` to enumeration.
+    /// Traps if pointer size limit exceeded.
+    /// Lookup value if key is already present. First return value `size` is if the key in new to the enumeration
+    /// or index of key in enumeration otherwise. Second return is old value if new wasn't added or a new one otherwise.
+    ///
+    /// Example:
+    /// ```motoko
+    /// let e = StableTrie.Enumeration({
+    ///   pointer_size = 2;
+    ///   aridity = 2;
+    ///   root_aridity = null;
+    ///   key_size = 2;
+    ///   value_size = 1;
+    /// });
+    /// assert(e.lookupOrPut("abc", "a") == (null, 0);
+    /// assert(e.lookupOrPut("aaa", "b") == (null, 1));
+    /// assert(e.lookupOrPut("abc", "c") == (?"a", 0);
+    /// ```
+    /// Runtime: O(key_size) acesses to stable memory.
     public func lookupOrPut(key : Blob, value : Blob) : (?Blob, Nat) = base.unwrap(lookupOrPutChecked(key, value));
 
-    /// Returns `?(index, value)` where `index` is the index of `key` in order it was added to enumeration and `value` is corresponding value to the `key`,
+    /// Returns `?(value, index)` where `index` is the index of `key` in order it was added to enumeration and `value` is corresponding value to the `key`,
     /// or `null` it `key` wasn't added.
     ///
     /// Example:
@@ -149,8 +209,8 @@ module {
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// assert(e.put("abc", "a") == ?0);
-    /// assert(e.put("aaa", "b") == ?1);
+    /// assert(e.add("abc", "a") == 0);
+    /// assert(e.add("aaa", "b") == 1);
     /// assert(e.lookup("abc") == ?("a", 0);
     /// assert(e.lookup("aaa") == ?("b", 1));
     /// assert(e.lookup("bbb") == null);
@@ -169,10 +229,10 @@ module {
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// assert(e.put("abc", "a") == ?0);
-    /// assert(e.put("aaa", "b") == ?1);
-    /// assert(e.get(0) == ("abc", "a"));
-    /// assert(e.get(1) == ("aaa", "b"));
+    /// assert(e.add("abc", "a") == 0);
+    /// assert(e.add("aaa", "b") == 1);
+    /// assert(e.get(0) == ?("abc", "a"));
+    /// assert(e.get(1) == ?("aaa", "b"));
     /// ```
     /// Runtime: O(1) accesses to stable memory.
     public func get(index : Nat) : ?(Blob, Blob) {
@@ -195,8 +255,8 @@ module {
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// assert(e.put("abc", "a") == ?0);
-    /// assert(e.put("aaa", "b") == ?1);
+    /// assert(e.add("abc", "a") == 0);
+    /// assert(e.add("aaa", "b") == 1);
     /// assert(e.slice(0, 2) == [("abc", "a"), ("aaa", "b")]);
     /// ```
     /// Runtime: O(right - left) accesses to stable memory.
@@ -216,26 +276,121 @@ module {
       );
     };
 
+    /// Returns all the keys and values in enumeration ordered by `Blob.compare` of keys.
+    ///
+    /// Example:
+    /// ```motoko
+    /// let e = StableTrie.Enumeration({
+    ///   pointer_size = 2;
+    ///   aridity = 2;
+    ///   root_aridity = null;
+    ///   key_size = 2;
+    ///   value_size = 1;
+    /// });
+    /// assert(e.add("abc", "a") == 0);
+    /// assert(e.add("aaa", "b") == 1);
+    /// assert(Iter.toArray(e.entries()) == [("aaa", "b"), ("abc", "a")]);
+    /// ```
     public func entries() : Iter.Iter<(Blob, Blob)> = base.entries();
 
+    /// Returns all the keys and values in enumeration reverse ordered by `Blob.compare` of keys.
+    ///
+    /// Example:
+    /// ```motoko
+    /// let e = StableTrie.Enumeration({
+    ///   pointer_size = 2;
+    ///   aridity = 2;
+    ///   root_aridity = null;
+    ///   key_size = 2;
+    ///   value_size = 1;
+    /// });
+    /// assert(e.add("abc", "a") == 0);
+    /// assert(e.add("aaa", "b") == 1);
+    /// assert(Iter.toArray(e.entries()) == [("abc", "a"), ("aaa", "b")]);
+    /// ```
     public func entriesRev() : Iter.Iter<(Blob, Blob)> = base.entriesRev();
 
+    /// Returns all the values in enumeration ordered by `Blob.compare` of keys.
+    ///
+    /// Example:
+    /// ```motoko
+    /// let e = StableTrie.Enumeration({
+    ///   pointer_size = 2;
+    ///   aridity = 2;
+    ///   root_aridity = null;
+    ///   key_size = 2;
+    ///   value_size = 1;
+    /// });
+    /// assert(e.add("abc", "a") == 0);
+    /// assert(e.add("aaa", "b") == 1);
+    /// assert(Iter.toArray(e.entries()) == ["b", "a"]);
+    /// ```
     public func vals() : Iter.Iter<Blob> = base.vals();
 
+    /// Returns all the values in enumeration reverse ordered by `Blob.compare` of keys.
+    ///
+    /// Example:
+    /// ```motoko
+    /// let e = StableTrie.Enumeration({
+    ///   pointer_size = 2;
+    ///   aridity = 2;
+    ///   root_aridity = null;
+    ///   key_size = 2;
+    ///   value_size = 1;
+    /// });
+    /// assert(e.add("abc", "a") == 0);
+    /// assert(e.add("aaa", "b") == 1);
+    /// assert(Iter.toArray(e.entries()) == ["a", "b"]);
+    /// ```
     public func valsRev() : Iter.Iter<Blob> = base.valsRev();
 
+    /// Returns all the keys in enumeration ordered by `Blob.compare` of keys.
+    ///
+    /// Example:
+    /// ```motoko
+    /// let e = StableTrie.Enumeration({
+    ///   pointer_size = 2;
+    ///   aridity = 2;
+    ///   root_aridity = null;
+    ///   key_size = 2;
+    ///   value_size = 1;
+    /// });
+    /// assert(e.add("abc", "a") == 0);
+    /// assert(e.add("aaa", "b") == 1);
+    /// assert(Iter.toArray(e.entries()) == ["aaa", "abc"]);
+    /// ```
     public func keys() : Iter.Iter<Blob> = base.keys();
 
+    /// Returns all the keys in enumeration reverse ordered by `Blob.compare` of keys.
+    ///
+    /// Example:
+    /// ```motoko
+    /// let e = StableTrie.Enumeration({
+    ///   pointer_size = 2;
+    ///   aridity = 2;
+    ///   root_aridity = null;
+    ///   key_size = 2;
+    ///   value_size = 1;
+    /// });
+    /// assert(e.add("abc", "a") == 0);
+    /// assert(e.add("aaa", "b") == 1);
+    /// assert(Iter.toArray(e.entries()) == ["abc", "aaa"]);
+    /// ```
     public func keysRev() : Iter.Iter<Blob> = base.keysRev();
 
+    /// Size of used stable memory in bytes.
     public func size() : Nat = base.size();
 
+    /// Number of leaves.
     public func leafCount() : Nat = base.leafCount();
 
+    /// Number of nodes.
     public func nodeCount() : Nat = base.nodeCount();
-
+    
+    /// Convert to stable data.
     public func share() : StableData = base.share();
 
+    /// Create from stable data. Must be the first call after constructor.
     public func unshare(data : StableData) = base.unshare(data);
   };
 };
