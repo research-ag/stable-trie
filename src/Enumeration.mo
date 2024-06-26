@@ -8,10 +8,10 @@ import Result "mo:base/Result";
 import Base "base";
 
 module {
-  /// Type of stable data.
+  /// Type of stable data of `StableTrieEnumeration`.
   public type StableData = Base.StableData;
 
-  /// Bidirectional enumeration of any keys s in the order they are added.
+  /// Bidirectional enumeration of any keys in the order they are added.
   /// For a map from keys to index `Nat` it is implemented as trie in stable memory.
   /// for a map from index `Nat` to keys the implementation is a consecutive interval of stable memory.
   ///
@@ -35,8 +35,9 @@ module {
   public class Enumeration(args : Base.Args) {
     let base : Base.StableTrieBase = Base.StableTrieBase(args);
 
-    /// Add `key` and `value` to enumeration. 
-    /// Returns `#LimitExceeded` if pointer size limit exceeded. Returns `size` if the key in new to the enumeration
+    /// Add `key` and `value` to the enumeration. 
+    /// Returns `#LimitExceeded` if pointer size limit exceeded.
+    /// Returns `size` if the key in new to the enumeration
     /// or rewrites value and returns index of key in enumeration otherwise.
     ///
     /// Example:
@@ -86,7 +87,7 @@ module {
     /// Add `key` and `value` to enumeration.
     /// Returns `#LimitExceeded` if pointer size limit exceeded.
     /// Rewrites value if key is already present. First return is old value if new wasn't added or `null` otherwise. 
-    /// Size return value is `size` if the key in new to the enumeration
+    /// Second return value is `size` if the key in new to the enumeration
     /// or index of key in enumeration otherwise.
     ///
     /// Example:
@@ -145,7 +146,7 @@ module {
     /// Add `key` and `value` to enumeration.
     /// Returns `#LimitExceeded` if pointer size limit exceeded.
     /// Lookup value if key is already present. First return value `size` is if the key in new to the enumeration
-    /// or index of key in enumeration otherwise. Second return is old value if new wasn't added or a new one otherwise.
+    /// or index of key in enumeration otherwise. Second return is old value if new wasn't added or null otherwise.
     ///
     /// Example:
     /// ```motoko
@@ -156,9 +157,9 @@ module {
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// assert(e.lookupOrPut("abc", "a") == #ok (null, 0);
+    /// assert(e.lookupOrPut("abc", "a") == #ok (null, 0));
     /// assert(e.lookupOrPut("aaa", "b") == #ok (null, 1));
-    /// assert(e.lookupOrPut("abc", "c") == #ok (?"a", 0);
+    /// assert(e.lookupOrPut("abc", "c") == #ok (?"a", 0));
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
     public func lookupOrPutChecked(key : Blob, value : Blob) : Result.Result<(?Blob, Nat), { #LimitExceeded }> {
@@ -293,7 +294,7 @@ module {
     /// ```
     public func entries() : Iter.Iter<(Blob, Blob)> = base.entries();
 
-    /// Returns all the keys and values in enumeration reverse ordered by `Blob.compare` of keys.
+    /// Returns all the keys and values in the enumeration reverse ordered by `Blob.compare` of keys.
     ///
     /// Example:
     /// ```motoko
@@ -310,7 +311,7 @@ module {
     /// ```
     public func entriesRev() : Iter.Iter<(Blob, Blob)> = base.entriesRev();
 
-    /// Returns all the values in enumeration ordered by `Blob.compare` of keys.
+    /// Returns all the values in the enumeration ordered by `Blob.compare` of keys.
     ///
     /// Example:
     /// ```motoko
@@ -327,7 +328,7 @@ module {
     /// ```
     public func vals() : Iter.Iter<Blob> = base.vals();
 
-    /// Returns all the values in enumeration reverse ordered by `Blob.compare` of keys.
+    /// Returns all the values in the enumeration reverse ordered by `Blob.compare` of keys.
     ///
     /// Example:
     /// ```motoko
@@ -344,7 +345,7 @@ module {
     /// ```
     public func valsRev() : Iter.Iter<Blob> = base.valsRev();
 
-    /// Returns all the keys in enumeration ordered by `Blob.compare` of keys.
+    /// Returns all the keys in the enumeration ordered by `Blob.compare` of keys.
     ///
     /// Example:
     /// ```motoko
@@ -361,7 +362,7 @@ module {
     /// ```
     public func keys() : Iter.Iter<Blob> = base.keys();
 
-    /// Returns all the keys in enumeration reverse ordered by `Blob.compare` of keys.
+    /// Returns all the keys in the enumeration reverse ordered by `Blob.compare` of keys.
     ///
     /// Example:
     /// ```motoko
@@ -381,10 +382,24 @@ module {
     /// Size of used stable memory in bytes.
     public func size() : Nat = base.size();
 
-    /// Number of leaves.
+    /// Size of used stable memory in bytes.
+    ///
+    /// Example:
+    /// ```motoko
+    /// let e = StableTrie.Enumeration({
+    ///   pointer_size = 2;
+    ///   aridity = 2;
+    ///   root_aridity = null;
+    ///   key_size = 2;
+    ///   value_size = 1;
+    /// });
+    /// assert(e.add("abc", "a") == 0);
+    /// assert(e.add("aaa", "b") == 1);
+    /// assert(e.leafCount() == 2);
+    /// ```
     public func leafCount() : Nat = base.leafCount();
 
-    /// Number of nodes.
+    /// Number of internal nodes excluding leaves.
     public func nodeCount() : Nat = base.nodeCount();
     
     /// Convert to stable data.
