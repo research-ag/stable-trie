@@ -97,6 +97,15 @@ Run
 mops bench --replica pocket-ic
 ```
 
+Benchmark of stable trie map. Values are average numbers of intructions.
+See [canister-profiling](https://github.com/research-ag/canister-profiling) for more details.
+
+|method|rb tree|zhus map|stable trie map|motoko stable btree|
+|---|---|---|---|---|
+|put|3_749|3_720|4_404|259_442|
+|random blobs inside average|5_027|2_152|10_463|445_008|
+|random blobs outside average|4_148|1_085|2_364|406_721|
+
 ## Design
 
 [Trie](https://en.wikipedia.org/wiki/Trie)
