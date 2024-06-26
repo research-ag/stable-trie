@@ -1,18 +1,4 @@
-/// Stable trie enumeration.
-///
-/// `Enumeration` is a "set enumeration" of elements of `Blob`s called "keys"
-/// interface implemented in stable memory using trie.
-///
-/// A typical application is to assign permanent user numbers to princpals.
-///
-/// The data structure is a map `Nat -> Blob` with the following properties:
-/// * keys are not repeated, i.e. the map is injective
-/// * keys are consecutively numbered (no gaps), i.e. if n keys are stored
-///   then `[0,n) -> Blob` is bijective
-/// * keys are numbered in the order they are added to the data structure
-/// * keys cannot be deleted
-/// * efficient inverse lookup `Blob -> Nat`
-/// * doubles as a set implementation (without deletion)
+/// Base class for stable trie.
 ///
 /// Copyright: 2023-2024 MR Research AG
 /// Main author: Andrii Stepanov (AStepanov25)
@@ -38,6 +24,7 @@ module {
     var freeSpace : Nat64;
   };
 
+  /// Arguments of constructor of `Enumeration` and `Map`.
   public type Args = {
     pointer_size : Nat;
     aridity : Nat;
@@ -46,7 +33,7 @@ module {
     value_size : Nat;
   };
 
-  /// Type of stable data of `StableTrieEnumeration`
+  /// Type of stable data of `StableTrieEnumeration`.
   public type StableData = {
     nodes : Region;
     leaves : Region;
@@ -54,6 +41,7 @@ module {
     leaf_count : Nat64;
   };
 
+  /// Base class for stable trie map and enumeration. SHOULD NOT BE USED FROM THE USER'S CODE.
   public class StableTrieBase(args : Args) {
     assert switch (args.pointer_size) {
       case (2 or 4 or 5 or 6 or 8) true;
@@ -63,6 +51,7 @@ module {
       case (2 or 4 or 16 or 256) true;
       case (_) false;
     };
+    // Max leaf size is 2 ** 16, one page of stable memory.
     assert args.key_size >= 1 and args.key_size + args.value_size <= 2 ** 16;
 
     public let aridity_ = Nat64.fromNat(args.aridity);
@@ -71,6 +60,7 @@ module {
     public let pointer_size_ = Nat64.fromNat(args.pointer_size);
     public let root_aridity_ = Nat64.fromNat(Option.get(args.root_aridity, args.aridity));
 
+    // Mask of `pointer_size * 8` bits.
     public let loadMask = if (args.pointer_size == 8) 0xffff_ffff_ffff_ffff : Nat64 else (1 << (pointer_size_ << 3)) - 1;
 
     public let bitlength = Nat16.bitcountTrailingZero(Nat16.fromNat(args.aridity));
@@ -97,6 +87,7 @@ module {
     public var leaf_count : Nat64 = 0;
     public var node_count : Nat64 = 0;
 
+    /// Store pointer to a region
     public let storePointer : (region : Region.Region, offset : Nat64, child : Nat64) -> () = switch (pointer_size_) {
       case (8) func(region, offset, child) = Region.storeNat64(region, offset, child);
       case (6) func(region, offset, child) {
@@ -112,6 +103,7 @@ module {
       case (_) Debug.trap("Can never happen");
     };
 
+    /// Pair of nodes and leaves regions.
     public type State = {
       nodes : Region;
       leaves : Region;
@@ -119,6 +111,7 @@ module {
 
     var regions_ : ?State = null;
 
+    /// Get or create and initialize regions.
     public func regions() : State {
       switch (regions_) {
         case (?r) r;
@@ -146,7 +139,11 @@ module {
       };
     };
 
+
+    /// Pop empty node from empty nodes stack. Used to implement deletion in map.
     var pop_node : (Region.Region) -> ?Nat64 = func(_) = null;
+    
+    /// Pop empty leaf from empty leaf stack. Used to implement deletion in map.
     var pop_leaf : (Region.Region) -> ?Nat64 = func(_) = null;
 
     public func unwrap<T>(r : Result.Result<T, { #LimitExceeded }>) : T {
@@ -154,12 +151,13 @@ module {
       x;
     };
 
+    /// Set `pop_node` and `pop_leaf` callbacks by map constructor.
     public func setCallbacks(node : (Region.Region) -> ?Nat64, leaf : (Region.Region) -> ?Nat64) {
       pop_node := node;
       pop_leaf := leaf;
     };
 
-    // allocate can only be used for n <= 65536
+    /// Acclocate one page if required.  `allocate` can only be used for n <= 65536
     func allocate(region : Region, n : Nat64) {
       if (region.freeSpace < n) {
         assert Region.grow(region.region, 1) != 0xffff_ffff_ffff_ffff;
@@ -168,6 +166,7 @@ module {
       region.freeSpace -%= n;
     };
 
+    /// Create internal node.
     func newInternalNode(region : Region) : ?Nat64 {
       let node = switch (pop_node(region.region)) {
         case (?node) node;
@@ -184,6 +183,7 @@ module {
       ?node;
     };
 
+    /// Create new leaf and initialize key. Value is initialized later.
     public func newLeaf(region : Region, key : Blob) : ?Nat64 {
       let leaf = switch (pop_leaf(region.region)) {
         case (?leaf) leaf;
@@ -201,42 +201,51 @@ module {
       ?((leaf << 1) | 1);
     };
 
+    /// Get address of pointer of node's `node` child number `index`.
     public func getOffset(node : Nat64, index : Nat64) : Nat64 {
       let delta = index *% pointer_size_;
       if (node == 0) return delta; // root node
       (offset_base +% (node >> 1) *% node_size) +% delta;
     };
 
+    /// Load pointer from a region.
     public func loadPointer(region : Region.Region, offset : Nat64) : Nat64 {
       Region.loadNat64(region, offset) & loadMask;
     };
 
+    /// Load node's `node` child number `index`.
     public func getChild(region : Region.Region, node : Nat64, index : Nat64) : Nat64 {
       loadPointer(region, getOffset(node, index));
     };
 
+    /// Set node's `node` child number `index`.
     public func setChild(region : Region.Region, node : Nat64, index : Nat64, child : Nat64) {
       let offset = getOffset(node, index);
       storePointer(region, offset, child);
     };
 
+    /// Get offset of leaf number `index`.
     public func getLeafOffset(index : Nat64) : Nat64 = index *% leaf_size;
 
+    /// Load key of leaf number `index`.
     public func getKey(region : Region.Region, index : Nat64) : Blob {
       Region.loadBlob(region, getLeafOffset(index), args.key_size);
     };
 
+    /// Load value of leaf number `index`.
     public func getValue(region : Region.Region, index : Nat64) : Blob {
       if (empty_values) return "";
       Region.loadBlob(region, getLeafOffset(index) +% key_size_, args.value_size);
     };
 
+    /// Set value of leaf number `index`.
     public func setValue(region : Region.Region, index : Nat64, value : Blob) {
       assert value.size() == args.value_size;
       if (empty_values) return;
       Region.storeBlob(region, getLeafOffset(index) +% key_size_, value);
     };
 
+    /// Get index in root node.
     public func keyToRootIndex(bytes : [Nat8]) : Nat64 {
       var result : Nat64 = 0;
       var i = 0;
@@ -252,37 +261,31 @@ module {
       return result;
     };
 
+    /// Get index in internal, not root node.
     public func keyToIndex(bytes : [Nat8], pos : Nat16) : Nat64 {
       let bit_pos = Nat8.fromNat16(pos & 7);
       let ret = Nat8.toNat((bytes[Nat16.toNat(pos >> 3)] << bit_pos) >> bitshift);
       return Nat64.fromIntWrap(ret);
     };
 
+    /// Find key in a tree. Returns node, child index, child value and bit offset.
     public func find(nodes : Region.Region, bytes : [Nat8]) : (Nat64, Nat64, Nat64, Nat16) {
       var idx = keyToRootIndex(bytes);
       var pos = root_bitlength;
       var node : Nat64 = 0;
-      var old_leaf : Nat64 = 0;
       loop {
-        switch (getChild(nodes, node, idx)) {
-          case (0) {
-            old_leaf := 0;
-            return (node, idx, old_leaf, pos);
-          };
-          case (n) {
-            if (n & 1 == 1) {
-              old_leaf := n;
-              return (node, idx, old_leaf, pos);
-            };
-            node := n;
-          };
+        let child = getChild(nodes, node, idx);
+        if (child == 0 or child & 1 == 1){
+          return (node, idx, child, pos);
         };
+        node := child;
         idx := keyToIndex(bytes, pos);
         pos +%= bitlength;
       };
       Debug.trap("Unreacheable");
     };
 
+    /// Put only `key` into trie. Returns pair (wheter new leaf created, index of leaf) or null in case of pointer size overflow.
     public func put_(nodes : Region, leaves : Region, nodes_region : Region.Region, leaves_region : Region.Region, key : Blob) : ?(Bool, Nat64) {
       assert key.size() == args.key_size;
       let bytes = Blob.toArray(key);
@@ -329,6 +332,7 @@ module {
       Debug.trap("Unreacheable");
     };
 
+    /// Lookup `key` in trie. Returns `value` and index of that leaf or null if not found.
     public func lookup(key : Blob) : ?(Blob, Nat) {
       assert key.size() == args.key_size;
       let { leaves; nodes } = regions();
@@ -425,18 +429,23 @@ module {
 
     public func keysRev() : Iter.Iter<Blob> = keys_(#reverse);
 
+    /// Size of used stable memory in bytes.
     public func size() : Nat = Nat64.toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size);
 
+    /// Number of allocated leaves.
     public func leafCount() : Nat = Nat64.toNat(leaf_count);
 
+    /// Number of allocated nodes.
     public func nodeCount() : Nat = Nat64.toNat(node_count);
 
+    /// Convert to stable data.
     public func share() : StableData = {
       regions() with
       node_count;
       leaf_count;
     };
 
+    /// Create from stable data. Must be the first call after constructor.
     public func unshare(data : StableData) {
       switch (regions_) {
         case (null) {
