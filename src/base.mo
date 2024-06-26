@@ -1,18 +1,4 @@
-/// Stable trie enumeration.
-///
-/// `Enumeration` is a "set enumeration" of elements of `Blob`s called "keys"
-/// interface implemented in stable memory using trie.
-///
-/// A typical application is to assign permanent user numbers to princpals.
-///
-/// The data structure is a map `Nat -> Blob` with the following properties:
-/// * keys are not repeated, i.e. the map is injective
-/// * keys are consecutively numbered (no gaps), i.e. if n keys are stored
-///   then `[0,n) -> Blob` is bijective
-/// * keys are numbered in the order they are added to the data structure
-/// * keys cannot be deleted
-/// * efficient inverse lookup `Blob -> Nat`
-/// * doubles as a set implementation (without deletion)
+/// Base class for stable trie.
 ///
 /// Copyright: 2023-2024 MR Research AG
 /// Main author: Andrii Stepanov (AStepanov25)

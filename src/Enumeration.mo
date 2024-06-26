@@ -1,3 +1,11 @@
+/// Stable trie enumeration.
+///
+/// Copyright: 2023-2024 MR Research AG
+///
+/// Main author: Andrii Stepanov (AStepanov25)
+///
+/// Contributors: Timo Hanke (timohanke)
+
 import Blob "mo:base/Blob";
 import Nat64 "mo:base/Nat64";
 import Nat "mo:base/Nat";
