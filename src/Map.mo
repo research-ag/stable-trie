@@ -75,7 +75,7 @@ module {
 
     /// Add deleted node to linked list.
     func pushEmptyNode(nodes : Region.Region, node : Nat64) {
-      base.setChild(nodes, node, 0, last_empty_node);
+      base.storePointer(nodes, base.getNodeOffset(node, 0), last_empty_node);
       last_empty_node := node;
     };
 
@@ -83,7 +83,7 @@ module {
     func popEmptyNode(nodes : Region.Region) : ?Nat64 {
       if (last_empty_node == base.loadMask) return null;
       let ret = last_empty_node;
-      last_empty_node := base.getChild(nodes, last_empty_node, 0);
+      last_empty_node := base.loadPointer(nodes, base.getNodeOffset(last_empty_node, 0));
       ?ret;
     };
 
@@ -323,7 +323,7 @@ module {
 
     /// Returns leaf if the node constains single leaf. Or node otherwise.
     func branchRoot(region : Region.Region, node : Nat64) : Nat64 {
-      let blob = Region.loadBlob(region, base.getOffset(node, 0), base.node_size_);
+      let blob = Region.loadBlob(region, base.getNodeOffset(node, 0), base.node_size_);
       let bytes = Blob.toArray(blob);
 
       var lastNode : Nat64 = 0;
