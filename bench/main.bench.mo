@@ -13,7 +13,7 @@ module {
   public func init() : Bench.Bench {
     let bench = Bench.Bench();
 
-    let n = 18;
+    let n = 9;
     let cols = 4;
     let key_size = 8;
     bench.cols(["2", "4", "16", "256"]);
