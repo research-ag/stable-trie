@@ -72,7 +72,7 @@ module {
 
     /// Add deleted node to linked list.
     func pushEmptyNode(nodes : Region.Region, node : Nat64) {
-      base.setChild(nodes, node, 0, last_empty_node);
+      base.storePointer(nodes, base.getNodeOffset(node, 0), last_empty_node);
       last_empty_node := node;
     };
 
