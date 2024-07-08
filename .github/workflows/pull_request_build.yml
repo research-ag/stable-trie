@@ -31,5 +31,8 @@ jobs:
       - name: Run tests
         run: mops test
 
+      - name: Install dfx
+        uses: dfinity/setup-dfx@main
+
       - name: run benches
         run: mops bench
