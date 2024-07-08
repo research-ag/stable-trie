@@ -84,6 +84,7 @@ module {
       if (last_empty_node == base.loadMask) return null;
       let ret = last_empty_node;
       last_empty_node := base.loadPointer(nodes, base.getNodeOffset(last_empty_node, 0));
+      base.storePointer(nodes, base.getNodeOffset(ret, 0), 0);
       ?ret;
     };
 
