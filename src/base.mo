@@ -202,7 +202,7 @@ module {
     };
 
     /// Get address of pointer of node's `node` child number `index`.
-    public func getOffset(node : Nat64, index : Nat64) : Nat64 {
+    public func getNodeOffset(node : Nat64, index : Nat64) : Nat64 {
       let delta = index *% pointer_size_;
       if (node == 0) return delta; // root node
       (offset_base +% (node >> 1) *% node_size) +% delta;
@@ -215,12 +215,12 @@ module {
 
     /// Load node's `node` child number `index`.
     public func getChild(region : Region.Region, node : Nat64, index : Nat64) : Nat64 {
-      loadPointer(region, getOffset(node, index));
+      loadPointer(region, getNodeOffset(node, index));
     };
 
     /// Set node's `node` child number `index`.
     public func setChild(region : Region.Region, node : Nat64, index : Nat64, child : Nat64) {
-      let offset = getOffset(node, index);
+      let offset = getNodeOffset(node, index);
       storePointer(region, offset, child);
     };
 
