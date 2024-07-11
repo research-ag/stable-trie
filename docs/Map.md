@@ -12,7 +12,7 @@ Contributors: Timo Hanke (timohanke)
 type StableData = Base.StableData and { last_empty_node : Nat64; last_empty_leaf : Nat64 }
 ```
 
-Type of stable data of `StableTrieMap`
+Type of stable data of `StableTrie.Map`
 
 ## Class `Map`
 
@@ -20,20 +20,23 @@ Type of stable data of `StableTrieMap`
 class Map(args : Base.Args)
 ```
 
-Map interface implemented as trie in stable memory.
+A map from constant-length Blob keys to constant-length Blob values, implemented as a trie in Regions.
 
 Arguments:
-+ `pointer_size` is size of pointer of address space, first bit is reserved for internal use,
-  so max amount of nodes in stable trie is `2 ** (pointer_size * 8 - 1)`. Should be one of 2, 4, 5, 6, 8.
-+ `aridity` is amount of children of any non leaf node except in trie. Should be one of 2, 4, 16, 256.
-+ `root_aridity` is amount of children of root node.
-+ `key_size` and `value_size` are sizes of key and value which should be constant per one instance of `Map`
++ `pointer_size` is the number of bytes used for internal pointers. Allowed values are 2, 4, 5, 6, 8.
+   There can be at most `N/2` inner nodes in the trie and at most `N/2` leaves where `N = 256 ** pointer_size`.
++ `aridity` is the number of children of any inner node that is not the root node. Allowed values are 2, 4, 16, 256. The recommended value is 4.
++ `root_aridity` is the number of children of the root node. If `null`, then `aridity` is used.
++ `key_size` is the byte length of all keys.
++ `value_size` is the byte length of all values. If `0` then the map becomes a set.
+
+There is a requirement that `key_size + value_size >= pointer_size`.
 
 Example:
 ```motoko
-let e = StableTrie.Map({
+let m = StableTrie.Map({
   pointer_size = 2;
-  aridity = 2;
+  aridity = 4;
   root_aridity = null;
   key_size = 2;
   value_size = 0;
@@ -45,23 +48,23 @@ let e = StableTrie.Map({
 func putChecked(key : Blob, value : Blob) : Result.Result<(), {#LimitExceeded}>
 ```
 
-Add `key` and `value` to the map. Rewrites value in case it's already there.
-Returns `#LimitExceeded` if pointer size limit exceeded.
+Add the `key` and `value` pair to the map. Existing values are silently overwritten.
+Returns `#LimitExceeded` if the pointer size limit is exceeded.
 
 Example:
 ```motoko
-let e = StableTrie.Map({
+let m = StableTrie.Map({
   pointer_size = 2;
-  aridity = 2;
+  aridity = 4;
   root_aridity = null;
   key_size = 2;
   value_size = 1;
 });
-assert(e.putChecked("abc", "a") == #ok);
-assert(e.putChecked("aaa", "b") == #ok);
-assert(e.putChecked("abc", "c") == #ok);
+assert(m.putChecked("abc", "a") == #ok);
+assert(m.putChecked("aaa", "b") == #ok);
+assert(m.putChecked("abc", "c") == #ok);
 ```
-Runtime: O(key_size) acesses to stable memory.
+Runtime: O(key_size) accesses to stable memory.
 
 
 ### Function `put`
@@ -69,21 +72,21 @@ Runtime: O(key_size) acesses to stable memory.
 func put(key : Blob, value : Blob)
 ```
 
-Add `key` and `value` to the map. Rewrites value in case it's already there.
-Traps if pointer size limit exceeded.
+Add the `key` and `value` pair to the map. If `key` already exists then the old value is silently overwritten.
+Traps if the pointer size limit is exceeded.
 
 Example:
 ```motoko
-let e = StableTrie.Map({
+let m = StableTrie.Map({
   pointer_size = 2;
-  aridity = 2;
+  aridity = 4;
   root_aridity = null;
   key_size = 2;
   value_size = 1;
 });
-e.put("abc", "a");
-e.put("aaa", "b");
-e.put("abc", "c");
+m.put("abc", "a");
+m.put("aaa", "b");
+m.put("abc", "c");
 ```
 Runtime: O(key_size) acesses to stable memory.
 
@@ -93,22 +96,21 @@ Runtime: O(key_size) acesses to stable memory.
 func replaceChecked(key : Blob, value : Blob) : Result.Result<?Blob, {#LimitExceeded}>
 ```
 
-Add `key` and `value` to the map.
-Returns `#LimitExceeded` if pointer size limit exceeded.
-Rewrites value if key is already present. Returns old value if new wasn't added or `null` otherwise. 
+Add the `key` and `value` pair to the map. If `key` already exists then the old value is overwritten and returned. If `key` is new then `null` is returned.
+Returns `#LimitExceeded` if the pointer size limit is exceeded.
 
 Example:
 ```motoko
-let e = StableTrie.Map({
+let m = StableTrie.Map({
   pointer_size = 2;
-  aridity = 2;
+  aridity = 4;
   root_aridity = null;
   key_size = 2;
   value_size = 1;
 });
-assert(e.replaceChecked("abc", "a") == #ok (null));
-assert(e.replaceChecked("aaa", "b") == #ok (null));
-assert(e.replaceChecked("abc", "c") == #ok ("a"));
+assert(m.replaceChecked("abc", "a") == #ok (null));
+assert(m.replaceChecked("aaa", "b") == #ok (null));
+assert(m.replaceChecked("abc", "c") == #ok (?"a"));
 ```
 Runtime: O(key_size) acesses to stable memory.
 
@@ -118,22 +120,21 @@ Runtime: O(key_size) acesses to stable memory.
 func replace(key : Blob, value : Blob) : ?Blob
 ```
 
-Add `key` and `value` to the map.
+Add the `key` and `value` pair to the map. If `key` already exists then the old value is overwritten and returned. If `key` is new then `null` is returned.
 Traps if pointer size limit exceeded.
-Rewrites value if key is already present. Returns old value if new wasn't added or `null` otherwise. 
 
 Example:
 ```motoko
-let e = StableTrie.Map({
+let m = StableTrie.Map({
   pointer_size = 2;
-  aridity = 2;
+  aridity = 4;
   root_aridity = null;
   key_size = 2;
   value_size = 1;
 });
-assert(e.replace("abc", "a") == null);
-assert(e.replace("aaa", "b") == null);
-assert(e.replace("abc", "c") == "a");
+assert(m.replace("abc", "a") == null);
+assert(m.replace("aaa", "b") == null);
+assert(m.replace("abc", "c") == ?"a");
 ```
 Runtime: O(key_size) acesses to stable memory.
 
@@ -143,22 +144,22 @@ Runtime: O(key_size) acesses to stable memory.
 func getOrPutChecked(key : Blob, value : Blob) : Result.Result<?Blob, {#LimitExceeded}>
 ```
 
-Add `key` and `value` to the map.
-Returns `#LimitExceeded` if pointer size limit exceeded.
-Lookup value if key is already present. Returns old value if new wasn't added or a null otherwise.
+Add the `key` and `value` pair to the map. If `key` already exists then the value is not written and the old value is returned (`get` behaviour). If `key` is new then the value is written and `null` is returned (`put` behaviour).
+Returns `#LimitExceeded` if the pointer size limit is exceeded.
 
 Example:
 ```motoko
-let e = StableTrie.Map({
+let m = StableTrie.Map({
   pointer_size = 2;
-  aridity = 2;
+  aridity = 4;
   root_aridity = null;
   key_size = 2;
   value_size = 1;
 });
-assert(e.getOrPutChecked("abc", "a") == #ok (null));
-assert(e.getOrPutChecked("aaa", "b") == #ok (null));
-assert(e.getOrPutChecked("abc", "c") == #ok (?"a"));
+assert(m.getOrPutChecked("abc", "a") == #ok (null));
+assert(m.getOrPutChecked("aaa", "b") == #ok (null));
+assert(m.getOrPutChecked("abc", "c") == #ok (?"a"));
+assert(m.get("abc") == ?"a");
 ```
 Runtime: O(key_size) acesses to stable memory.
 
@@ -168,22 +169,22 @@ Runtime: O(key_size) acesses to stable memory.
 func getOrPut(key : Blob, value : Blob) : ?Blob
 ```
 
-Add `key` and `value` to the map.
+Add the `key` and `value` pair to the map. If `key` already exists then the value is not written and the old value is returned (`get` behaviour). If `key` is new then the value is written and `null` is returned (`put` behaviour).
 Traps if pointer size limit exceeded.
-Lookup value if key is already present. Returns old value if new wasn't added or a null otherwise.
 
 Example:
 ```motoko
-let e = StableTrie.Map({
+let m = StableTrie.Map({
   pointer_size = 2;
-  aridity = 2;
+  aridity = 4;
   root_aridity = null;
   key_size = 2;
   value_size = 1;
 });
-assert(e.getOrPut("abc", "a") == null);
-assert(e.getOrPut("aaa", "b") == null);
-assert(e.getOrPut("abc", "c") == ?"a");
+assert(m.getOrPut("abc", "a") == null);
+assert(m.getOrPut("aaa", "b") == null);
+assert(m.getOrPut("abc", "c") == ?"a");
+assert(m.get("abc") == ?"a");
 ```
 Runtime: O(key_size) acesses to stable memory.
 
@@ -193,22 +194,22 @@ Runtime: O(key_size) acesses to stable memory.
 func get(key : Blob) : ?Blob
 ```
 
-Returns `value` corresponding to the `key` or null if the `key` is not in the map.
+Returns the `value` corresponding to `key` or null if `key` is not in the map.
 
 Example:
 ```motoko
-let e = StableTrie.Map({
+let m = StableTrie.Map({
   pointer_size = 2;
   aridity = 2;
   root_aridity = null;
   key_size = 2;
   value_size = 1;
 });
-e.put("abc", "a");
-e.put("aaa", "b");
-assert(e.get("abc") == ?"a");
-assert(e.get("aaa") == ?"b");
-assert(e.get("bbb") == null);
+m.put("abc", "a");
+m.put("aaa", "b");
+assert(m.get("abc") == ?"a");
+assert(m.get("aaa") == ?"b");
+assert(m.get("bbb") == null);
 ```
 Runtime: O(key_size) acesses to stable memory.
 
@@ -218,22 +219,22 @@ Runtime: O(key_size) acesses to stable memory.
 func remove(key : Blob) : ?Blob
 ```
 
-Remove `value` corresponding to the `key` and return removed `value`.
+Delete the `key` and its corresponding `value` from the map. Returns the deleted `value` or `null` if the key was not present in the map.
 
 Example:
 ```motoko
-let e = StableTrie.Map({
+let m = StableTrie.Map({
   pointer_size = 2;
-  aridity = 2;
+  aridity = 4;
   root_aridity = null;
   key_size = 2;
   value_size = 1;
 });
-e.put("abc", "a");
-e.put("aaa", "b");
-assert(e.remove("abc") == ?"a");
-assert(e.remove("aaa") == ?"b");
-assert(e.remove("bbb") == null);
+m.put("abc", "a");
+m.put("aaa", "b");
+assert(m.remove("abc") == ?"a");
+assert(m.remove("aaa") == ?"b");
+assert(m.remove("bbb") == null);
 ```
 Runtime: O(key_size) acesses to stable memory.
 
@@ -243,22 +244,22 @@ Runtime: O(key_size) acesses to stable memory.
 func delete(key : Blob)
 ```
 
-Delete `value` corresponding to the `key`.
+Delete the `key` and its corresponding `value` from the map. Nothing happens if the key is not present in the map.
 
 Example:
 ```motoko
-let e = StableTrie.Map({
+let m = StableTrie.Map({
   pointer_size = 2;
-  aridity = 2;
+  aridity = 4;
   root_aridity = null;
   key_size = 2;
   value_size = 1;
 });
-e.put("abc", "a");
-e.put("aaa", "b");
-e.delete("abc");
-e.delete("aaa");
-e.delete("bbb");
+m.put("abc", "a");
+m.put("aaa", "b");
+m.delete("abc");
+m.delete("aaa");
+m.delete("bbb");
 ```
 Runtime: O(key_size) acesses to stable memory.
 
@@ -268,20 +269,20 @@ Runtime: O(key_size) acesses to stable memory.
 func entries() : Iter.Iter<(Blob, Blob)>
 ```
 
-Returns all the keys and values in the map ordered by `Blob.compare` of keys.
+Returns all the key-value pairs in the map ordered by `Blob.compare` of keys.
 
 Example:
 ```motoko
-let e = StableTrie.Enumeration({
+let m = StableTrie.Map({
   pointer_size = 2;
-  aridity = 2;
+  aridity = 4;
   root_aridity = null;
   key_size = 2;
   value_size = 1;
 });
-e.put("abc", "a");
-e.put("aaa", "b");
-assert(Iter.toArray(e.entries()) == [("aaa", "b"), ("abc", "a")]);
+m.put("abc", "a");
+m.put("aaa", "b");
+assert(Iter.toArray(m.entries()) == [("aaa", "b"), ("abc", "a")]);
 ```
 
 
@@ -290,20 +291,20 @@ assert(Iter.toArray(e.entries()) == [("aaa", "b"), ("abc", "a")]);
 func entriesRev() : Iter.Iter<(Blob, Blob)>
 ```
 
-Returns all the keys and values in the map reverse ordered by `Blob.compare` of keys.
+Returns all the key-value pairs in the map reverse ordered by `Blob.compare` of keys.
 
 Example:
 ```motoko
-let e = StableTrie.Enumeration({
+let m = StableTrie.Map({
   pointer_size = 2;
-  aridity = 2;
+  aridity = 4;
   root_aridity = null;
   key_size = 2;
   value_size = 1;
 });
-e.put("abc", "a");
-e.put("aaa", "b");
-assert(Iter.toArray(e.entries()) == [("abc", "a"), ("aaa", "b")]);
+m.put("abc", "a");
+m.put("aaa", "b");
+assert(Iter.toArray(m.entries()) == [("abc", "a"), ("aaa", "b")]);
 ```
 
 
@@ -316,16 +317,16 @@ Returns all the values in the map ordered by `Blob.compare` of keys.
 
 Example:
 ```motoko
-let e = StableTrie.Enumeration({
+let m = StableTrie.Map({
   pointer_size = 2;
-  aridity = 2;
+  aridity = 4;
   root_aridity = null;
   key_size = 2;
   value_size = 1;
 });
-e.put("abc", "a");
-e.put("aaa", "b");
-assert(Iter.toArray(e.entries()) == ["b", "a"]);
+m.put("abc", "a");
+m.put("aaa", "b");
+assert(Iter.toArray(m.entries()) == ["b", "a"]);
 ```
 
 
@@ -338,16 +339,16 @@ Returns all the values in the map reverse ordered by `Blob.compare` of keys.
 
 Example:
 ```motoko
-let e = StableTrie.Enumeration({
+let m = StableTrie.Map({
   pointer_size = 2;
-  aridity = 2;
+  aridity = 4;
   root_aridity = null;
   key_size = 2;
   value_size = 1;
 });
-e.put("abc", "a");
-e.put("aaa", "b");
-assert(Iter.toArray(e.entries()) == ["a", "b"]);
+m.put("abc", "a");
+m.put("aaa", "b");
+assert(Iter.toArray(m.entries()) == ["a", "b"]);
 ```
 
 
@@ -360,16 +361,16 @@ Returns all the keys in the map ordered by `Blob.compare` of keys.
 
 Example:
 ```motoko
-let e = StableTrie.Enumeration({
+let m = StableTrie.Map({
   pointer_size = 2;
-  aridity = 2;
+  aridity = 4;
   root_aridity = null;
   key_size = 2;
   value_size = 1;
 });
-e.put("abc", "a");
-e.put("aaa", "b");
-assert(Iter.toArray(e.entries()) == ["aaa", "abc"]);
+m.put("abc", "a");
+m.put("aaa", "b");
+assert(Iter.toArray(m.entries()) == ["aaa", "abc"]);
 ```
 
 
@@ -382,16 +383,16 @@ Returns all the keys in the map reverse ordered by `Blob.compare` of keys.
 
 Example:
 ```motoko
-let e = StableTrie.Enumeration({
+let m = StableTrie.Map({
   pointer_size = 2;
-  aridity = 2;
+  aridity = 4;
   root_aridity = null;
   key_size = 2;
   value_size = 1;
 });
-e.put("abc", "a");
-e.put("aaa", "b");
-assert(Iter.toArray(e.entries()) == ["abc", "aaa"]);
+m.put("abc", "a");
+m.put("aaa", "b");
+assert(Iter.toArray(m.entries()) == ["abc", "aaa"]);
 ```
 
 
@@ -412,16 +413,16 @@ Size of used stable memory in bytes.
 
 Example:
 ```motoko
-let e = StableTrie.Enumeration({
+let m = StableTrie.Map({
   pointer_size = 2;
   aridity = 2;
   root_aridity = null;
   key_size = 2;
   value_size = 1;
 });
-e.put("abc", "a");
-e.put("aaa", "b");
-assert(e.leafCount() == 2);
+m.put("abc", "a");
+m.put("aaa", "b");
+assert(m.leafCount() == 2);
 ```
 
 

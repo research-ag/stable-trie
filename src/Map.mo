@@ -20,26 +20,29 @@ import Result "mo:base/Result";
 import Base "base";
 
 module {
-  /// Type of stable data of `StableTrieMap`
+  /// Type of stable data of `StableTrie.Map`
   public type StableData = Base.StableData and {
     last_empty_node : Nat64;
     last_empty_leaf : Nat64;
   };
 
-  /// Map interface implemented as trie in stable memory.
+  /// A map from constant-length Blob keys to constant-length Blob values, implemented as a trie in Regions.
   ///
   /// Arguments:
-  /// + `pointer_size` is size of pointer of address space, first bit is reserved for internal use,
-  ///   so max amount of nodes in stable trie is `2 ** (pointer_size * 8 - 1)`. Should be one of 2, 4, 5, 6, 8.
-  /// + `aridity` is amount of children of any non leaf node except in trie. Should be one of 2, 4, 16, 256.
-  /// + `root_aridity` is amount of children of root node.
-  /// + `key_size` and `value_size` are sizes of key and value which should be constant per one instance of `Map`
+  /// + `pointer_size` is the number of bytes used for internal pointers. Allowed values are 2, 4, 5, 6, 8.
+  ///    There can be at most `N/2` inner nodes in the trie and at most `N/2` leaves where `N = 256 ** pointer_size`.
+  /// + `aridity` is the number of children of any inner node that is not the root node. Allowed values are 2, 4, 16, 256. The recommended value is 4.
+  /// + `root_aridity` is the number of children of the root node. If `null`, then `aridity` is used.
+  /// + `key_size` is the byte length of all keys.
+  /// + `value_size` is the byte length of all values. If `0` then the map becomes a set.
+  ///
+  /// There is a requirement that `key_size + value_size >= pointer_size`.
   ///
   /// Example:
   /// ```motoko
-  /// let e = StableTrie.Map({
+  /// let m = StableTrie.Map({
   ///   pointer_size = 2;
-  ///   aridity = 2;
+  ///   aridity = 4;
   ///   root_aridity = null;
   ///   key_size = 2;
   ///   value_size = 0;
@@ -50,9 +53,9 @@ module {
 
     assert args.key_size + args.value_size >= args.pointer_size;
 
-    /// Deleted nodes form linked list in stable memory. This is a root of this list.
+    /// Deleted nodes are stored in a linked list in stable memory so that their space can be reused. This is the head of the list.
+    /// The same for leaves.
     var last_empty_node : Nat64 = base.loadMask;
-    /// Deleted leaves form linked list in stable memory. This is a root of this list.
     var last_empty_leaf : Nat64 = base.loadMask;
 
     /// Add deleted leaf to linked list.
@@ -81,29 +84,30 @@ module {
       if (last_empty_node == base.loadMask) return null;
       let ret = last_empty_node;
       last_empty_node := base.loadPointer(nodes, base.getNodeOffset(last_empty_node, 0));
+      base.storePointer(nodes, base.getNodeOffset(ret, 0), 0);
       ?ret;
     };
 
     // callbacks are used in `newInternalNode` and `newLeaf`
     base.setCallbacks(popEmptyNode, popEmptyLeaf);
 
-    /// Add `key` and `value` to the map. Rewrites value in case it's already there.
-    /// Returns `#LimitExceeded` if pointer size limit exceeded.
+    /// Add the `key` and `value` pair to the map. Existing values are silently overwritten.
+    /// Returns `#LimitExceeded` if the pointer size limit is exceeded.
     ///
     /// Example:
     /// ```motoko
-    /// let e = StableTrie.Map({
+    /// let m = StableTrie.Map({
     ///   pointer_size = 2;
-    ///   aridity = 2;
+    ///   aridity = 4;
     ///   root_aridity = null;
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// assert(e.putChecked("abc", "a") == #ok);
-    /// assert(e.putChecked("aaa", "b") == #ok);
-    /// assert(e.putChecked("abc", "c") == #ok);
+    /// assert(m.putChecked("abc", "a") == #ok);
+    /// assert(m.putChecked("aaa", "b") == #ok);
+    /// assert(m.putChecked("abc", "c") == #ok);
     /// ```
-    /// Runtime: O(key_size) acesses to stable memory.
+    /// Runtime: O(key_size) accesses to stable memory.
     public func putChecked(key : Blob, value : Blob) : Result.Result<(), { #LimitExceeded }> {
       let { leaves; nodes } = base.regions();
       let leaves_region = leaves.region;
@@ -114,41 +118,40 @@ module {
       #ok();
     };
 
-    /// Add `key` and `value` to the map. Rewrites value in case it's already there.
-    /// Traps if pointer size limit exceeded.
+    /// Add the `key` and `value` pair to the map. If `key` already exists then the old value is silently overwritten.
+    /// Traps if the pointer size limit is exceeded.
     ///
     /// Example:
     /// ```motoko
-    /// let e = StableTrie.Map({
+    /// let m = StableTrie.Map({
     ///   pointer_size = 2;
-    ///   aridity = 2;
+    ///   aridity = 4;
     ///   root_aridity = null;
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// e.put("abc", "a");
-    /// e.put("aaa", "b");
-    /// e.put("abc", "c");
+    /// m.put("abc", "a");
+    /// m.put("aaa", "b");
+    /// m.put("abc", "c");
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
     public func put(key : Blob, value : Blob) = base.unwrap(putChecked(key, value));
 
-    /// Add `key` and `value` to the map.
-    /// Returns `#LimitExceeded` if pointer size limit exceeded.
-    /// Rewrites value if key is already present. Returns old value if new wasn't added or `null` otherwise. 
+    /// Add the `key` and `value` pair to the map. If `key` already exists then the old value is overwritten and returned. If `key` is new then `null` is returned.
+    /// Returns `#LimitExceeded` if the pointer size limit is exceeded.
     ///
     /// Example:
     /// ```motoko
-    /// let e = StableTrie.Map({
+    /// let m = StableTrie.Map({
     ///   pointer_size = 2;
-    ///   aridity = 2;
+    ///   aridity = 4;
     ///   root_aridity = null;
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// assert(e.replaceChecked("abc", "a") == #ok (null));
-    /// assert(e.replaceChecked("aaa", "b") == #ok (null));
-    /// assert(e.replaceChecked("abc", "c") == #ok ("a"));
+    /// assert(m.replaceChecked("abc", "a") == #ok (null));
+    /// assert(m.replaceChecked("aaa", "b") == #ok (null));
+    /// assert(m.replaceChecked("abc", "c") == #ok (?"a"));
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
     public func replaceChecked(key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
@@ -169,42 +172,41 @@ module {
       );
     };
 
-    /// Add `key` and `value` to the map.
+    /// Add the `key` and `value` pair to the map. If `key` already exists then the old value is overwritten and returned. If `key` is new then `null` is returned.
     /// Traps if pointer size limit exceeded.
-    /// Rewrites value if key is already present. Returns old value if new wasn't added or `null` otherwise. 
     ///
     /// Example:
     /// ```motoko
-    /// let e = StableTrie.Map({
+    /// let m = StableTrie.Map({
     ///   pointer_size = 2;
-    ///   aridity = 2;
+    ///   aridity = 4;
     ///   root_aridity = null;
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// assert(e.replace("abc", "a") == null);
-    /// assert(e.replace("aaa", "b") == null);
-    /// assert(e.replace("abc", "c") == "a");
+    /// assert(m.replace("abc", "a") == null);
+    /// assert(m.replace("aaa", "b") == null);
+    /// assert(m.replace("abc", "c") == ?"a");
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
     public func replace(key : Blob, value : Blob) : ?Blob = base.unwrap(replaceChecked(key, value));
 
-    /// Add `key` and `value` to the map.
-    /// Returns `#LimitExceeded` if pointer size limit exceeded.
-    /// Lookup value if key is already present. Returns old value if new wasn't added or a null otherwise.
+    /// Add the `key` and `value` pair to the map. If `key` already exists then the value is not written and the old value is returned (`get` behaviour). If `key` is new then the value is written and `null` is returned (`put` behaviour).
+    /// Returns `#LimitExceeded` if the pointer size limit is exceeded.
     ///
     /// Example:
     /// ```motoko
-    /// let e = StableTrie.Map({
+    /// let m = StableTrie.Map({
     ///   pointer_size = 2;
-    ///   aridity = 2;
+    ///   aridity = 4;
     ///   root_aridity = null;
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// assert(e.getOrPutChecked("abc", "a") == #ok (null));
-    /// assert(e.getOrPutChecked("aaa", "b") == #ok (null));
-    /// assert(e.getOrPutChecked("abc", "c") == #ok (?"a"));
+    /// assert(m.getOrPutChecked("abc", "a") == #ok (null));
+    /// assert(m.getOrPutChecked("aaa", "b") == #ok (null));
+    /// assert(m.getOrPutChecked("abc", "c") == #ok (?"a"));
+    /// assert(m.get("abc") == ?"a");
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
     public func getOrPutChecked(key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
@@ -223,87 +225,87 @@ module {
       );
     };
 
-    /// Add `key` and `value` to the map.
+    /// Add the `key` and `value` pair to the map. If `key` already exists then the value is not written and the old value is returned (`get` behaviour). If `key` is new then the value is written and `null` is returned (`put` behaviour).
     /// Traps if pointer size limit exceeded.
-    /// Lookup value if key is already present. Returns old value if new wasn't added or a null otherwise.
     ///
     /// Example:
     /// ```motoko
-    /// let e = StableTrie.Map({
+    /// let m = StableTrie.Map({
     ///   pointer_size = 2;
-    ///   aridity = 2;
+    ///   aridity = 4;
     ///   root_aridity = null;
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// assert(e.getOrPut("abc", "a") == null);
-    /// assert(e.getOrPut("aaa", "b") == null);
-    /// assert(e.getOrPut("abc", "c") == ?"a");
+    /// assert(m.getOrPut("abc", "a") == null);
+    /// assert(m.getOrPut("aaa", "b") == null);
+    /// assert(m.getOrPut("abc", "c") == ?"a");
+    /// assert(m.get("abc") == ?"a");
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
     public func getOrPut(key : Blob, value : Blob) : ?Blob = base.unwrap(getOrPutChecked(key, value));
 
-    /// Returns `value` corresponding to the `key` or null if the `key` is not in the map.
+    /// Returns the `value` corresponding to `key` or null if `key` is not in the map.
     ///
     /// Example:
     /// ```motoko
-    /// let e = StableTrie.Map({
+    /// let m = StableTrie.Map({
     ///   pointer_size = 2;
     ///   aridity = 2;
     ///   root_aridity = null;
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// e.put("abc", "a");
-    /// e.put("aaa", "b");
-    /// assert(e.get("abc") == ?"a");
-    /// assert(e.get("aaa") == ?"b");
-    /// assert(e.get("bbb") == null);
+    /// m.put("abc", "a");
+    /// m.put("aaa", "b");
+    /// assert(m.get("abc") == ?"a");
+    /// assert(m.get("aaa") == ?"b");
+    /// assert(m.get("bbb") == null);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
     public func get(key : Blob) : ?Blob = Option.map<(Blob, Nat), Blob>(base.lookup(key), func(a) = a.0);
 
-    /// Remove `value` corresponding to the `key` and return removed `value`.
+    /// Delete the `key` and its corresponding `value` from the map. Returns the deleted `value` or `null` if the key was not present in the map.
     ///
     /// Example:
     /// ```motoko
-    /// let e = StableTrie.Map({
+    /// let m = StableTrie.Map({
     ///   pointer_size = 2;
-    ///   aridity = 2;
+    ///   aridity = 4;
     ///   root_aridity = null;
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// e.put("abc", "a");
-    /// e.put("aaa", "b");
-    /// assert(e.remove("abc") == ?"a");
-    /// assert(e.remove("aaa") == ?"b");
-    /// assert(e.remove("bbb") == null);
+    /// m.put("abc", "a");
+    /// m.put("aaa", "b");
+    /// assert(m.remove("abc") == ?"a");
+    /// assert(m.remove("aaa") == ?"b");
+    /// assert(m.remove("bbb") == null);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
     public func remove(key : Blob) : ?Blob = removeInternal(key, true);
 
-    /// Delete `value` corresponding to the `key`.
+    /// Delete the `key` and its corresponding `value` from the map. Nothing happens if the key is not present in the map.
     ///
     /// Example:
     /// ```motoko
-    /// let e = StableTrie.Map({
+    /// let m = StableTrie.Map({
     ///   pointer_size = 2;
-    ///   aridity = 2;
+    ///   aridity = 4;
     ///   root_aridity = null;
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// e.put("abc", "a");
-    /// e.put("aaa", "b");
-    /// e.delete("abc");
-    /// e.delete("aaa");
-    /// e.delete("bbb");
+    /// m.put("abc", "a");
+    /// m.put("aaa", "b");
+    /// m.delete("abc");
+    /// m.delete("aaa");
+    /// m.delete("bbb");
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
     public func delete(key : Blob) = ignore removeInternal(key, false);
 
-    /// Remove key. `ret` is flag meaning whether to read deleted value.
+    /// Remove key. `ret` is flag meaning whether to read deleted value or not.
     func removeInternal(key : Blob, ret : Bool) : ?Blob {
       let { leaves; nodes } = base.regions();
       let leaves_region = leaves.region;
@@ -368,37 +370,37 @@ module {
       (value, ret_branch_root);
     };
 
-    /// Returns all the keys and values in the map ordered by `Blob.compare` of keys.
+    /// Returns all the key-value pairs in the map ordered by `Blob.compare` of keys.
     ///
     /// Example:
     /// ```motoko
-    /// let e = StableTrie.Enumeration({
+    /// let m = StableTrie.Map({
     ///   pointer_size = 2;
-    ///   aridity = 2;
+    ///   aridity = 4;
     ///   root_aridity = null;
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// e.put("abc", "a");
-    /// e.put("aaa", "b");
-    /// assert(Iter.toArray(e.entries()) == [("aaa", "b"), ("abc", "a")]);
+    /// m.put("abc", "a");
+    /// m.put("aaa", "b");
+    /// assert(Iter.toArray(m.entries()) == [("aaa", "b"), ("abc", "a")]);
     /// ```
     public func entries() : Iter.Iter<(Blob, Blob)> = base.entries();
 
-    /// Returns all the keys and values in the map reverse ordered by `Blob.compare` of keys.
+    /// Returns all the key-value pairs in the map reverse ordered by `Blob.compare` of keys.
     ///
     /// Example:
     /// ```motoko
-    /// let e = StableTrie.Enumeration({
+    /// let m = StableTrie.Map({
     ///   pointer_size = 2;
-    ///   aridity = 2;
+    ///   aridity = 4;
     ///   root_aridity = null;
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// e.put("abc", "a");
-    /// e.put("aaa", "b");
-    /// assert(Iter.toArray(e.entries()) == [("abc", "a"), ("aaa", "b")]);
+    /// m.put("abc", "a");
+    /// m.put("aaa", "b");
+    /// assert(Iter.toArray(m.entries()) == [("abc", "a"), ("aaa", "b")]);
     /// ```
     public func entriesRev() : Iter.Iter<(Blob, Blob)> = base.entriesRev();
 
@@ -406,16 +408,16 @@ module {
     ///
     /// Example:
     /// ```motoko
-    /// let e = StableTrie.Enumeration({
+    /// let m = StableTrie.Map({
     ///   pointer_size = 2;
-    ///   aridity = 2;
+    ///   aridity = 4;
     ///   root_aridity = null;
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// e.put("abc", "a");
-    /// e.put("aaa", "b");
-    /// assert(Iter.toArray(e.entries()) == ["b", "a"]);
+    /// m.put("abc", "a");
+    /// m.put("aaa", "b");
+    /// assert(Iter.toArray(m.entries()) == ["b", "a"]);
     /// ```
     public func vals() : Iter.Iter<Blob> = base.vals();
 
@@ -423,16 +425,16 @@ module {
     ///
     /// Example:
     /// ```motoko
-    /// let e = StableTrie.Enumeration({
+    /// let m = StableTrie.Map({
     ///   pointer_size = 2;
-    ///   aridity = 2;
+    ///   aridity = 4;
     ///   root_aridity = null;
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// e.put("abc", "a");
-    /// e.put("aaa", "b");
-    /// assert(Iter.toArray(e.entries()) == ["a", "b"]);
+    /// m.put("abc", "a");
+    /// m.put("aaa", "b");
+    /// assert(Iter.toArray(m.entries()) == ["a", "b"]);
     /// ```
     public func valsRev() : Iter.Iter<Blob> = base.valsRev();
 
@@ -440,16 +442,16 @@ module {
     ///
     /// Example:
     /// ```motoko
-    /// let e = StableTrie.Enumeration({
+    /// let m = StableTrie.Map({
     ///   pointer_size = 2;
-    ///   aridity = 2;
+    ///   aridity = 4;
     ///   root_aridity = null;
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// e.put("abc", "a");
-    /// e.put("aaa", "b");
-    /// assert(Iter.toArray(e.entries()) == ["aaa", "abc"]);
+    /// m.put("abc", "a");
+    /// m.put("aaa", "b");
+    /// assert(Iter.toArray(m.entries()) == ["aaa", "abc"]);
     /// ```
     public func keys() : Iter.Iter<Blob> = base.keys();
 
@@ -457,16 +459,16 @@ module {
     ///
     /// Example:
     /// ```motoko
-    /// let e = StableTrie.Enumeration({
+    /// let m = StableTrie.Map({
     ///   pointer_size = 2;
-    ///   aridity = 2;
+    ///   aridity = 4;
     ///   root_aridity = null;
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// e.put("abc", "a");
-    /// e.put("aaa", "b");
-    /// assert(Iter.toArray(e.entries()) == ["abc", "aaa"]);
+    /// m.put("abc", "a");
+    /// m.put("aaa", "b");
+    /// assert(Iter.toArray(m.entries()) == ["abc", "aaa"]);
     /// ```
     public func keysRev() : Iter.Iter<Blob> = base.keysRev();
     
@@ -477,16 +479,16 @@ module {
     ///
     /// Example:
     /// ```motoko
-    /// let e = StableTrie.Enumeration({
+    /// let m = StableTrie.Map({
     ///   pointer_size = 2;
     ///   aridity = 2;
     ///   root_aridity = null;
     ///   key_size = 2;
     ///   value_size = 1;
     /// });
-    /// e.put("abc", "a");
-    /// e.put("aaa", "b");
-    /// assert(e.leafCount() == 2);
+    /// m.put("abc", "a");
+    /// m.put("aaa", "b");
+    /// assert(m.leafCount() == 2);
     /// ```
     public func leafCount() : Nat = base.leafCount();
 

@@ -141,20 +141,20 @@ module {
 
 
     /// Pop empty node from empty nodes stack. Used to implement deletion in map.
-    var pop_node : (Region.Region) -> ?Nat64 = func(_) = null;
+    var popNode : (Region.Region) -> ?Nat64 = func(_) = null;
     
     /// Pop empty leaf from empty leaf stack. Used to implement deletion in map.
-    var pop_leaf : (Region.Region) -> ?Nat64 = func(_) = null;
+    var popLeaf : (Region.Region) -> ?Nat64 = func(_) = null;
 
     public func unwrap<T>(r : Result.Result<T, { #LimitExceeded }>) : T {
       let #ok x = r else Debug.trap("Pointer size overflow");
       x;
     };
 
-    /// Set `pop_node` and `pop_leaf` callbacks by map constructor.
+    /// Set `popNode` and `popLeaf` callbacks by map constructor.
     public func setCallbacks(node : (Region.Region) -> ?Nat64, leaf : (Region.Region) -> ?Nat64) {
-      pop_node := node;
-      pop_leaf := leaf;
+      popNode := node;
+      popLeaf := leaf;
     };
 
     /// Acclocate one page if required.  `allocate` can only be used for n <= 65536
@@ -168,7 +168,7 @@ module {
 
     /// Create internal node.
     func newInternalNode(region : Region) : ?Nat64 {
-      let node = switch (pop_node(region.region)) {
+      let node = switch (popNode(region.region)) {
         case (?node) node;
         case (null) {
           if (node_count != max_address) {
@@ -185,7 +185,7 @@ module {
 
     /// Create new leaf and initialize key. Value is initialized later.
     public func newLeaf(region : Region, key : Blob) : ?Nat64 {
-      let leaf = switch (pop_leaf(region.region)) {
+      let leaf = switch (popLeaf(region.region)) {
         case (?leaf) leaf;
         case (null) {
           if (leaf_count != max_address) {
