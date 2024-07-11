@@ -22,8 +22,52 @@ import Base "base";
 module {
   /// Type of stable data of `StableTrie.Map`
   public type StableData = Base.StableData and {
-    last_empty_node : Nat64;
-    last_empty_leaf : Nat64;
+    empty_nodes : (Nat, Nat64);
+    empty_leaves : (Nat, Nat64);
+  };
+
+  /// Memory stats.
+  public type MemoryStats = {
+    /// Size of used stable memory in bytes.
+    bytes_size : Nat;
+    /// Number of leaves without deleted ones.
+    used_leaf_count : Nat;
+    /// Number of nodes without deleted ones.
+    used_node_count : Nat;
+    /// Number of allocated leaves.
+    total_leaf_count : Nat;
+    /// Number of allocated nodes.
+    total_node_count : Nat;
+  };
+
+  class LinkedList(base : Base.StableTrieBase, getOffset : (Nat64) -> Nat64) {
+    var last_empty_item : Nat64 = base.loadMask;
+    public var count = 0;
+
+    /// Add deleted item to linked list.
+    public func push(region : Region.Region, item : Nat64) {
+      base.storePointer(region, getOffset(item), last_empty_item);
+      last_empty_item := item;
+      count += 1;
+    };
+
+    /// Pop last deleted item to linked list.
+    public func pop(region : Region.Region) : ?Nat64 {
+      if (last_empty_item == base.loadMask) return null;
+
+      let ret = last_empty_item;
+      last_empty_item := base.loadPointer(region, getOffset(last_empty_item));
+      base.storePointer(region, getOffset(ret), 0);
+      count -= 1;
+      ?ret;
+    };
+
+    public func share() : (Nat, Nat64) = (count, last_empty_item);
+
+    public func unshare((c, last) : (Nat, Nat64)) {
+      count := c;
+      last_empty_item := last;
+    };
   };
 
   /// A map from constant-length Blob keys to constant-length Blob values, implemented as a trie in Regions.
@@ -55,41 +99,12 @@ module {
 
     /// Deleted nodes are stored in a linked list in stable memory so that their space can be reused. This is the head of the list.
     /// The same for leaves.
-    var last_empty_node : Nat64 = base.loadMask;
-    var last_empty_leaf : Nat64 = base.loadMask;
 
-    /// Add deleted leaf to linked list.
-    func pushEmptyLeaf(leaves : Region.Region, leaf : Nat64) {
-      base.storePointer(leaves, base.getLeafOffset(leaf), last_empty_leaf);
-      last_empty_leaf := leaf;
-    };
-
-    /// Pop last deleted leaf to linked list.
-    func popEmptyLeaf(leaves : Region.Region) : ?Nat64 {
-      if (last_empty_leaf == base.loadMask) return null;
-      let ret = last_empty_leaf;
-
-      last_empty_leaf := base.loadPointer(leaves, base.getLeafOffset(last_empty_leaf));
-      ?ret;
-    };
-
-    /// Add deleted node to linked list.
-    func pushEmptyNode(nodes : Region.Region, node : Nat64) {
-      base.storePointer(nodes, base.getNodeOffset(node, 0), last_empty_node);
-      last_empty_node := node;
-    };
-
-    /// Pop last deleted node to linked list.
-    func popEmptyNode(nodes : Region.Region) : ?Nat64 {
-      if (last_empty_node == base.loadMask) return null;
-      let ret = last_empty_node;
-      last_empty_node := base.loadPointer(nodes, base.getNodeOffset(last_empty_node, 0));
-      base.storePointer(nodes, base.getNodeOffset(ret, 0), 0);
-      ?ret;
-    };
+    let empty_leaves : LinkedList = LinkedList(base, base.getLeafOffset);
+    let empty_nodes : LinkedList = LinkedList(base, func(node : Nat64) : Nat64 = base.getNodeOffset(node, 0));
 
     // callbacks are used in `newInternalNode` and `newLeaf`
-    base.setCallbacks(popEmptyNode, popEmptyLeaf);
+    base.setCallbacks(empty_nodes.pop, empty_leaves.pop);
 
     /// Add the `key` and `value` pair to the map. Existing values are silently overwritten.
     /// Returns `#LimitExceeded` if the pointer size limit is exceeded.
@@ -348,7 +363,7 @@ module {
         let leaf = node >> 1;
         if (base.getKey(leaves, leaf) == key) {
           let r = (if (ret) ?base.getValue(leaves, leaf) else null, 0 : Nat64);
-          pushEmptyLeaf(leaves, leaf);
+          empty_leaves.push(leaves, leaf);
           return r;
         } else {
           return (null, node);
@@ -365,7 +380,7 @@ module {
       } else node;
 
       if (ret_branch_root & 1 == 1) {
-        pushEmptyNode(nodes, node);
+        empty_nodes.push(nodes, node);
       };
       (value, ret_branch_root);
     };
@@ -471,40 +486,32 @@ module {
     /// assert(Iter.toArray(m.entries()) == ["abc", "aaa"]);
     /// ```
     public func keysRev() : Iter.Iter<Blob> = base.keysRev();
-    
-    /// Size of used stable memory in bytes.
-    public func size() : Nat = base.size();
 
-    /// Size of used stable memory in bytes.
-    ///
-    /// Example:
-    /// ```motoko
-    /// let m = StableTrie.Map({
-    ///   pointer_size = 2;
-    ///   aridity = 2;
-    ///   root_aridity = null;
-    ///   key_size = 2;
-    ///   value_size = 1;
-    /// });
-    /// m.put("abc", "a");
-    /// m.put("aaa", "b");
-    /// assert(m.leafCount() == 2);
-    /// ```
-    public func leafCount() : Nat = base.leafCount();
+    /// Number of key-value pairs in the map.
+    public func size() : Nat = Nat64.toNat(base.leaf_count) - empty_leaves.count;
 
-    /// Number of internal nodes excluding leaves.
-    public func nodeCount() : Nat = base.nodeCount();
-    
+    /// Memory stats.
+    public func memoryStats() : MemoryStats {
+      let { bytes_size; leaf_count; node_count } = base.memoryStats();
+      {
+        bytes_size;
+        total_leaf_count = leaf_count;
+        total_node_count = node_count;
+        used_leaf_count = leaf_count - empty_leaves.count;
+        used_node_count = node_count - empty_nodes.count;
+      };
+    };
+
     /// Convert to stable data.
     public func share() : StableData = {
-      base.share() with last_empty_node;
-      last_empty_leaf;
+      base.share() with empty_nodes = empty_nodes.share();
+      empty_leaves = empty_leaves.share();
     };
 
     /// Create from stable data. Must be the first call after constructor.
     public func unshare(data : StableData) {
-      last_empty_node := data.last_empty_node;
-      last_empty_leaf := data.last_empty_node;
+      empty_nodes.unshare(data.empty_nodes);
+      empty_leaves.unshare(data.empty_leaves);
       base.unshare(data);
     };
   };

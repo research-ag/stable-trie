@@ -107,13 +107,14 @@ for (value_size in value_sizes.vals()) {
         assert revVals == [];
       };
 
-      let before = (trie.leafCount(), trie.nodeCount());
+      let before = trie.memoryStats();
       i := 0;
       for (key in keys.vals()) {
         trie.put(key, values[i]);
         i += 1;
       };
-      assert before == (trie.leafCount(), trie.nodeCount());
+      let after = trie.memoryStats();
+      assert before.total_leaf_count == after.total_leaf_count and before.total_node_count == after.total_node_count;
     };
   };
 };

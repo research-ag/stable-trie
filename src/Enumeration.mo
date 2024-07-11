@@ -19,6 +19,9 @@ module {
   /// Type of stable data of `StableTrieEnumeration`.
   public type StableData = Base.StableData;
 
+  /// Memory stats.
+  public type MemoryStats = Base.MemoryStats;
+
   /// Bidirectional enumeration of any keys in the order they are added.
   /// For a map from keys to index `Nat` it is implemented as trie in stable memory.
   /// for a map from index `Nat` to keys the implementation is a consecutive interval of stable memory.
@@ -387,28 +390,11 @@ module {
     /// ```
     public func keysRev() : Iter.Iter<Blob> = base.keysRev();
 
-    /// Size of used stable memory in bytes.
-    public func size() : Nat = base.size();
-
-    /// Size of used stable memory in bytes.
-    ///
-    /// Example:
-    /// ```motoko
-    /// let e = StableTrie.Enumeration({
-    ///   pointer_size = 2;
-    ///   aridity = 2;
-    ///   root_aridity = null;
-    ///   key_size = 2;
-    ///   value_size = 1;
-    /// });
-    /// assert(e.add("abc", "a") == 0);
-    /// assert(e.add("aaa", "b") == 1);
-    /// assert(e.leafCount() == 2);
-    /// ```
-    public func leafCount() : Nat = base.leafCount();
+    /// Number of key-value pairs in enumeration.
+    public func size() : Nat = Nat64.toNat(base.leaf_count);
 
     /// Number of internal nodes excluding leaves.
-    public func nodeCount() : Nat = base.nodeCount();
+    public func memoryStats() : MemoryStats = base.memoryStats();
     
     /// Convert to stable data.
     public func share() : StableData = base.share();
