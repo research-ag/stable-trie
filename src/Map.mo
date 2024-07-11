@@ -29,7 +29,7 @@ module {
   /// Memory stats.
   public type MemoryStats = {
     /// Size of used stable memory in bytes.
-    bytes_size : Nat;
+    byte_size : Nat;
     /// Number of leaves without deleted ones.
     used_leaf_count : Nat;
     /// Number of nodes without deleted ones.
@@ -492,9 +492,9 @@ module {
 
     /// Memory stats.
     public func memoryStats() : MemoryStats {
-      let { bytes_size; leaf_count; node_count } = base.memoryStats();
+      let { byte_size; leaf_count; node_count } = base.memoryStats();
       {
-        bytes_size;
+        byte_size;
         total_leaf_count = leaf_count;
         total_node_count = node_count;
         used_leaf_count = leaf_count - empty_leaves.count;

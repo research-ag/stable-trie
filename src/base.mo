@@ -36,7 +36,7 @@ module {
   /// Memory stats.
   public type MemoryStats = {
     /// Size of used stable memory in bytes.
-    bytes_size : Nat;
+    byte_size : Nat;
     /// Number of allocated leaves.
     leaf_count : Nat;
     /// Number of allocated nodes.
@@ -439,7 +439,7 @@ module {
     public func keysRev() : Iter.Iter<Blob> = keys_(#reverse);
 
     public func memoryStats() : MemoryStats = {
-      bytes_size = Nat64.toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size);
+      byte_size = Nat64.toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size);
       leaf_count = Nat64.toNat(leaf_count);
       node_count = Nat64.toNat(node_count);
     };
