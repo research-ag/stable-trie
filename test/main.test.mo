@@ -57,6 +57,7 @@ for (value_size in value_sizes.vals()) {
       var i = 0;
       for (key in keys.vals()) {
         assert trie.add(key, values[i]) == i;
+        assert trie.size() == i + 1;
         i += 1;
       };
       

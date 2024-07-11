@@ -33,6 +33,16 @@ module {
     value_size : Nat;
   };
 
+  /// Memory stats.
+  public type MemoryStats = {
+    /// Size of used stable memory in bytes.
+    byte_size : Nat;
+    /// Number of allocated leaves.
+    leaf_count : Nat;
+    /// Number of allocated nodes.
+    node_count : Nat;
+  };
+
   /// Type of stable data of `StableTrieEnumeration`.
   public type StableData = {
     nodes : Region;
@@ -139,10 +149,9 @@ module {
       };
     };
 
-
     /// Pop empty node from empty nodes stack. Used to implement deletion in map.
     var popNode : (Region.Region) -> ?Nat64 = func(_) = null;
-    
+
     /// Pop empty leaf from empty leaf stack. Used to implement deletion in map.
     var popLeaf : (Region.Region) -> ?Nat64 = func(_) = null;
 
@@ -275,7 +284,7 @@ module {
       var node : Nat64 = 0;
       loop {
         let child = getChild(nodes, node, idx);
-        if (child == 0 or child & 1 == 1){
+        if (child == 0 or child & 1 == 1) {
           return (node, idx, child, pos);
         };
         node := child;
@@ -429,14 +438,11 @@ module {
 
     public func keysRev() : Iter.Iter<Blob> = keys_(#reverse);
 
-    /// Size of used stable memory in bytes.
-    public func size() : Nat = Nat64.toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size);
-
-    /// Number of allocated leaves.
-    public func leafCount() : Nat = Nat64.toNat(leaf_count);
-
-    /// Number of allocated nodes.
-    public func nodeCount() : Nat = Nat64.toNat(node_count);
+    public func memoryStats() : MemoryStats = {
+      byte_size = Nat64.toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size);
+      leaf_count = Nat64.toNat(leaf_count);
+      node_count = Nat64.toNat(node_count);
+    };
 
     /// Convert to stable data.
     public func share() : StableData = {
