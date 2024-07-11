@@ -55,18 +55,21 @@ for (value_size in value_sizes.vals()) {
       var i = 0;
       for (key in keys.vals()) {
         trie.put(key, values[i]);
+        assert trie.size() == i + 1;
         i += 1;
       };
 
       i := 0;
       for (key in delete_keys.vals()) {
         trie.put(key, values[i]);
+        assert trie.size() == keys.size() + i + 1;
         i += 1;
       };
 
       i := 0;
       for (key in delete_keys.vals()) {
         assert trie.remove(key) == ?values[i];
+        assert trie.size() == (2 * n - i - 1 : Nat);
         i += 1;
       };
 
