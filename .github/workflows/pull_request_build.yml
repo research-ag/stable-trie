@@ -35,4 +35,4 @@ jobs:
         uses: dfinity/setup-dfx@main
 
       - name: run benches
-        run: mops bench
+        run: mops bench --replica pocket-ic
