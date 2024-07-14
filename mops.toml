@@ -1,9 +1,9 @@
 [package]
-name = "stable_trie_enumeration"
+name = "stable-trie"
 version = "0.0.1"
-description = ""
-repository = "https://github.com/research-ag/stable_trie_enumeration"
-keywords = [ "stable", "trie", "enumeration" ]
+description = "Stable-memory trie-based key-value map"
+repository = "https://github.com/research-ag/stable-trie"
+keywords = [ "set" ]
 license = "Apache-2.0"
 
 [dependencies]
@@ -11,7 +11,7 @@ base = "0.11.2"
 
 [dev-dependencies]
 test = "2.0.0"
-prng = "0.0.3"
+prng = "0.0.5"
 bench = "1.0.0"
 
 [toolchain]

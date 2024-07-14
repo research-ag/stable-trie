@@ -120,6 +120,19 @@ The space of deleted objects is re-used in place for new objects.
 
 ## Comparison
 
+We have profiled StableTrieMap against the RBTree from base, the motoko-hashmap from ZhenyaUsenko, and the MotokoStableBTree from sardariuss.
+Note that RBTree and motoko-hashmap are heap data structures.
+MotokoStableBTree is a stable-memory data structure.
+
+|method|rb tree|zhus map|stable trie map|motoko stable btree|
+|---|---|---|---|---|
+|put|3_749|3_716|4_338|259_119|
+|get|4_148|1_089|2_366|406_727|
+|delete|5_034|2_154|10_396|444_755|
+
+We have achieved that `put` and `get` operations are in the same order as the heap data structures.
+The `delete` operation shows the additional work needed to clean up the trie and track the freed space for re-use.
+
 ### Links
 
 The package is published on [MOPS](https://mops.one/stable-trie) and [GitHub](https://github.com/research-ag/stable-trie).
