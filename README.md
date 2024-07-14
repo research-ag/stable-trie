@@ -216,9 +216,9 @@ See [canister-profiling](https://github.com/research-ag/canister-profiling) for 
 
 |method|rb tree|zhus map|stable trie map|motoko stable btree|
 |---|---|---|---|---|
-|put|3_749|3_720|4_404|259_442|
-|random blobs inside average|5_027|2_152|10_463|445_008|
-|random blobs outside average|4_148|1_085|2_364|406_721|
+|put|3_749|3_716|4_338|259_119|
+|get|4_148|1_089|2_366|406_727|
+|delete|5_034|2_154|10_396|444_755|
 
 ## Copyright
 
