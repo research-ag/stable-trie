@@ -62,8 +62,7 @@ and that can compete in performance with a heap implementation.
 
 ## Configuration and optimization
 
-The trie constructor has two main configuration parameters
-that every user must provide:
+The trie constructor has two main configuration parameters affecting keys and values:
 
 * The byte size of the keys.
 * The byte size of the values. Values of size 0 are allowed and turn the data structure into a set.
@@ -83,8 +82,6 @@ But it will waste memory if they are not full.
 * Pointer size. This is the byte size of the internal pointers stored in each node.  
 It can be set lower to save memory but that sets a limit on how large the trie can grow.
 Allowed values are 2,4,5,6,8.
-
-In a `StableTrieMap` key size plus value size must be greater equal pointer size.
 
 ## Extensions
 
@@ -118,6 +115,9 @@ it never moves objects.
 In particular, it does not perform de-fragmentation. 
 The space of deleted objects is re-used in place for new objects.
 
+Deletion is complete in the sense that not only leaves get deleted 
+but also inner nodes which end up forming a linear branch get compressed back into a single node.
+
 ## Comparison
 
 We have profiled StableTrieMap against the RBTree from base, the motoko-hashmap from ZhenyaUsenko, and the MotokoStableBTree from sardariuss.
@@ -133,7 +133,7 @@ MotokoStableBTree is a stable-memory data structure.
 We have achieved that `put` and `get` operations are in the same order as the heap data structures.
 The `delete` operation shows the additional work needed to clean up the trie and track the freed space for re-use.
 
-### Links
+## Links
 
 The package is published on [MOPS](https://mops.one/stable-trie) and [GitHub](https://github.com/research-ag/stable-trie).
 
@@ -144,8 +144,6 @@ For updates, help, questions, feedback and other requests related to this packag
 * [OpenChat group](https://oc.app/2zyqk-iqaaa-aaaar-anmra-cai)
 * [Twitter](https://twitter.com/mr_research_ag)
 * [Dfinity forum](https://forum.dfinity.org/)
-
-### Interface
 
 ## Usage
 
@@ -199,9 +197,7 @@ assert e.slice(0, 2) == [("abc", "a"), ("aaa", "b")];
 
 ### Build & test
 
-We need up-to-date versions of `node`, `moc` and `mops` installed.
-
-Then run:
+Run:
 ```
 git clone git@github.com:research-ag/stable-trie.git
 mops install
@@ -223,16 +219,6 @@ See [canister-profiling](https://github.com/research-ag/canister-profiling) for 
 |put|3_749|3_720|4_404|259_442|
 |random blobs inside average|5_027|2_152|10_463|445_008|
 |random blobs outside average|4_148|1_085|2_364|406_721|
-
-## Design
-
-[Trie](https://en.wikipedia.org/wiki/Trie)
-
-## Implementation notes
-
-Additional optimization is performed: the invariant holds that every internal node 
-except from root can have not less than two leaf children (indirect children inclusive).
-So branches containing single leaf are compressed.
 
 ## Copyright
 
