@@ -3,7 +3,7 @@ name = "stable-trie"
 version = "0.0.1"
 description = "Stable-memory trie-based key-value map"
 repository = "https://github.com/research-ag/stable-trie"
-keywords = [ "set", "enumeration" ]
+keywords = [ "set", "enumeration", "lookup", "bijective" ]
 license = "Apache-2.0"
 
 [dependencies]
