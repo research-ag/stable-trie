@@ -1,3 +1,6 @@
+[![mops](https://oknww-riaaa-aaaam-qaf6a-cai.raw.ic0.app/badge/mops/stable-trie)](https://mops.one/stable-trie)
+[![documentation](https://oknww-riaaa-aaaam-qaf6a-cai.raw.ic0.app/badge/documentation/stable-trie)](https://mops.one/stable-trie/docs)
+
 # Stable trie for Motoko
 
 ## Overview
