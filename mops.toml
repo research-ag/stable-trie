@@ -1,18 +1,20 @@
 [package]
-name = ""
+name = "stable-trie"
 version = "0.0.1"
-description = ""
-repository = "https://github.com/research-ag/..."
-keywords = [ ]
+description = "Stable-memory trie-based key-value map"
+repository = "https://github.com/research-ag/stable-trie"
+keywords = [ "set", "enumeration" ]
 license = "Apache-2.0"
 
 [dependencies]
-base = "0.11.1"
+base = "0.11.2"
 
 [dev-dependencies]
 test = "2.0.0"
+prng = "0.0.5"
 bench = "1.0.0"
 
 [toolchain]
-moc = "0.11.1"
+moc = "0.11.2"
+wasmtime = "22.0.0"
 pocket-ic = "1.0.0"
