@@ -58,6 +58,7 @@ for (value_size in value_sizes.vals()) {
         assert trie.size() == i + 1;
         i += 1;
       };
+      assert trie.memoryStats().total_leaf_count == n;
 
       i := 0;
       for (key in delete_keys.vals()) {
@@ -65,6 +66,7 @@ for (value_size in value_sizes.vals()) {
         assert trie.size() == keys.size() + i + 1;
         i += 1;
       };
+      assert trie.memoryStats().total_leaf_count == 2 * n;
 
       i := 0;
       for (key in delete_keys.vals()) {
@@ -72,9 +74,9 @@ for (value_size in value_sizes.vals()) {
         assert trie.size() == (2 * n - i - 1 : Nat);
         i += 1;
       };
+      assert trie.memoryStats().total_leaf_count == 2 * n;
 
       i := 0;
-
       for (key in keys.vals()) {
         assert (trie.get(key) == ?values[i]);
         i += 1;
@@ -101,6 +103,8 @@ for (value_size in value_sizes.vals()) {
         assert trie.remove(key) == ?values[i];
         i += 1;
       };
+      assert trie.size() == 0;
+      assert trie.memoryStats().total_leaf_count == 2 * n;
 
       do {
         let vals = Iter.toArray(Iter.map<(Blob, Blob), Blob>(trie.entries(), func((a, _)) = a));
@@ -116,8 +120,9 @@ for (value_size in value_sizes.vals()) {
         trie.put(key, values[i]);
         i += 1;
       };
-      let after = trie.memoryStats();
-      assert before.total_leaf_count == after.total_leaf_count and before.total_node_count == after.total_node_count;
+      assert trie.size() == n;
+      assert trie.memoryStats().total_leaf_count == 2 * n;
+      assert trie.memoryStats().total_node_count == before.total_node_count;
     };
   };
 };
