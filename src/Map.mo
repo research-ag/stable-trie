@@ -330,11 +330,9 @@ module {
       let leaves_region = leaves.region;
       let nodes_region = nodes.region;
 
-      let bytes = Blob.toArray(key);
-
-      let idx = base.keyToRootIndex(bytes);
+      let idx = base.keyToRootIndex(key);
       let child = base.getChild(nodes_region, 0, idx);
-      let (value, branch_root) = removeRec(nodes_region, leaves_region, key, bytes, child, base.root_bitlength, ret);
+      let (value, branch_root) = removeRec(nodes_region, leaves_region, key, child, base.root_bitlength, ret);
       if (branch_root != child) {
         base.setChild(nodes_region, 0, idx, branch_root);
       };
@@ -344,13 +342,12 @@ module {
     /// Returns leaf if the node constains single leaf. Or node otherwise.
     func branchRoot(region : Region.Region, node : Nat64) : Nat64 {
       let blob = Region.loadBlob(region, base.getNodeOffset(node, 0), base.node_size_);
-      let bytes = Blob.toArray(blob);
 
       var lastNode : Nat64 = 0;
       for (i in Iter.range(0, args.aridity - 1)) {
         var x : Nat64 = 0;
         for (i in Iter.revRange(i * args.pointer_size + args.pointer_size - 1, i * args.pointer_size)) {
-          x := x * 256 + Nat64.fromNat(Nat8.toNat(bytes[Int.abs(i)]));
+          x := x * 256 + Nat64.fromNat(Nat8.toNat(blob[Int.abs(i)]));
         };
         if (x > 0) {
           if (lastNode != 0) return node;
@@ -361,7 +358,7 @@ module {
     };
 
     /// Remove recursively starting from child of root node.
-    func removeRec(nodes : Region.Region, leaves : Region.Region, key : Blob, bytes : [Nat8], node : Nat64, pos : Nat16, ret : Bool) : (?Blob, Nat64) {
+    func removeRec(nodes : Region.Region, leaves : Region.Region, key : Blob, node : Nat64, pos : Nat16, ret : Bool) : (?Blob, Nat64) {
       if (node == 0) return (null, node);
       if (node & 1 == 1) {
         let leaf = node >> 1;
@@ -374,9 +371,9 @@ module {
         };
       };
 
-      let idx = base.keyToIndex(bytes, pos);
+      let idx = base.keyToIndex(key, pos);
       let child = base.getChild(nodes, node, idx);
-      let (value, branch_root) = removeRec(nodes, leaves, key, bytes, child, pos +% base.bitlength, ret);
+      let (value, branch_root) = removeRec(nodes, leaves, key, child, pos +% base.bitlength, ret);
 
       let ret_branch_root = if (branch_root != child) {
         base.setChild(nodes, node, idx, branch_root);
