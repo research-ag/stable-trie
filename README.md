@@ -131,11 +131,11 @@ The results in the following table show that `put` and `get` operations are in t
 
 |method|rb tree|zhus map|stable trie map|motoko stable btree|
 |---|---|---|---|---|
-|put|3_748|3_720|4_476|259_441|
-|inside get|2_196|1_905|3_778|202_699|
-|ouside get|1_605|1_089|2_325|209_641|
-|inside deletion|5_034|2_152|10_548|445_004|
-|outside deletion|4_148|1_085|2_364|406_710|
+|put|3_736|3_491|3_136|255_732|
+|inside get|2_196|1_835|2_793|200_453|
+|ouside get|1_605|1_019|1_391|207_289|
+|inside deletion|5_034|2_080|8_906|438_861|
+|outside deletion|4_148|1_016|1_442|401_505|
 
 See the Benchmark section at the end for an explanation of this table. 
 
@@ -226,11 +226,11 @@ See [canister-profiling](https://github.com/research-ag/canister-profiling) for 
 
 |method|rb tree|zhus map|stable trie map|motoko stable btree|
 |---|---|---|---|---|
-|put|3_748|3_720|4_476|259_441|
-|inside get|2_196|1_905|3_778|202_699|
-|ouside get|1_605|1_089|2_325|209_641|
-|inside deletion|5_034|2_152|10_548|445_004|
-|outside deletion|4_148|1_085|2_364|406_710|
+|put|3_736|3_491|3_136|255_732|
+|inside get|2_196|1_835|2_793|200_453|
+|ouside get|1_605|1_019|1_391|207_289|
+|inside deletion|5_034|2_080|8_906|438_861|
+|outside deletion|4_148|1_016|1_442|401_505|
 
 Here, "inside" means that the key that is looked up or deleted is present in the tree.
 "Outside" means that the key is not present.
