@@ -40,7 +40,7 @@ module {
 
   /// Memory stats.
   public type MemoryStats = {
-    /// Size of used stable memory in key.
+    /// Size of used stable memory in bytes.
     byte_size : Nat;
     /// Number of allocated leaves.
     leaf_count : Nat;
