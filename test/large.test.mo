@@ -62,16 +62,16 @@ while (n1 > 0) {
   pos1 += 8;
 };
 
+let s = trie.memoryStats();
 Debug.print("children number: " # debug_show k);
 Debug.print("pointer size: " # debug_show pointer_size);
 Debug.print("keys: " # debug_show (max * max));
-Debug.print("size: " # debug_show trie.size());
-Debug.print("bytes per key: " # debug_show (trie.size() / (max * max)));
-let s = trie.memoryStats();
-let (leafs, nodes) = (s.leaf_count, s.node_count);
-Debug.print("leafs (=keys): " # debug_show leafs);
+Debug.print("byte size: " # debug_show s.byte_size);
+Debug.print("bytes per key: " # debug_show (s.byte_size / (max * max)));
+let (leaves, nodes) = (s.leaf_count, s.node_count);
+Debug.print("leaves (=keys): " # debug_show leaves);
 Debug.print("nodes: " # debug_show nodes);
-Debug.print("nodes per leaf: " # debug_show (Float.fromInt(nodes) / Float.fromInt(leafs)));
-Debug.print("pointers per leaf: " # debug_show (Float.fromInt(nodes * k) / Float.fromInt(leafs)));
-Debug.print("children per node: " # debug_show (Float.fromInt(nodes + leafs) / Float.fromInt(nodes)));
-Debug.print("children utilization: " # debug_show (Float.fromInt(nodes + leafs) / Float.fromInt(nodes * k)));
+Debug.print("nodes per leaf: " # debug_show (Float.fromInt(nodes) / Float.fromInt(leaves)));
+Debug.print("pointers per leaf: " # debug_show (Float.fromInt(nodes * k) / Float.fromInt(leaves)));
+Debug.print("children per node: " # debug_show (Float.fromInt(nodes + leaves) / Float.fromInt(nodes)));
+Debug.print("children utilization: " # debug_show (Float.fromInt(nodes + leaves) / Float.fromInt(nodes * k)));
