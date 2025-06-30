@@ -260,31 +260,31 @@ module {
     };
 
     /// Get index in root node.
-    public func keyToRootIndex(bytes : [Nat8]) : Nat64 {
+    public func keyToRootIndex(key : Blob) : Nat64 {
       var result : Nat64 = 0;
       var i = 0;
       let iters = Nat64.toNat(root_bitlength_ >> 3);
       while (i < iters) {
-        result := (result << 8) | Nat32.toNat64(Nat16.toNat32(Nat8.toNat16(bytes[i])));
+        result := (result << 8) | Nat32.toNat64(Nat16.toNat32(Nat8.toNat16(key[i])));
         i += 1;
       };
       let skip = root_bitlength_ & 7;
       if (skip != 0) {
-        result := (result << skip) | (Nat32.toNat64(Nat16.toNat32(Nat8.toNat16(bytes[i]))) >> (8 -% skip));
+        result := (result << skip) | (Nat32.toNat64(Nat16.toNat32(Nat8.toNat16(key[i]))) >> (8 -% skip));
       };
       return result;
     };
 
     /// Get index in internal, not root node.
-    public func keyToIndex(bytes : [Nat8], pos : Nat16) : Nat64 {
+    public func keyToIndex(key : Blob, pos : Nat16) : Nat64 {
       let bit_pos = Nat8.fromNat16(pos & 7);
-      let ret = Nat8.toNat((bytes[Nat16.toNat(pos >> 3)] << bit_pos) >> bitshift);
+      let ret = Nat8.toNat((key[Nat16.toNat(pos >> 3)] << bit_pos) >> bitshift);
       return Nat64.fromIntWrap(ret);
     };
 
     /// Find key in a tree. Returns node, child index, child value and bit offset.
-    public func find(nodes : Region.Region, bytes : [Nat8]) : (Nat64, Nat64, Nat64, Nat16) {
-      var idx = keyToRootIndex(bytes);
+    public func find(nodes : Region.Region, key : Blob) : (Nat64, Nat64, Nat64, Nat16) {
+      var idx = keyToRootIndex(key);
       var pos = root_bitlength;
       var node : Nat64 = 0;
       loop {
@@ -293,7 +293,7 @@ module {
           return (node, idx, child, pos);
         };
         node := child;
-        idx := keyToIndex(bytes, pos);
+        idx := keyToIndex(key, pos);
         pos +%= bitlength;
       };
       Debug.trap("Unreacheable");
@@ -302,9 +302,8 @@ module {
     /// Put only `key` into trie. Returns pair (wheter new leaf created, index of leaf) or null in case of pointer size overflow.
     public func put_(nodes : Region, leaves : Region, nodes_region : Region.Region, leaves_region : Region.Region, key : Blob) : ?(Bool, Nat64) {
       assert key.size() == args.key_size;
-      let bytes = Blob.toArray(key);
 
-      let (node_, last_, old_leaf, pos_) = find(nodes_region, bytes);
+      let (node_, last_, old_leaf, pos_) = find(nodes_region, key);
 
       var last = last_;
       var node = node_;
@@ -322,7 +321,6 @@ module {
         return ?(false, index);
       };
 
-      let old_bytes = Blob.toArray(old_key);
       var pos = pos_;
       label l loop {
         let ?add = newInternalNode(nodes) else {
@@ -332,7 +330,7 @@ module {
         setChild(nodes_region, node, last, add);
         node := add;
 
-        let (a, b) = (keyToIndex(bytes, pos), keyToIndex(old_bytes, pos));
+        let (a, b) = (keyToIndex(key, pos), keyToIndex(old_key, pos));
         pos +%= bitlength;
         if (a == b) {
           last := a;
@@ -351,9 +349,7 @@ module {
       assert key.size() == args.key_size;
       let { leaves; nodes } = regions();
 
-      let bytes = Blob.toArray(key);
-
-      let (_, _, old_leaf, _) = find(nodes.region, bytes);
+      let (_, _, old_leaf, _) = find(nodes.region, key);
       if (old_leaf == 0) return null;
       let index = old_leaf >> 1;
 
