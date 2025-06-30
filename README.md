@@ -10,7 +10,7 @@
 The trie constitutes a key-value map where both keys and values are constant length Blobs.
 Various parameters of the trie can be configured in the constructor such as key length, value length and the number of children per node (see the Configuration section below for details).
 
-The trie can be used as map (`StableTrieMap`) or an enumeration (`StableTrieEnumeration`)
+The trie can be used as a _map_ (`StableTrieMap`) or an _enumeration_ (`StableTrieEnumeration`)
 which are different interfaces to the same underlying data structure.
 
 `StableTrieMap` offers deletion.
@@ -20,8 +20,9 @@ However, it should be noted that deletion does not allow the Regions to shrink a
 In `StableTrieEnumeration` each key, besides its value, also has an index associated with it
 which reflects the order of its insertion into the map.
 This index is inherent in the data structure and therefore has no additional memory footprint over `StableTrieMap`.
-Values can be looked up by index or by value
+Values can be looked up by index or by key
 and index can be looked up by key. 
+But key can not be looked up by index.
 `StableTrieEnumeration` does not allow deletion.
 
 Both the map and the enumeration variant can be adapted to implement a set simply by setting the value size to 0.
@@ -50,10 +51,10 @@ A data structure of the first kind we call a _stable-type_ data structure. It ca
 
 A data structure of the second kind we call _stable-memory_ datastructure.
 All of its dynamically sized data must live in the canister's stable memory.
-Heap memory usage must be limited to size O(1).
+Heap memory usage must be limited to size `O(1)`.
 For example, when Regions are used, then the Region references live on the heap.
 This is allowed for a constant number of Regions.
-It is also allowed to store O(1) metadata on the heap such as a fixed number of pointers to positions in the Regions. 
+It is also allowed to store `O(1)` metadata on the heap such as a fixed number of pointers to positions in the Regions. 
 Stable-memory data structures are not subject to the two limitations mentioned above.
 
 Some published Motoko data structures are hybrid.
@@ -106,8 +107,8 @@ Each Region is an array of constant size objects.
 Pointers use one bit to encode the Region they point to
 and the remaining bits to encode the index of the object in the region.
 This means that with a pointer size of n bytes
-the trie can have at most N/2 leaves where N = 256**n
-and at most N/2 inner nodes.
+the trie can have at most `N/2` leaves where `N = 256**n`
+and at most `N/2` inner nodes.
 
 One cannot predict in general which limit will be reached first,
 but under most circumstances it will be the leaf limit.
@@ -127,7 +128,8 @@ We have profiled StableTrieMap against the RBTree from base, the motoko-hashmap 
 Note that RBTree and motoko-hashmap are heap data structures.
 MotokoStableBTree is a stable-memory data structure.
 
-The results in the following table show that `put` and `get` operations are in the same order as the heap data structures.
+The results in the following table shows that stable-trie can compete with the heap data structures.
+And it is 2 orders of magnitude faster than the only other stable-memory map.
 
 |method|rb tree|zhus map|stable trie map|motoko stable btree|
 |---|---|---|---|---|
@@ -137,11 +139,14 @@ The results in the following table show that `put` and `get` operations are in t
 |inside deletion|5_034|2_080|8_906|438_861|
 |outside deletion|4_148|1_016|1_442|401_505|
 
-See the Benchmark section at the end for an explanation of this table. 
-
 "Inside" means that the key that is looked up or deleted is present in the tree.
 "Outside" means that the key is not present.
 The row for "inside deletion" shows the additional work done to clean up the trie and to track the freed space for re-use.
+
+The tree size in this profiling run is 4,096 entries.
+The key length is 29 bytes like a typical user principal.
+
+See [canister-profiling](https://github.com/research-ag/canister-profiling) for more details.
 
 ## Links
 
@@ -218,29 +223,14 @@ mops test
 
 Run
 ```
-mops bench --replica pocket-ic
+mops bench
 ```
-
-Benchmark of stable trie map. Values are average numbers of intructions.
-See [canister-profiling](https://github.com/research-ag/canister-profiling) for more details.
-
-|method|rb tree|zhus map|stable trie map|motoko stable btree|
-|---|---|---|---|---|
-|put|3_736|3_491|3_136|255_732|
-|inside get|2_196|1_835|2_793|200_453|
-|ouside get|1_605|1_019|1_391|207_289|
-|inside deletion|5_034|2_080|8_906|438_861|
-|outside deletion|4_148|1_016|1_442|401_505|
-
-Here, "inside" means that the key that is looked up or deleted is present in the tree.
-"Outside" means that the key is not present.
-
-The tree size in this profiling run is 4,096 entries.
-The key length is 29 bytes like a typical user principal.
+This is the benchmark to compare different versions of stable-trie.
+For comparison of stbale-trie against other data structures see the section Comparisons above.,
 
 ## Copyright
 
-MR Research AG, 2023-2024
+MR Research AG, 2024
 
 ## Authors
 
