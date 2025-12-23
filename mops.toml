@@ -7,7 +7,7 @@ keywords = [ "set", "enumeration", "lookup", "bijective", "key-value" ]
 license = "Apache-2.0"
 
 [dependencies]
-base = "0.14.13"
+core = "2.0.0"
 
 [dev-dependencies]
 test = "2.1.1"
@@ -15,8 +15,8 @@ prng = "0.0.5"
 bench = "1.0.0"
 
 [requirements]
-moc = "0.14.9"
+moc = "1.0.0"
 
 [toolchain]
-moc = "0.14.9"
-wasmtime = "34.0.1"
+moc = "1.0.0"
+wasmtime = "40.0.0"

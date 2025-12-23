@@ -4,18 +4,18 @@
 /// Main author: Andrii Stepanov (AStepanov25)
 /// Contributors: Timo Hanke (timohanke)
 
-import Blob "mo:base/Blob";
-import Nat64 "mo:base/Nat64";
-import Nat "mo:base/Nat";
-import Array "mo:base/Array";
-import Iter "mo:base/Iter";
-import Option "mo:base/Option";
-import Region "mo:base/Region";
-import Nat8 "mo:base/Nat8";
-import Nat16 "mo:base/Nat16";
-import Debug "mo:base/Debug";
-import Nat32 "mo:base/Nat32";
-import Result "mo:base/Result";
+import Blob "mo:core/Blob";
+import Nat64 "mo:core/Nat64";
+import Nat "mo:core/Nat";
+import Iter "mo:core/Iter";
+import Option "mo:core/Option";
+import Region "mo:core/Region";
+import Nat8 "mo:core/Nat8";
+import Nat16 "mo:core/Nat16";
+import Nat32 "mo:core/Nat32";
+import Result "mo:core/Result";
+import VarArray "mo:core/VarArray";
+import Runtime "mo:core/Runtime";
 
 module {
   /// Stable region with `freeSpace` variable.
@@ -115,7 +115,7 @@ module {
       };
       case (4) func(region, offset, child) = Region.storeNat32(region, offset, Nat32.fromNat64(child));
       case (2) func(region, offset, child) = Region.storeNat16(region, offset, Nat16.fromNat32(Nat32.fromNat64(child)));
-      case (_) Debug.trap("Can never happen");
+      case (_) Runtime.trap("Can never happen");
     };
 
     /// Pair of nodes and leaves regions.
@@ -161,7 +161,7 @@ module {
     var popLeaf : (Region.Region) -> ?Nat64 = func(_) = null;
 
     public func unwrap<T>(r : Result.Result<T, { #LimitExceeded }>) : T {
-      let #ok x = r else Debug.trap("Pointer size overflow");
+      let #ok x = r else Runtime.trap("Pointer size overflow");
       x;
     };
 
@@ -296,7 +296,7 @@ module {
         idx := keyToIndex(key, pos);
         pos +%= bitlength;
       };
-      Debug.trap("Unreacheable");
+      Runtime.trap("Unreacheable");
     };
 
     /// Put only `key` into trie. Returns pair (wheter new leaf created, index of leaf) or null in case of pointer size overflow.
@@ -341,7 +341,7 @@ module {
           return ?(true, (leaf >> 1));
         };
       };
-      Debug.trap("Unreacheable");
+      Runtime.trap("Unreacheable");
     };
 
     /// Lookup `key` in trie. Returns `value` and index of that leaf or null if not found.
@@ -365,7 +365,7 @@ module {
 
     class Iterator(nodes : Region.Region, dir : Dir) {
       let forward = dir == #forward;
-      let stack = Array.init<(Nat64, Nat64)>(args.key_size * 8 / Nat16.toNat(bitlength), (0, 0));
+      let stack = VarArray.repeat<(Nat64, Nat64)>((0, 0), args.key_size * 8 / Nat16.toNat(bitlength));
       var depth = 1;
       stack[0] := if (forward) (0, 0) else (0, root_aridity_ - 1);
 
@@ -460,7 +460,7 @@ module {
           node_count := data.node_count;
           leaf_count := data.leaf_count;
         };
-        case (_) Debug.trap("Region is already initialized");
+        case (_) Runtime.trap("Region is already initialized");
       };
     };
   };

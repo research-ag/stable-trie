@@ -1,12 +1,12 @@
 // @testmode wasi
 
 import Prng "mo:prng";
-import Array "mo:base/Array";
-import Blob "mo:base/Blob";
-import Nat8 "mo:base/Nat8";
-import Nat64 "mo:base/Nat64";
-import Iter "mo:base/Iter";
-import Nat "mo:base/Nat";
+import Array "mo:core/Array";
+import Blob "mo:core/Blob";
+import Nat8 "mo:core/Nat8";
+import Nat64 "mo:core/Nat64";
+import Iter "mo:core/Iter";
+import Nat "mo:core/Nat";
 import StableTrie "../src/Map";
 
 let rng = Prng.Seiran128();

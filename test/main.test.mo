@@ -1,14 +1,14 @@
 // @testmode wasi
 
 import Prng "mo:prng";
-import Array "mo:base/Array";
-import Blob "mo:base/Blob";
-import Nat8 "mo:base/Nat8";
-import Nat64 "mo:base/Nat64";
-import Iter "mo:base/Iter";
-import Nat "mo:base/Nat";
-import Debug "mo:base/Debug";
-import Result "mo:base/Result";
+import Array "mo:core/Array";
+import Blob "mo:core/Blob";
+import Nat8 "mo:core/Nat8";
+import Nat64 "mo:core/Nat64";
+import Iter "mo:core/Iter";
+import Nat "mo:core/Nat";
+import Debug "mo:core/Debug";
+import Result "mo:core/Result";
 import StableTrie "../src/Enumeration";
 
 let rng = Prng.Seiran128();
@@ -95,7 +95,7 @@ func pointerMaxSizeTest() {
     key_size = 2;
     value_size = 0;
   });
-  for (i in Iter.range(0, 32_000)) {
+  for (i in Nat.range(0, 32_000 + 1)) {
     let key = Blob.fromArray([Nat8.fromNat(i % 256), Nat8.fromNat(i / 256)]);
     if (trie.addChecked(key, "") != #ok(i)) {
       Debug.print(debug_show i);
@@ -131,12 +131,12 @@ func _profile() {
         value_size = 0;
       });
       let second = Iter.map<Nat, Text>(
-        Iter.range(0, n),
+        Nat.range(0, n + 1),
         func(i) {
           if (i == 0) {
             ignore trie.add(keys[0], "");
           } else {
-            for (j in Iter.range(2 ** (i - 1), 2 ** i - 1)) {
+            for (j in Nat.range(2 ** (i - 1), 2 ** i)) {
               assert Result.isOk(trie.addChecked(keys[j], ""));
             };
           };

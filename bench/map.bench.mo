@@ -1,12 +1,11 @@
 import StableTrie "../src/Map";
 import Prng "mo:prng";
-import Array "mo:base/Array";
-import Blob "mo:base/Blob";
-import Nat8 "mo:base/Nat8";
-import Nat64 "mo:base/Nat64";
-import Iter "mo:base/Iter";
-import Nat "mo:base/Nat";
-import Text "mo:base/Text";
+import Array "mo:core/Array";
+import Blob "mo:core/Blob";
+import Nat8 "mo:core/Nat8";
+import Nat64 "mo:core/Nat64";
+import Nat "mo:core/Nat";
+import Text "mo:core/Text";
 import Bench "mo:bench";
 
 module {
@@ -58,13 +57,13 @@ module {
         if (r == 0) {
           trie.put(keys[0], "");
         } else {
-          for (j in Iter.range(2 ** (r - 1), 2 ** r - 1)) {
+          for (j in Nat.range(2 ** (r - 1), 2 ** r)) {
             trie.put(keys[j], "");
           };
-          for (j in Iter.range(2 ** (r - 1), 2 ** r - 1)) {
+          for (j in Nat.range(2 ** (r - 1), 2 ** r)) {
             trie.delete(keys[j]);
           };
-          for (j in Iter.range(2 ** (r - 1), 2 ** r - 1)) {
+          for (j in Nat.range(2 ** (r - 1), 2 ** r)) {
             trie.put(keys[j], "");
           };
         };
