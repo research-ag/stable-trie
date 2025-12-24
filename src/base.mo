@@ -1,7 +1,9 @@
 /// Base class for stable trie.
 ///
-/// Copyright: 2023-2024 MR Research AG
+/// Copyright: 2023 - 2025 MR Research AG
+///
 /// Main author: Andrii Stepanov (AStepanov25)
+///
 /// Contributors: Timo Hanke (timohanke)
 
 import Blob "mo:core/Blob";
@@ -107,14 +109,14 @@ module {
       case (8) func(region, offset, child) = Region.storeNat64(region, offset, child);
       case (6) func(region, offset, child) {
         Region.storeNat32(region, offset, Nat32.fromNat64(child & 0xffff_ffff));
-        Region.storeNat16(region, offset +% 4, Nat16.fromNat32(Nat32.fromNat64(child >> 32)));
+        Region.storeNat16(region, offset +% 4, Nat16.fromNat64(child >> 32));
       };
       case (5) func(region, offset, child) {
         Region.storeNat32(region, offset, Nat32.fromNat64(child & 0xffff_ffff));
-        Region.storeNat8(region, offset +% 4, Nat8.fromNat16(Nat16.fromNat32(Nat32.fromNat64(child >> 32))));
+        Region.storeNat8(region, offset +% 4, Nat8.fromNat64(child >> 32));
       };
       case (4) func(region, offset, child) = Region.storeNat32(region, offset, Nat32.fromNat64(child));
-      case (2) func(region, offset, child) = Region.storeNat16(region, offset, Nat16.fromNat32(Nat32.fromNat64(child)));
+      case (2) func(region, offset, child) = Region.storeNat16(region, offset, Nat16.fromNat64(child));
       case (_) Runtime.trap("Can never happen");
     };
 
@@ -265,21 +267,19 @@ module {
       var i = 0;
       let iters = Nat64.toNat(root_bitlength_ >> 3);
       while (i < iters) {
-        result := (result << 8) | Nat32.toNat64(Nat16.toNat32(Nat8.toNat16(key[i])));
+        result := (result << 8) | Nat64.fromNat8(key[i]);
         i += 1;
       };
       let skip = root_bitlength_ & 7;
       if (skip != 0) {
-        result := (result << skip) | (Nat32.toNat64(Nat16.toNat32(Nat8.toNat16(key[i]))) >> (8 -% skip));
+        result := (result << skip) | (Nat64.fromNat8(key[i]) >> (8 -% skip));
       };
       return result;
     };
 
     /// Get index in internal, not root node.
     public func keyToIndex(key : Blob, pos : Nat16) : Nat64 {
-      let bit_pos = Nat8.fromNat16(pos & 7);
-      let ret = Nat8.toNat((key[Nat16.toNat(pos >> 3)] << bit_pos) >> bitshift);
-      return Nat64.fromIntWrap(ret);
+      return Nat64.fromNat8((key[Nat16.toNat(pos >> 3)] << Nat8.fromNat16(pos & 7)) >> bitshift);
     };
 
     /// Find key in a tree. Returns node, child index, child value and bit offset.

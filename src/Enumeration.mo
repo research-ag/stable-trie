@@ -1,6 +1,6 @@
 /// Stable trie enumeration.
 ///
-/// Copyright: 2023-2024 MR Research AG
+/// Copyright: 2023 - 2025 MR Research AG
 ///
 /// Main author: Andrii Stepanov (AStepanov25)
 ///
