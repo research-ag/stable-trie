@@ -346,7 +346,7 @@ module {
       for (i in Nat.range(0, args.aridity)) {
         var x : Nat64 = 0;
         for (j in Nat.rangeByInclusive(i * args.pointer_size + args.pointer_size - 1, i * args.pointer_size, -1)) {
-          x := x * 256 + Nat8.toNat64(blob[j]);
+          x := x * 256 + Nat64.fromIntWrap(Nat8.toNat(blob[j]));
         };
         if (x > 0) {
           if (lastNode != 0) return node;
