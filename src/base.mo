@@ -109,14 +109,14 @@ module {
       case (8) func(region, offset, child) = Region.storeNat64(region, offset, child);
       case (6) func(region, offset, child) {
         Region.storeNat32(region, offset, Nat32.fromNat64(child & 0xffff_ffff));
-        Region.storeNat16(region, offset +% 4, Nat16.fromIntWrap(Nat64.toNat(child >> 32)));
+        Region.storeNat16(region, offset +% 4, Nat16.fromNat64(child >> 32));
       };
       case (5) func(region, offset, child) {
         Region.storeNat32(region, offset, Nat32.fromNat64(child & 0xffff_ffff));
-        Region.storeNat8(region, offset +% 4, Nat8.fromIntWrap(Nat64.toNat(child >> 32)));
+        Region.storeNat8(region, offset +% 4, Nat8.fromNat64(child >> 32));
       };
       case (4) func(region, offset, child) = Region.storeNat32(region, offset, Nat32.fromNat64(child));
-      case (2) func(region, offset, child) = Region.storeNat16(region, offset, Nat16.fromIntWrap(Nat64.toNat(child)));
+      case (2) func(region, offset, child) = Region.storeNat16(region, offset, Nat16.fromNat64(child));
       case (_) Runtime.trap("Can never happen");
     };
 
