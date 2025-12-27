@@ -1,14 +1,15 @@
 // @testmode wasi
 
-import Prng "mo:prng";
 import Array "mo:core/Array";
 import Blob "mo:core/Blob";
-import Nat8 "mo:core/Nat8";
-import Nat64 "mo:core/Nat64";
-import Iter "mo:core/Iter";
-import Nat "mo:core/Nat";
 import Debug "mo:core/Debug";
+import Nat "mo:core/Nat";
+import Nat8 "mo:core/Nat8";
+import Nat64_ "mo:core/Nat64";
+import Iter "mo:core/Iter";
 import Result "mo:core/Result";
+import Types "mo:core/Types";
+import Prng "mo:prng";
 import StableTrie "../src/Enumeration";
 
 let rng = Prng.Seiran128();
@@ -23,19 +24,19 @@ func gen(n : Nat, size : Nat) : [Blob] {
     n,
     func(i) {
       if (i % 2 == 0) {
-        prev := Array.tabulate<Nat8>(size, func(j) = Nat8.fromNat(Nat64.toNat(rng.next()) % 256));
+        prev := Array.tabulate<Nat8>(size, func(j) = Nat8.fromIntWrap(rng.next().toNat()));
         Blob.fromArray(prev);
       } else {
-        let t = Nat64.toNat(rng.next()) % key_size;
-        Blob.fromArray(Array.tabulate<Nat8>(size, func(j) = if (j < t) prev[j] else Nat8.fromNat(Nat64.toNat(rng.next()) % 256)));
+        let t = rng.next().toNat() % key_size;
+        Blob.fromArray(Array.tabulate<Nat8>(size, func(j) = if (j < t) prev[j] else Nat8.fromIntWrap(rng.next().toNat())));
       };
     },
   );
 };
 
 let keys = gen(n, key_size);
-let sorted = Array.sort<Blob>(keys, Blob.compare);
-let revSorted = Array.reverse(sorted);
+let sorted = keys.sort();
+let revSorted = sorted.reverse();
 let keysAbsent = gen(n, key_size);
 
 // Note: bits = 256 and pointers = 2 requires smaller n
@@ -96,7 +97,7 @@ func pointerMaxSizeTest() {
     value_size = 0;
   });
   for (i in Nat.range(0, 32_000 + 1)) {
-    let key = Blob.fromArray([Nat8.fromNat(i % 256), Nat8.fromNat(i / 256)]);
+    let key = Blob.fromArray([Nat8.fromIntWrap(i), Nat8.fromNat(i / 256)]);
     if (trie.addChecked(key, "") != #ok(i)) {
       Debug.print(debug_show i);
       assert false;
@@ -116,10 +117,10 @@ func _profile() {
   let keys = Array.tabulate<Blob>(
     2 ** n,
     func(i) {
-      Blob.fromArray(Array.tabulate<Nat8>(key_size, func(j) = Nat8.fromNat(Nat64.toNat(rng.next()) % 256)));
+      Blob.fromArray(Array.tabulate<Nat8>(key_size, func(j) = Nat8.fromIntWrap(rng.next().toNat())))
     },
   );
-  let _rows = Iter.map<Nat, (Text, Iter.Iter<Text>)>(
+  let _rows = Iter.map<Nat, (Text, Types.Iter<Text>)>(
     children_number.vals(),
     func(k) {
       let first = Nat.toText(k);

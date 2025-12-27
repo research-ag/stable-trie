@@ -6,15 +6,13 @@
 ///
 /// Contributors: Timo Hanke (timohanke)
 
-import Blob "mo:core/Blob";
-import Nat64 "mo:core/Nat64";
 import Nat "mo:core/Nat";
-import Iter "mo:core/Iter";
-import Region "mo:core/Region";
-import Nat8 "mo:core/Nat8";
-import Nat16 "mo:core/Nat16";
+import Nat64_ "mo:core/Nat64";
 import Option "mo:core/Option";
+import Region "mo:core/Region";
 import Result "mo:core/Result";
+import Types "mo:core/Types";
+import Prim "mo:prim";
 
 import Base "base";
 
@@ -346,7 +344,7 @@ module {
       for (i in Nat.range(0, args.aridity)) {
         var x : Nat64 = 0;
         for (j in Nat.rangeByInclusive(i * args.pointer_size + args.pointer_size - 1, i * args.pointer_size, -1)) {
-          x := x * 256 + Nat64.fromIntWrap(Nat8.toNat(blob[j]));
+          x := x * 256 + Prim.intToNat64Wrap(Prim.nat8ToNat(blob[j]));
         };
         if (x > 0) {
           if (lastNode != 0) return node;
@@ -400,7 +398,7 @@ module {
     /// m.put("aaa", "b");
     /// assert(Iter.toArray(m.entries()) == [("aaa", "b"), ("abc", "a")]);
     /// ```
-    public func entries() : Iter.Iter<(Blob, Blob)> = base.entries();
+    public func entries() : Types.Iter<(Blob, Blob)> = base.entries();
 
     /// Returns all the key-value pairs in the map reverse ordered by `Blob.compare` of keys.
     ///
@@ -417,7 +415,7 @@ module {
     /// m.put("aaa", "b");
     /// assert(Iter.toArray(m.entries()) == [("abc", "a"), ("aaa", "b")]);
     /// ```
-    public func entriesRev() : Iter.Iter<(Blob, Blob)> = base.entriesRev();
+    public func entriesRev() : Types.Iter<(Blob, Blob)> = base.entriesRev();
 
     /// Returns all the values in the map ordered by `Blob.compare` of keys.
     ///
@@ -434,7 +432,7 @@ module {
     /// m.put("aaa", "b");
     /// assert(Iter.toArray(m.entries()) == ["b", "a"]);
     /// ```
-    public func vals() : Iter.Iter<Blob> = base.vals();
+    public func vals() : Types.Iter<Blob> = base.vals();
 
     /// Returns all the values in the map reverse ordered by `Blob.compare` of keys.
     ///
@@ -451,7 +449,7 @@ module {
     /// m.put("aaa", "b");
     /// assert(Iter.toArray(m.entries()) == ["a", "b"]);
     /// ```
-    public func valsRev() : Iter.Iter<Blob> = base.valsRev();
+    public func valsRev() : Types.Iter<Blob> = base.valsRev();
 
     /// Returns all the keys in the map ordered by `Blob.compare` of keys.
     ///
@@ -468,7 +466,7 @@ module {
     /// m.put("aaa", "b");
     /// assert(Iter.toArray(m.entries()) == ["aaa", "abc"]);
     /// ```
-    public func keys() : Iter.Iter<Blob> = base.keys();
+    public func keys() : Types.Iter<Blob> = base.keys();
 
     /// Returns all the keys in the map reverse ordered by `Blob.compare` of keys.
     ///
@@ -485,10 +483,10 @@ module {
     /// m.put("aaa", "b");
     /// assert(Iter.toArray(m.entries()) == ["abc", "aaa"]);
     /// ```
-    public func keysRev() : Iter.Iter<Blob> = base.keysRev();
+    public func keysRev() : Types.Iter<Blob> = base.keysRev();
 
     /// Number of key-value pairs in the map.
-    public func size() : Nat = Nat64.toNat(base.leaf_count) - empty_leaves.count;
+    public func size() : Nat = base.leaf_count.toNat() - empty_leaves.count;
 
     /// Memory stats.
     public func memoryStats() : MemoryStats {

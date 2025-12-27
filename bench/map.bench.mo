@@ -40,7 +40,7 @@ module {
           Array.tabulate<Nat8>(
             key_size,
             func(j) {
-              Nat8.fromNat(Nat64.toNat(rng.next()) % 256);
+              Nat8.fromIntWrap(rng.next().toNat());
             },
           )
         );

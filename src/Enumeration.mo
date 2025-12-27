@@ -6,12 +6,11 @@
 ///
 /// Contributors: Timo Hanke (timohanke)
 
-import Blob "mo:core/Blob";
-import Nat64 "mo:core/Nat64";
-import Nat "mo:core/Nat";
 import Array "mo:core/Array";
-import Iter "mo:core/Iter";
+import Nat_ "mo:core/Nat";
+import Nat64 "mo:core/Nat64";
 import Result "mo:core/Result";
+import Types "mo:core/Types";
 
 import Base "base";
 
@@ -77,7 +76,7 @@ module {
 
       let ?(_, leaf) = base.put_(nodes, leaves, nodes_region, leaves_region, key) else return #err(#LimitExceeded);
       base.setValue(leaves_region, leaf, value);
-      #ok(Nat64.toNat(leaf));
+      #ok(leaf.toNat());
     };
 
     /// Add `key` and `value` to enumeration.
@@ -134,7 +133,7 @@ module {
         base.setValue(leaves_region, leaf, value);
         ?old_value;
       };
-      #ok(ret_value, Nat64.toNat(leaf));
+      #ok(ret_value, leaf.toNat());
     };
 
     /// Add `key` and `value` to enumeration.
@@ -190,7 +189,7 @@ module {
       } else {
         ?base.getValue(leaves_region, leaf);
       };
-      #ok(ret_value, Nat64.toNat(leaf));
+      #ok(ret_value, leaf.toNat());
     };
 
     /// Add `key` and `value` to enumeration.
@@ -256,7 +255,7 @@ module {
       let { leaves } = base.regions();
       let leaves_region = leaves.region;
 
-      let index_ = Nat64.fromNat(index);
+      let index_ = index.toNat64();
       if (index_ >= base.leaf_count) return null;
       ?(base.getKey(leaves_region, index_), base.getValue(leaves_region, index_));
     };
@@ -281,13 +280,13 @@ module {
       let { leaves } = base.regions();
       let leaves_region = leaves.region;
 
-      let l = Nat64.fromNat(left);
-      let r = Nat64.fromNat(right);
+      let l = left.toNat64();
+      let r = right.toNat64();
       assert l <= r and r <= base.leaf_count;
       Array.tabulate<(Blob, Blob)>(
         right - left,
         func(i) {
-          let index = Nat64.fromNat(i);
+          let index = Nat64.fromIntWrap(i);
           (base.getKey(leaves_region, index), base.getValue(leaves_region, index));
         },
       );
@@ -308,7 +307,7 @@ module {
     /// assert(e.add("aaa", "b") == 1);
     /// assert(Iter.toArray(e.entries()) == [("aaa", "b"), ("abc", "a")]);
     /// ```
-    public func entries() : Iter.Iter<(Blob, Blob)> = base.entries();
+    public func entries() : Types.Iter<(Blob, Blob)> = base.entries();
 
     /// Returns all the keys and values in the enumeration reverse ordered by `Blob.compare` of keys.
     ///
@@ -325,7 +324,7 @@ module {
     /// assert(e.add("aaa", "b") == 1);
     /// assert(Iter.toArray(e.entries()) == [("abc", "a"), ("aaa", "b")]);
     /// ```
-    public func entriesRev() : Iter.Iter<(Blob, Blob)> = base.entriesRev();
+    public func entriesRev() : Types.Iter<(Blob, Blob)> = base.entriesRev();
 
     /// Returns all the values in the enumeration ordered by `Blob.compare` of keys.
     ///
@@ -342,7 +341,7 @@ module {
     /// assert(e.add("aaa", "b") == 1);
     /// assert(Iter.toArray(e.entries()) == ["b", "a"]);
     /// ```
-    public func vals() : Iter.Iter<Blob> = base.vals();
+    public func vals() : Types.Iter<Blob> = base.vals();
 
     /// Returns all the values in the enumeration reverse ordered by `Blob.compare` of keys.
     ///
@@ -359,7 +358,7 @@ module {
     /// assert(e.add("aaa", "b") == 1);
     /// assert(Iter.toArray(e.entries()) == ["a", "b"]);
     /// ```
-    public func valsRev() : Iter.Iter<Blob> = base.valsRev();
+    public func valsRev() : Types.Iter<Blob> = base.valsRev();
 
     /// Returns all the keys in the enumeration ordered by `Blob.compare` of keys.
     ///
@@ -376,7 +375,7 @@ module {
     /// assert(e.add("aaa", "b") == 1);
     /// assert(Iter.toArray(e.entries()) == ["aaa", "abc"]);
     /// ```
-    public func keys() : Iter.Iter<Blob> = base.keys();
+    public func keys() : Types.Iter<Blob> = base.keys();
 
     /// Returns all the keys in the enumeration reverse ordered by `Blob.compare` of keys.
     ///
@@ -393,10 +392,10 @@ module {
     /// assert(e.add("aaa", "b") == 1);
     /// assert(Iter.toArray(e.entries()) == ["abc", "aaa"]);
     /// ```
-    public func keysRev() : Iter.Iter<Blob> = base.keysRev();
+    public func keysRev() : Types.Iter<Blob> = base.keysRev();
 
     /// Number of key-value pairs in enumeration.
-    public func size() : Nat = Nat64.toNat(base.leaf_count);
+    public func size() : Nat = base.leaf_count.toNat();
 
     /// Number of internal nodes excluding leaves.
     public func memoryStats() : MemoryStats = base.memoryStats();
