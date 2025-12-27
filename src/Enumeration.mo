@@ -1,17 +1,17 @@
 /// Stable trie enumeration.
 ///
-/// Copyright: 2023-2024 MR Research AG
+/// Copyright: 2023 - 2025 MR Research AG
 ///
 /// Main author: Andrii Stepanov (AStepanov25)
 ///
 /// Contributors: Timo Hanke (timohanke)
 
-import Blob "mo:base/Blob";
-import Nat64 "mo:base/Nat64";
-import Nat "mo:base/Nat";
-import Array "mo:base/Array";
-import Iter "mo:base/Iter";
-import Result "mo:base/Result";
+import Blob "mo:core/Blob";
+import Nat64 "mo:core/Nat64";
+import Nat "mo:core/Nat";
+import Array "mo:core/Array";
+import Iter "mo:core/Iter";
+import Result "mo:core/Result";
 
 import Base "base";
 

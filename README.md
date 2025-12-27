@@ -230,7 +230,7 @@ For comparison of stbale-trie against other data structures see the section Comp
 
 ## Copyright
 
-MR Research AG, 2024
+MR Research AG, 2023 - 2025
 
 ## Authors
 

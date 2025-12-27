@@ -1,21 +1,20 @@
 /// Stable trie map.
 ///
-/// Copyright: 2023-2024 MR Research AG
+/// Copyright: 2023 - 2025 MR Research AG
 ///
 /// Main author: Andrii Stepanov (AStepanov25)
 ///
 /// Contributors: Timo Hanke (timohanke)
 
-import Blob "mo:base/Blob";
-import Nat64 "mo:base/Nat64";
-import Nat "mo:base/Nat";
-import Iter "mo:base/Iter";
-import Region "mo:base/Region";
-import Nat8 "mo:base/Nat8";
-import Nat16 "mo:base/Nat16";
-import Int "mo:base/Int";
-import Option "mo:base/Option";
-import Result "mo:base/Result";
+import Blob "mo:core/Blob";
+import Nat64 "mo:core/Nat64";
+import Nat "mo:core/Nat";
+import Iter "mo:core/Iter";
+import Region "mo:core/Region";
+import Nat8 "mo:core/Nat8";
+import Nat16 "mo:core/Nat16";
+import Option "mo:core/Option";
+import Result "mo:core/Result";
 
 import Base "base";
 
@@ -344,10 +343,10 @@ module {
       let blob = Region.loadBlob(region, base.getNodeOffset(node, 0), base.node_size_);
 
       var lastNode : Nat64 = 0;
-      for (i in Iter.range(0, args.aridity - 1)) {
+      for (i in Nat.range(0, args.aridity)) {
         var x : Nat64 = 0;
-        for (i in Iter.revRange(i * args.pointer_size + args.pointer_size - 1, i * args.pointer_size)) {
-          x := x * 256 + Nat64.fromNat(Nat8.toNat(blob[Int.abs(i)]));
+        for (j in Nat.rangeByInclusive(i * args.pointer_size + args.pointer_size - 1, i * args.pointer_size, -1)) {
+          x := x * 256 + Nat8.toNat64(blob[j]);
         };
         if (x > 0) {
           if (lastNode != 0) return node;

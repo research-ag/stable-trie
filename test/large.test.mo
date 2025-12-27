@@ -1,10 +1,10 @@
 // @testmode wasi
 
 import Prng "mo:prng";
-import Nat64 "mo:base/Nat64";
-import Region "mo:base/Region";
-import Debug "mo:base/Debug";
-import Float "mo:base/Float";
+import Nat64 "mo:core/Nat64";
+import Region "mo:core/Region";
+import Debug "mo:core/Debug";
+import Float "mo:core/Float";
 import StableTrie "../src/Enumeration";
 
 let key_size = 8;

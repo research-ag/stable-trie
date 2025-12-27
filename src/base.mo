@@ -1,21 +1,23 @@
 /// Base class for stable trie.
 ///
-/// Copyright: 2023-2024 MR Research AG
+/// Copyright: 2023 - 2025 MR Research AG
+///
 /// Main author: Andrii Stepanov (AStepanov25)
+///
 /// Contributors: Timo Hanke (timohanke)
 
-import Blob "mo:base/Blob";
-import Nat64 "mo:base/Nat64";
-import Nat "mo:base/Nat";
-import Array "mo:base/Array";
-import Iter "mo:base/Iter";
-import Option "mo:base/Option";
-import Region "mo:base/Region";
-import Nat8 "mo:base/Nat8";
-import Nat16 "mo:base/Nat16";
-import Debug "mo:base/Debug";
-import Nat32 "mo:base/Nat32";
-import Result "mo:base/Result";
+import Blob "mo:core/Blob";
+import Nat64 "mo:core/Nat64";
+import Nat "mo:core/Nat";
+import Iter "mo:core/Iter";
+import Option "mo:core/Option";
+import Region "mo:core/Region";
+import Nat8 "mo:core/Nat8";
+import Nat16 "mo:core/Nat16";
+import Nat32 "mo:core/Nat32";
+import Result "mo:core/Result";
+import VarArray "mo:core/VarArray";
+import Runtime "mo:core/Runtime";
 
 module {
   /// Stable region with `freeSpace` variable.
@@ -107,15 +109,15 @@ module {
       case (8) func(region, offset, child) = Region.storeNat64(region, offset, child);
       case (6) func(region, offset, child) {
         Region.storeNat32(region, offset, Nat32.fromNat64(child & 0xffff_ffff));
-        Region.storeNat16(region, offset +% 4, Nat16.fromNat32(Nat32.fromNat64(child >> 32)));
+        Region.storeNat16(region, offset +% 4, Nat16.fromNat64(child >> 32));
       };
       case (5) func(region, offset, child) {
         Region.storeNat32(region, offset, Nat32.fromNat64(child & 0xffff_ffff));
-        Region.storeNat8(region, offset +% 4, Nat8.fromNat16(Nat16.fromNat32(Nat32.fromNat64(child >> 32))));
+        Region.storeNat8(region, offset +% 4, Nat8.fromNat64(child >> 32));
       };
       case (4) func(region, offset, child) = Region.storeNat32(region, offset, Nat32.fromNat64(child));
-      case (2) func(region, offset, child) = Region.storeNat16(region, offset, Nat16.fromNat32(Nat32.fromNat64(child)));
-      case (_) Debug.trap("Can never happen");
+      case (2) func(region, offset, child) = Region.storeNat16(region, offset, Nat16.fromNat64(child));
+      case (_) Runtime.trap("Can never happen");
     };
 
     /// Pair of nodes and leaves regions.
@@ -161,7 +163,7 @@ module {
     var popLeaf : (Region.Region) -> ?Nat64 = func(_) = null;
 
     public func unwrap<T>(r : Result.Result<T, { #LimitExceeded }>) : T {
-      let #ok x = r else Debug.trap("Pointer size overflow");
+      let #ok x = r else Runtime.trap("Pointer size overflow");
       x;
     };
 
@@ -265,21 +267,19 @@ module {
       var i = 0;
       let iters = Nat64.toNat(root_bitlength_ >> 3);
       while (i < iters) {
-        result := (result << 8) | Nat32.toNat64(Nat16.toNat32(Nat8.toNat16(key[i])));
+        result := (result << 8) | Nat64.fromNat8(key[i]);
         i += 1;
       };
       let skip = root_bitlength_ & 7;
       if (skip != 0) {
-        result := (result << skip) | (Nat32.toNat64(Nat16.toNat32(Nat8.toNat16(key[i]))) >> (8 -% skip));
+        result := (result << skip) | (Nat64.fromNat8(key[i]) >> (8 -% skip));
       };
       return result;
     };
 
     /// Get index in internal, not root node.
     public func keyToIndex(key : Blob, pos : Nat16) : Nat64 {
-      let bit_pos = Nat8.fromNat16(pos & 7);
-      let ret = Nat8.toNat((key[Nat16.toNat(pos >> 3)] << bit_pos) >> bitshift);
-      return Nat64.fromIntWrap(ret);
+      return Nat64.fromNat8((key[Nat16.toNat(pos >> 3)] << Nat8.fromNat16(pos & 7)) >> bitshift);
     };
 
     /// Find key in a tree. Returns node, child index, child value and bit offset.
@@ -296,7 +296,7 @@ module {
         idx := keyToIndex(key, pos);
         pos +%= bitlength;
       };
-      Debug.trap("Unreacheable");
+      Runtime.trap("Unreacheable");
     };
 
     /// Put only `key` into trie. Returns pair (wheter new leaf created, index of leaf) or null in case of pointer size overflow.
@@ -341,7 +341,7 @@ module {
           return ?(true, (leaf >> 1));
         };
       };
-      Debug.trap("Unreacheable");
+      Runtime.trap("Unreacheable");
     };
 
     /// Lookup `key` in trie. Returns `value` and index of that leaf or null if not found.
@@ -365,7 +365,7 @@ module {
 
     class Iterator(nodes : Region.Region, dir : Dir) {
       let forward = dir == #forward;
-      let stack = Array.init<(Nat64, Nat64)>(args.key_size * 8 / Nat16.toNat(bitlength), (0, 0));
+      let stack = VarArray.repeat<(Nat64, Nat64)>((0, 0), args.key_size * 8 / Nat16.toNat(bitlength));
       var depth = 1;
       stack[0] := if (forward) (0, 0) else (0, root_aridity_ - 1);
 
@@ -460,7 +460,7 @@ module {
           node_count := data.node_count;
           leaf_count := data.leaf_count;
         };
-        case (_) Debug.trap("Region is already initialized");
+        case (_) Runtime.trap("Region is already initialized");
       };
     };
   };
