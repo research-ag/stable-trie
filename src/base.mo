@@ -239,7 +239,7 @@ module {
 
     /// Load pointer from a region.
     public func loadPointer(region : Region.Region, offset : Nat64) : Nat64 {
-      Region.loadNat64(region, offset) & loadMask;
+      Prim.regionLoadNat64(region, offset) & loadMask;
     };
 
     /// Load node's `node` child number `index`.
