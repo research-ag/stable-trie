@@ -11,7 +11,7 @@ core = "2.0.0"
 
 [dev-dependencies]
 test = "2.1.1"
-prng = "0.0.5"
+prng = "0.0.6"
 bench = "1.0.0"
 
 [requirements]
