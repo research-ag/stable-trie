@@ -20,15 +20,18 @@ import Runtime "mo:core/Runtime";
 import Prim "mo:prim";
 
 module {
+  // up conversions
   let nat8to16 = Prim.nat8ToNat16;
   let nat16to32 = Prim.nat16ToNat32;
+  let nat16toNat = Prim.nat16ToNat;
   let nat32to64 = Prim.nat32ToNat64;
-  let nat64to32 = Prim.nat64ToNat32;
+  let nat64toNat = Prim.nat64ToNat;
+
+  // down conversions
   let nat16to8 = Prim.nat16ToNat8;
-  let intToNat8Wrap = Prim.intToNat8Wrap;
-  let intToNat16Wrap = Prim.intToNat16Wrap;
-  let nat16tonat = Prim.nat16ToNat;
-  let nat64tonat = Prim.nat64ToNat;
+  let nat64to32 = Prim.nat64ToNat32;
+  let natWrap8 = Prim.intToNat8Wrap;
+  let natWrap16 = Prim.intToNat16Wrap;
 
   /// Stable region with `freeSpace` variable.
   public type Region = {
@@ -104,7 +107,7 @@ module {
     public let root_bitlength = Nat32.toNat16(Nat64.toNat32(root_bitlength_));
 
     public let node_size : Nat64 = aridity_ * pointer_size_;
-    public let node_size_ : Nat = nat64tonat(node_size);
+    public let node_size_ : Nat = nat64toNat(node_size);
     public let leaf_size : Nat64 = Nat64.fromNat(args.leaf_size);
     public let root_size : Nat64 = root_aridity_ * pointer_size_;
     public let offset_base : Nat64 = root_size - node_size;
@@ -119,14 +122,14 @@ module {
       case (8) func(region, offset, child) = Region.storeNat64(region, offset, child);
       case (6) func(region, offset, child) {
         Region.storeNat32(region, offset, nat64to32(child & 0xffff_ffff));
-        Region.storeNat16(region, offset +% 4, intToNat16Wrap(nat64tonat(child >> 32)));
+        Region.storeNat16(region, offset +% 4, natWrap16(nat64toNat(child >> 32)));
       };
       case (5) func(region, offset, child) {
         Region.storeNat32(region, offset, nat64to32(child & 0xffff_ffff));
-        Region.storeNat8(region, offset +% 4, intToNat8Wrap(nat64tonat(child >> 32)));
+        Region.storeNat8(region, offset +% 4, natWrap8(nat64toNat(child >> 32)));
       };
       case (4) func(region, offset, child) = Region.storeNat32(region, offset, nat64to32(child));
-      case (2) func(region, offset, child) = Region.storeNat16(region, offset, intToNat16Wrap(nat64tonat(child)));
+      case (2) func(region, offset, child) = Region.storeNat16(region, offset, natWrap16(nat64toNat(child)));
       case (_) Runtime.trap("Can never happen");
     };
 
@@ -275,7 +278,7 @@ module {
     public func keyToRootIndex(key : Blob) : Nat64 {
       var result : Nat64 = 0;
       var i = 0;
-      let iters = nat64tonat(root_bitlength_ >> 3);
+      let iters = nat64toNat(root_bitlength_ >> 3);
       while (i < iters) {
         result := (result << 8) | nat32to64(nat16to32(nat8to16(key[i])));
         i += 1;
@@ -289,7 +292,7 @@ module {
 
     /// Get index in internal, not root node.
     public func keyToIndex(key : Blob, pos : Nat16) : Nat64 {
-      return nat32to64(nat16to32(nat8to16((key[nat16tonat(pos >> 3)] << nat16to8(pos & 7)) >> bitshift)));
+      return nat32to64(nat16to32(nat8to16((key[nat16toNat(pos >> 3)] << nat16to8(pos & 7)) >> bitshift)));
     };
 
     /// Find key in a tree. Returns node, child index, child value and bit offset.
@@ -365,7 +368,7 @@ module {
 
       let leaves_region = leaves.region;
       return if (getKey(leaves_region, index) == key) {
-        ?(getValue(leaves_region, index), nat64tonat(index));
+        ?(getValue(leaves_region, index), nat64toNat(index));
       } else {
         null;
       };
@@ -375,7 +378,7 @@ module {
 
     class Iterator(nodes : Region.Region, dir : Dir) {
       let forward = dir == #forward;
-      let stack = VarArray.repeat<(Nat64, Nat64)>((0, 0), args.key_size * 8 / nat16tonat(bitlength));
+      let stack = VarArray.repeat<(Nat64, Nat64)>((0, 0), args.key_size * 8 / nat16toNat(bitlength));
       var depth = 1;
       stack[0] := if (forward) (0, 0) else (0, root_aridity_ - 1);
 
@@ -450,9 +453,9 @@ module {
     public func keysRev() : Iter.Iter<Blob> = keys_(#reverse);
 
     public func memoryStats() : MemoryStats = {
-      byte_size = nat64tonat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size);
-      leaf_count = nat64tonat(leaf_count);
-      node_count = nat64tonat(node_count);
+      byte_size = nat64toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size);
+      leaf_count = nat64toNat(leaf_count);
+      node_count = nat64toNat(node_count);
     };
 
     /// Convert to stable data.
