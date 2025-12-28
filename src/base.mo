@@ -8,8 +8,8 @@
 
 import Iter "mo:core/Iter";
 import Nat_ "mo:core/Nat";
-import Nat16 "mo:core/Nat16";
-import Nat64 "mo:core/Nat64";
+import Nat16 "mo:core/Nat16"; // bitcountTrailingZero
+import Nat64 "mo:core/Nat64"; // bitcountTrailingZero
 import Option "mo:core/Option";
 import Region "mo:core/Region";
 import Result "mo:core/Result";
@@ -28,9 +28,9 @@ module {
 
   // down conversions
   let nat16to8 = Prim.nat16ToNat8;
+  let nat32to16 = Prim.nat32ToNat16;
   let nat64to32 = Prim.nat64ToNat32;
   let natWrap8 = Prim.intToNat8Wrap;
-  let natWrap16 = Prim.intToNat16Wrap;
 
   /// Stable region with `freeSpace` variable.
   public type Region = {
@@ -120,14 +120,14 @@ module {
       case (8) func(region, offset, child) = region.storeNat64(offset, child);
       case (6) func(region, offset, child) {
         region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
-        region.storeNat16(offset +% 4, natWrap16(nat64toNat(child >> 32)));
+        region.storeNat16(offset +% 4, nat32to16(nat64to32(child >> 32)));
       };
       case (5) func(region, offset, child) {
         region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
         region.storeNat8(offset +% 4, natWrap8(nat64toNat(child >> 32)));
       };
       case (4) func(region, offset, child) = region.storeNat32(offset, nat64to32(child));
-      case (2) func(region, offset, child) = region.storeNat16(offset, natWrap16(nat64toNat(child)));
+      case (2) func(region, offset, child) = region.storeNat16(offset, nat32to16(nat64to32(child)));
       case (_) Runtime.trap("Can never happen");
     };
 
