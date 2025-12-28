@@ -237,6 +237,7 @@ module {
 
     /// Load pointer from a region.
     public func loadPointer(region : Region.Region, offset : Nat64) : Nat64 {
+      // region.loadNat64(offset) & loadMask;
       Prim.regionLoadNat64(region, offset) & loadMask;
     };
 
