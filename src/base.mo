@@ -235,15 +235,9 @@ module {
       (offset_base +% (node >> 1) *% node_size) +% delta;
     };
 
-    /// Load pointer from a region.
-    public func loadPointer(region : Region.Region, offset : Nat64) : Nat64 {
-      // region.loadNat64(offset) & loadMask;
-      Prim.regionLoadNat64(region, offset) & loadMask;
-    };
-
     /// Load node's `node` child number `index`.
     public func getChild(region : Region.Region, node : Nat64, index : Nat64) : Nat64 {
-      loadPointer(region, getNodeOffset(node, index));
+      Prim.regionLoadNat64(region, getNodeOffset(node, index)) & loadMask;
     };
 
     /// Set node's `node` child number `index`.
