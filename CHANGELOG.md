@@ -1,5 +1,9 @@
 # Stable-trie changelog
 
+## 0.0.4
+
+* Optimise instructions and heap usage
+
 ## 0.0.3
 
 * Switch from base to core 2.0.0
