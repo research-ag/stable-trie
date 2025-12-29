@@ -2,9 +2,9 @@ import StableTrie "../src/Enumeration";
 import Prng "mo:prng";
 import Array "mo:core/Array";
 import Blob "mo:core/Blob";
-import Nat8 "mo:core/Nat8";
-import Nat64 "mo:core/Nat64";
 import Nat "mo:core/Nat";
+import Nat8 "mo:core/Nat8";
+import Nat64_ "mo:core/Nat64";
 import Text "mo:core/Text";
 import Bench "mo:bench";
 
@@ -40,7 +40,7 @@ module {
           Array.tabulate<Nat8>(
             key_size,
             func(j) {
-              Nat8.fromNat(Nat64.toNat(rng.next()) % 256);
+              Nat8.fromIntWrap(rng.next().toNat());
             },
           )
         );

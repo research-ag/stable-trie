@@ -1,12 +1,12 @@
 // @testmode wasi
 
-import Prng "mo:prng";
 import Array "mo:core/Array";
 import Blob "mo:core/Blob";
+import Nat_ "mo:core/Nat";
 import Nat8 "mo:core/Nat8";
-import Nat64 "mo:core/Nat64";
+import Nat64_ "mo:core/Nat64";
 import Iter "mo:core/Iter";
-import Nat "mo:core/Nat";
+import Prng "mo:prng";
 import StableTrie "../src/Map";
 
 let rng = Prng.Seiran128();
@@ -21,7 +21,7 @@ func gen(n : Nat, size : Nat) : [Blob] {
     n,
     func(i) {
       if (i % 2 == 0) {
-        prev := Array.tabulate<Nat8>(size, func(j) = Nat8.fromNat(Nat64.toNat(rng.next()) % 256));
+        prev := Array.tabulate<Nat8>(size, func(j) = Nat8.fromIntWrap(rng.next().toNat()));
         Blob.fromArray(prev);
       } else {
         Blob.fromArray(Array.tabulate<Nat8>(size, func(j) = if (j + 1 < size) prev[j] else if (prev[j] == 255) 0 else prev[j] + 1));
@@ -32,8 +32,8 @@ func gen(n : Nat, size : Nat) : [Blob] {
 
 let keys = gen(n, key_size);
 let delete_keys = gen(n, key_size);
-let sorted = Array.sort<Blob>(keys, Blob.compare);
-let revSorted = Array.reverse(sorted);
+let sorted = keys.sort();
+let revSorted = sorted.reverse();
 let keysAbsent = gen(n, key_size);
 
 // Note: bits = 256 and pointers = 2 requires smaller n
@@ -135,7 +135,7 @@ do {
     key_size = 1;
     value_size = 0;
   });
-  let keys = Array.tabulate<Blob>(256, func(i) = Blob.fromArray([Nat8.fromNat(i)]));
+  let keys = Array.tabulate<Blob>(256, func(i) = Blob.fromArray([i.toNat8()]));
   for (key in keys.vals()) {
     trie.put(key, "");
   };

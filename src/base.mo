@@ -6,20 +6,32 @@
 ///
 /// Contributors: Timo Hanke (timohanke)
 
-import Blob "mo:core/Blob";
-import Nat64 "mo:core/Nat64";
-import Nat "mo:core/Nat";
 import Iter "mo:core/Iter";
+import Nat_ "mo:core/Nat";
+import Nat16 "mo:core/Nat16"; // bitcountTrailingZero
+import Nat64 "mo:core/Nat64"; // bitcountTrailingZero
 import Option "mo:core/Option";
 import Region "mo:core/Region";
-import Nat8 "mo:core/Nat8";
-import Nat16 "mo:core/Nat16";
-import Nat32 "mo:core/Nat32";
 import Result "mo:core/Result";
-import VarArray "mo:core/VarArray";
 import Runtime "mo:core/Runtime";
+import Types "mo:core/Types";
+import VarArray "mo:core/VarArray";
+import Prim "mo:prim";
 
 module {
+  // up conversions
+  let nat8to16 = Prim.nat8ToNat16;
+  let nat16to32 = Prim.nat16ToNat32;
+  let nat16toNat = Prim.nat16ToNat;
+  let nat32to64 = Prim.nat32ToNat64;
+  let nat64toNat = Prim.nat64ToNat;
+
+  // down conversions
+  let nat16to8 = Prim.nat16ToNat8;
+  let nat32to16 = Prim.nat32ToNat16;
+  let nat64to32 = Prim.nat64ToNat32;
+  let natWrap8 = Prim.intToNat8Wrap;
+
   /// Stable region with `freeSpace` variable.
   public type Region = {
     region : Region.Region;
@@ -71,31 +83,30 @@ module {
     // Max leaf size is 2 ** 16, one page of stable memory.
     assert args.key_size >= 1 and args.key_size + args.value_size <= 2 ** 16;
 
-    public let aridity_ = Nat64.fromNat(args.aridity);
-    public let key_size_ = Nat64.fromNat(args.key_size);
-    public let value_size_ = Nat64.fromNat(args.value_size);
-    public let pointer_size_ = Nat64.fromNat(args.pointer_size);
-    public let root_aridity_ = Nat64.fromNat(Option.get(args.root_aridity, args.aridity));
-
+    public let aridity_ = args.aridity.toNat64();
+    public let key_size_ = args.key_size.toNat64();
+    public let value_size_ = args.value_size.toNat64();
+    public let pointer_size_ = args.pointer_size.toNat64();
+    public let root_aridity_ = Option.get(args.root_aridity, args.aridity).toNat64();
     // Mask of `pointer_size * 8` bits.
     public let loadMask = if (args.pointer_size == 8) 0xffff_ffff_ffff_ffff : Nat64 else (1 << (pointer_size_ << 3)) - 1;
 
-    public let bitlength = Nat16.bitcountTrailingZero(Nat16.fromNat(args.aridity));
-    public let bitshift = Nat16.toNat8(8 - bitlength);
-    public let bitlength_ = Nat32.toNat64(Nat16.toNat32(bitlength));
+    public let bitlength = Nat16.bitcountTrailingZero(args.aridity.toNat16()); // TODO: use dot notation when available
+    public let bitshift = (8 - bitlength).toNat8();
+    public let bitlength_ = bitlength.toNat64();
 
     public let max_address = 2 ** (pointer_size_ * 8 - 1);
 
     assert Nat64.bitcountNonZero(root_aridity_) == 1; // 2-power
-    public let root_bitlength_ = Nat64.bitcountTrailingZero(root_aridity_);
+    public let root_bitlength_ = Nat64.bitcountTrailingZero(root_aridity_); // TODO: use dot notation when available
     assert root_bitlength_ > 0 and root_bitlength_ % bitlength_ == 0; // => root_bitlength_ >= bitlength_
     assert root_bitlength_ <= key_size_ * 8;
 
-    public let root_bitlength = Nat32.toNat16(Nat64.toNat32(root_bitlength_));
+    public let root_bitlength = root_bitlength_.toNat16();
 
     public let node_size : Nat64 = aridity_ * pointer_size_;
-    public let node_size_ : Nat = Nat64.toNat(node_size);
-    public let leaf_size : Nat64 = Nat64.fromNat(args.leaf_size);
+    public let node_size_ : Nat = nat64toNat(node_size);
+    public let leaf_size : Nat64 = args.leaf_size.toNat64();
     public let root_size : Nat64 = root_aridity_ * pointer_size_;
     public let offset_base : Nat64 = root_size - node_size;
     public let padding : Nat64 = 8 - pointer_size_;
@@ -106,17 +117,17 @@ module {
 
     /// Store pointer to a region
     public let storePointer : (region : Region.Region, offset : Nat64, child : Nat64) -> () = switch (pointer_size_) {
-      case (8) func(region, offset, child) = Region.storeNat64(region, offset, child);
+      case (8) func(region, offset, child) = region.storeNat64(offset, child);
       case (6) func(region, offset, child) {
-        Region.storeNat32(region, offset, Nat32.fromNat64(child & 0xffff_ffff));
-        Region.storeNat16(region, offset +% 4, Nat16.fromNat64(child >> 32));
+        region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
+        region.storeNat16(offset +% 4, nat32to16(nat64to32(child >> 32)));
       };
       case (5) func(region, offset, child) {
-        Region.storeNat32(region, offset, Nat32.fromNat64(child & 0xffff_ffff));
-        Region.storeNat8(region, offset +% 4, Nat8.fromNat64(child >> 32));
+        region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
+        region.storeNat8(offset +% 4, natWrap8(nat64toNat(child >> 32)));
       };
-      case (4) func(region, offset, child) = Region.storeNat32(region, offset, Nat32.fromNat64(child));
-      case (2) func(region, offset, child) = Region.storeNat16(region, offset, Nat16.fromNat64(child));
+      case (4) func(region, offset, child) = region.storeNat32(offset, nat64to32(child));
+      case (2) func(region, offset, child) = region.storeNat16(offset, nat32to16(nat64to32(child)));
       case (_) Runtime.trap("Can never happen");
     };
 
@@ -139,7 +150,7 @@ module {
             var freeSpace = 0;
           };
           let pages = (root_size + padding + 65536 - 1) / 65536;
-          assert Region.grow(nodes.region, pages) != 0xffff_ffff_ffff_ffff;
+          assert nodes.region.grow(pages) != 0xffff_ffff_ffff_ffff;
           nodes.freeSpace := pages * 65536 - root_size - padding;
           node_count := 1;
 
@@ -176,7 +187,7 @@ module {
     /// Acclocate one page if required.  `allocate` can only be used for n <= 65536
     func allocate(region : Region, n : Nat64) {
       if (region.freeSpace < n) {
-        assert Region.grow(region.region, 1) != 0xffff_ffff_ffff_ffff;
+        assert region.region.grow(1) != 0xffff_ffff_ffff_ffff;
         region.freeSpace +%= 65536;
       };
       region.freeSpace -%= n;
@@ -213,7 +224,7 @@ module {
         };
       };
 
-      Region.storeBlob(region.region, getLeafOffset(leaf), key);
+      region.region.storeBlob(getLeafOffset(leaf), key);
       ?((leaf << 1) | 1);
     };
 
@@ -226,12 +237,15 @@ module {
 
     /// Load pointer from a region.
     public func loadPointer(region : Region.Region, offset : Nat64) : Nat64 {
-      Region.loadNat64(region, offset) & loadMask;
+      // region.loadNat64(offset) & loadMask;
+      // workaround for https://github.com/caffeinelabs/motoko/issues/5767
+      Prim.regionLoadNat64(region, offset) & loadMask;
     };
 
     /// Load node's `node` child number `index`.
     public func getChild(region : Region.Region, node : Nat64, index : Nat64) : Nat64 {
-      loadPointer(region, getNodeOffset(node, index));
+      // inline loadPointer(region, getNodeOffset(node, index))
+      Prim.regionLoadNat64(region, getNodeOffset(node, index)) & loadMask;
     };
 
     /// Set node's `node` child number `index`.
@@ -245,41 +259,41 @@ module {
 
     /// Load key of leaf number `index`.
     public func getKey(region : Region.Region, index : Nat64) : Blob {
-      Region.loadBlob(region, getLeafOffset(index), args.key_size);
+      region.loadBlob(getLeafOffset(index), args.key_size);
     };
 
     /// Load value of leaf number `index`.
     public func getValue(region : Region.Region, index : Nat64) : Blob {
       if (empty_values) return "";
-      Region.loadBlob(region, getLeafOffset(index) +% key_size_, args.value_size);
+      region.loadBlob(getLeafOffset(index) +% key_size_, args.value_size);
     };
 
     /// Set value of leaf number `index`.
     public func setValue(region : Region.Region, index : Nat64, value : Blob) {
       assert value.size() == args.value_size;
       if (empty_values) return;
-      Region.storeBlob(region, getLeafOffset(index) +% key_size_, value);
+      region.storeBlob(getLeafOffset(index) +% key_size_, value);
     };
 
     /// Get index in root node.
     public func keyToRootIndex(key : Blob) : Nat64 {
       var result : Nat64 = 0;
       var i = 0;
-      let iters = Nat64.toNat(root_bitlength_ >> 3);
+      let iters = nat64toNat(root_bitlength_ >> 3);
       while (i < iters) {
-        result := (result << 8) | Nat64.fromNat8(key[i]);
+        result := (result << 8) | nat32to64(nat16to32(nat8to16(key[i])));
         i += 1;
       };
       let skip = root_bitlength_ & 7;
       if (skip != 0) {
-        result := (result << skip) | (Nat64.fromNat8(key[i]) >> (8 -% skip));
+        result := (result << skip) | (nat32to64(nat16to32(nat8to16(key[i]))) >> (8 -% skip));
       };
       return result;
     };
 
     /// Get index in internal, not root node.
     public func keyToIndex(key : Blob, pos : Nat16) : Nat64 {
-      return Nat64.fromNat8((key[Nat16.toNat(pos >> 3)] << Nat8.fromNat16(pos & 7)) >> bitshift);
+      return nat32to64(nat16to32(nat8to16((key[nat16toNat(pos >> 3)] << nat16to8(pos & 7)) >> bitshift)));
     };
 
     /// Find key in a tree. Returns node, child index, child value and bit offset.
@@ -355,7 +369,7 @@ module {
 
       let leaves_region = leaves.region;
       return if (getKey(leaves_region, index) == key) {
-        ?(getValue(leaves_region, index), Nat64.toNat(index));
+        ?(getValue(leaves_region, index), nat64toNat(index));
       } else {
         null;
       };
@@ -365,7 +379,7 @@ module {
 
     class Iterator(nodes : Region.Region, dir : Dir) {
       let forward = dir == #forward;
-      let stack = VarArray.repeat<(Nat64, Nat64)>((0, 0), args.key_size * 8 / Nat16.toNat(bitlength));
+      let stack = VarArray.repeat<(Nat64, Nat64)>((0, 0), args.key_size * 8 / nat16toNat(bitlength));
       var depth = 1;
       stack[0] := if (forward) (0, 0) else (0, root_aridity_ - 1);
 
@@ -404,7 +418,7 @@ module {
       };
     };
 
-    func entries_base<T>(dir : Dir, f : (Nat64, Region.Region) -> T) : Iter.Iter<T> {
+    func entries_base<T>(dir : Dir, f : (Nat64, Region.Region) -> T) : Types.Iter<T> {
       let state = regions();
       let { nodes; leaves } = state;
       let leaves_region = leaves.region;
@@ -412,37 +426,37 @@ module {
       Iter.map<Nat64, T>(Iterator(nodes_region, dir), func(leaf) = f(leaf, leaves_region));
     };
 
-    func entries_(dir : Dir) : Iter.Iter<(Blob, Blob)> = entries_base<(Blob, Blob)>(
+    func entries_(dir : Dir) : Types.Iter<(Blob, Blob)> = entries_base<(Blob, Blob)>(
       dir,
       func(leaf, leaves) = (getKey(leaves, leaf), getValue(leaves, leaf)),
     );
 
-    func vals_(dir : Dir) : Iter.Iter<Blob> = entries_base<Blob>(
+    func vals_(dir : Dir) : Types.Iter<Blob> = entries_base<Blob>(
       dir,
       func(leaf, leaves) = getValue(leaves, leaf),
     );
 
-    func keys_(dir : Dir) : Iter.Iter<Blob> = entries_base<Blob>(
+    func keys_(dir : Dir) : Types.Iter<Blob> = entries_base<Blob>(
       dir,
       func(leaf, leaves) = getKey(leaves, leaf),
     );
 
-    public func entries() : Iter.Iter<(Blob, Blob)> = entries_(#forward);
+    public func entries() : Types.Iter<(Blob, Blob)> = entries_(#forward);
 
-    public func entriesRev() : Iter.Iter<(Blob, Blob)> = entries_(#reverse);
+    public func entriesRev() : Types.Iter<(Blob, Blob)> = entries_(#reverse);
 
-    public func vals() : Iter.Iter<Blob> = vals_(#forward);
+    public func vals() : Types.Iter<Blob> = vals_(#forward);
 
-    public func valsRev() : Iter.Iter<Blob> = vals_(#reverse);
+    public func valsRev() : Types.Iter<Blob> = vals_(#reverse);
 
-    public func keys() : Iter.Iter<Blob> = keys_(#forward);
+    public func keys() : Types.Iter<Blob> = keys_(#forward);
 
-    public func keysRev() : Iter.Iter<Blob> = keys_(#reverse);
+    public func keysRev() : Types.Iter<Blob> = keys_(#reverse);
 
     public func memoryStats() : MemoryStats = {
-      byte_size = Nat64.toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size);
-      leaf_count = Nat64.toNat(leaf_count);
-      node_count = Nat64.toNat(node_count);
+      byte_size = nat64toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size);
+      leaf_count = nat64toNat(leaf_count);
+      node_count = nat64toNat(node_count);
     };
 
     /// Convert to stable data.
