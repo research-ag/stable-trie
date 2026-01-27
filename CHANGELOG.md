@@ -1,5 +1,10 @@
 # Stable-trie changelog
 
+## Next
+
+* Remove unused test dependency
+* Bump dependencies
+
 ## 0.0.4
 
 * Optimise instructions and heap usage

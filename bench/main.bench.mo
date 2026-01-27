@@ -1,4 +1,3 @@
-import StableTrie "../src/Enumeration";
 import Prng "mo:prng";
 import Array "mo:core/Array";
 import Blob "mo:core/Blob";
@@ -7,6 +6,8 @@ import Nat8 "mo:core/Nat8";
 import Nat64_ "mo:core/Nat64";
 import Text "mo:core/Text";
 import Bench "mo:bench";
+
+import StableTrie "../src/Enumeration";
 
 module {
   public func init() : Bench.Bench {

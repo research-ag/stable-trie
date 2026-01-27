@@ -12,7 +12,7 @@ import Nat64 "mo:core/Nat64";
 import Result "mo:core/Result";
 import Types "mo:core/Types";
 
-import Base "base";
+import Base "internal/base";
 
 module {
   /// Type of stable data of `StableTrieEnumeration`.

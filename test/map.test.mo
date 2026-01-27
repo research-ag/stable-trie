@@ -7,6 +7,7 @@ import Nat8 "mo:core/Nat8";
 import Nat64_ "mo:core/Nat64";
 import Iter "mo:core/Iter";
 import Prng "mo:prng";
+
 import StableTrie "../src/Map";
 
 let rng = Prng.Seiran128();

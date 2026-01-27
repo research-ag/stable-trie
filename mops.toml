@@ -10,12 +10,12 @@ license = "Apache-2.0"
 core = "2.0.0"
 
 [dev-dependencies]
-bench = "1.0.0"
-prng = "0.0.6"
+bench = "2.0.1"
+prng = "0.0.8"
 
 [requirements]
 moc = "1.0.0"
 
 [toolchain]
-moc = "1.0.0"
+moc = "1.1.0"
 wasmtime = "40.0.0"
