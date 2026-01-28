@@ -2,10 +2,8 @@ import Prng "mo:prng";
 import Array "mo:core/Array";
 import Blob "mo:core/Blob";
 import Nat "mo:core/Nat";
-import Nat8 "mo:core/Nat8";
 import Nat32 "mo:core/Nat32";
 import Nat64 "mo:core/Nat64";
-import Text "mo:core/Text";
 import Prim "mo:prim";
 
 import StableTrie "../src/Enumeration";
