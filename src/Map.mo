@@ -14,7 +14,7 @@ import Result "mo:core/Result";
 import Types "mo:core/Types";
 import Prim "mo:prim";
 
-import Base "base";
+import Base "internal/base";
 
 module {
   /// Type of stable data of `StableTrie.Map`

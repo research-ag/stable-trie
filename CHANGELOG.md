@@ -1,5 +1,13 @@
 # Stable-trie changelog
 
+## 0.0.5
+
+* Fix potential underflow trap in memoryStats
+* Improve benchmark accuracy
+* Add documentation
+* Update dependencies
+* Organize code into internal/ directory
+
 ## 0.0.4
 
 * Optimise instructions and heap usage

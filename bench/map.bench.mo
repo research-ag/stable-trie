@@ -1,25 +1,53 @@
-import StableTrie "../src/Map";
 import Prng "mo:prng";
 import Array "mo:core/Array";
 import Blob "mo:core/Blob";
-import Nat8 "mo:core/Nat8";
-import Nat64 "mo:core/Nat64";
 import Nat "mo:core/Nat";
+import Nat8 "mo:core/Nat8";
+import Nat32 "mo:core/Nat32";
+import Nat64 "mo:core/Nat64";
 import Text "mo:core/Text";
-import Bench "mo:bench";
+import Prim "mo:prim";
+
+import StableTrie "../src/Map";
 
 module {
-  public func init() : Bench.Bench {
-    let bench = Bench.Bench();
+  type Schema = {
+    name : Text;
+    description : Text;
+    rows : [Text];
+    cols : [Text];
+  };
 
+  class BenchV1(schema : Schema, run : (Nat, Nat) -> ()) {
+    public func getVersion() : Nat = 1;
+    public func getSchema() : Schema = schema;
+    public let runCell = run;
+
+    // unused stuff just to satisfy types
+    public func name(_ : Text) {};
+    public func description(_ : Text) {};
+    public func rows(_ : [Text]) {};
+    public func cols(_ : [Text]) {};
+    public func runner(_ : (Text, Text) -> ()) {};
+    // end unused stuff
+  };
+
+  let nat = Prim.nat32ToNat;
+
+  public func init() : BenchV1 {
     let n = 9;
-    let cols = 4;
     let key_size = 8;
-    bench.cols(["2", "4", "16", "256"]);
-    bench.rows(Array.tabulate<Text>(n, func(i) = Nat.toText(i)));
 
-    var tries = Array.tabulate<StableTrie.Map>(
-      cols,
+    let schema : Schema = {
+      name = "StableTrie Map Benchmark";
+      description = "Insert/delete random 8-byte keys into StableTrie Map. With each row in the table more keys are added, deleted and then added again. Row header `r` means this row brings total keys to `2^r`. Column header equals aridity of the trie.";
+      rows = Array.tabulate<Text>(n, func i = i.toText());
+      cols = ["2", "4", "16", "256"];
+    };
+    let (nRows, nCols) = (schema.rows.size(), schema.cols.size());
+
+    let tries = Array.tabulate<StableTrie.Map>(
+      nCols,
       func(i) {
         StableTrie.Map({
           pointer_size = 2;
@@ -34,47 +62,52 @@ module {
     let rng = Prng.Seiran128();
     rng.init(0);
     let keys = Array.tabulate<Blob>(
-      2 ** n,
+      2 ** (n - 1),
       func(i) {
         Blob.fromArray(
           Array.tabulate<Nat8>(
             key_size,
-            func(j) {
-              Nat8.fromIntWrap(rng.next().toNat());
-            },
+            func _ = Nat64.explode(rng.next()).7,
           )
         );
       },
     );
 
-    var aridity = 0;
-    bench.runner(
-      func(row, col) {
-        let ?r = Nat.fromText(row) else return;
+    let routines : [() -> ()] = Array.tabulate<() -> ()>(
+      nRows * nCols,
+      func(i) {
+        let row : Nat = i % nRows;
+        let col : Nat = i / nRows;
+        let trie = tries[col];
 
-        let trie = tries[aridity];
-
-        if (r == 0) {
-          trie.put(keys[0], "");
+        if (row == 0) {
+          func() = trie.put(keys[0], "");
         } else {
-          for (j in Nat.range(2 ** (r - 1), 2 ** r)) {
-            trie.put(keys[j], "");
-          };
-          for (j in Nat.range(2 ** (r - 1), 2 ** r)) {
-            trie.delete(keys[j]);
-          };
-          for (j in Nat.range(2 ** (r - 1), 2 ** r)) {
-            trie.put(keys[j], "");
+          let start = Nat32.fromIntWrap(2 ** (row - 1));
+          let end = Nat32.fromIntWrap(2 ** row);
+          func() {
+            var j = start;
+            while (j < end) {
+              trie.put(keys[nat(j)], "");
+              j +%= 1;
+            };
+            j := start;
+            while (j < end) {
+              trie.delete(keys[nat(j)]);
+              j +%= 1;
+            };
+            j := start;
+            while (j < end) {
+              trie.put(keys[nat(j)], "");
+              j +%= 1;
+            };
           };
         };
-
-        aridity += 1;
-        if (aridity == cols) {
-          aridity := 0;
-        };
-      }
+      },
     );
 
-    bench;
+    func run(ri : Nat, ci : Nat) = routines[ci * nRows + ri]();
+
+    BenchV1(schema, run);
   };
 };

@@ -39,6 +39,11 @@ module {
   };
 
   /// Arguments of constructor of `Enumeration` and `Map`.
+  /// pointer_size: size of pointer in bytes (2, 4, 5, 6, 8)
+  /// aridity: number of children per internal node (2, 4, 16, 256)
+  /// root_aridity: number of children for root node (must be power), null mean same as aridity
+  /// key_size: size of keys in bytes (>= 1)
+  /// value_size: size of values in bytes (>= 0)
   public type BaseArgs = {
     pointer_size : Nat;
     aridity : Nat;
@@ -83,37 +88,40 @@ module {
     // Max leaf size is 2 ** 16, one page of stable memory.
     assert args.key_size >= 1 and args.key_size + args.value_size <= 2 ** 16;
 
-    public let aridity_ = args.aridity.toNat64();
-    public let key_size_ = args.key_size.toNat64();
-    public let value_size_ = args.value_size.toNat64();
-    public let pointer_size_ = args.pointer_size.toNat64();
-    public let root_aridity_ = Option.get(args.root_aridity, args.aridity).toNat64();
-    // Mask of `pointer_size * 8` bits.
+    let aridity_ = args.aridity.toNat64();
+    let key_size_ = args.key_size.toNat64();
+    let pointer_size_ = args.pointer_size.toNat64();
+    let root_aridity_ = Option.get(args.root_aridity, args.aridity).toNat64();
+    /// Mask of `pointer_size * 8` bits.
     public let loadMask = if (args.pointer_size == 8) 0xffff_ffff_ffff_ffff : Nat64 else (1 << (pointer_size_ << 3)) - 1;
 
+    /// Bitlength of aridity - 1
     public let bitlength = Nat16.bitcountTrailingZero(args.aridity.toNat16()); // TODO: use dot notation when available
-    public let bitshift = (8 - bitlength).toNat8();
-    public let bitlength_ = bitlength.toNat64();
+    let bitshift = (8 - bitlength).toNat8();
+    let bitlength_ = bitlength.toNat64();
 
-    public let max_address = 2 ** (pointer_size_ * 8 - 1);
+    let max_address = 2 ** (pointer_size_ * 8 - 1);
 
     assert Nat64.bitcountNonZero(root_aridity_) == 1; // 2-power
-    public let root_bitlength_ = Nat64.bitcountTrailingZero(root_aridity_); // TODO: use dot notation when available
+    let root_bitlength_ = Nat64.bitcountTrailingZero(root_aridity_); // TODO: use dot notation when available
     assert root_bitlength_ > 0 and root_bitlength_ % bitlength_ == 0; // => root_bitlength_ >= bitlength_
     assert root_bitlength_ <= key_size_ * 8;
 
+    /// Bitlength of root_aridity - 1
     public let root_bitlength = root_bitlength_.toNat16();
 
-    public let node_size : Nat64 = aridity_ * pointer_size_;
+    let node_size : Nat64 = aridity_ * pointer_size_;
+    /// Node size in bytes, equals aridity * pointer_size.
     public let node_size_ : Nat = nat64toNat(node_size);
-    public let leaf_size : Nat64 = args.leaf_size.toNat64();
-    public let root_size : Nat64 = root_aridity_ * pointer_size_;
-    public let offset_base : Nat64 = root_size - node_size;
-    public let padding : Nat64 = 8 - pointer_size_;
-    public let empty_values : Bool = args.value_size == 0;
+    let leaf_size : Nat64 = args.leaf_size.toNat64();
+    let root_size : Nat64 = root_aridity_ * pointer_size_;
+    let offset_base : Nat64 = root_size - node_size;
+    let padding : Nat64 = 8 - pointer_size_;
+    let empty_values : Bool = args.value_size == 0;
 
+    /// Current number of leaves.
     public var leaf_count : Nat64 = 0;
-    public var node_count : Nat64 = 0;
+    var node_count : Nat64 = 0;
 
     /// Store pointer to a region
     public let storePointer : (region : Region.Region, offset : Nat64, child : Nat64) -> () = switch (pointer_size_) {
@@ -173,6 +181,7 @@ module {
     /// Pop empty leaf from empty leaf stack. Used to implement deletion in map.
     var popLeaf : (Region.Region) -> ?Nat64 = func(_) = null;
 
+    /// Unwrap a pointer-size result or trap on overflow.
     public func unwrap<T>(r : Result.Result<T, { #LimitExceeded }>) : T {
       let #ok x = r else Runtime.trap("Pointer size overflow");
       x;
@@ -184,7 +193,7 @@ module {
       popLeaf := leaf;
     };
 
-    /// Acclocate one page if required.  `allocate` can only be used for n <= 65536
+    /// Allocate one page if required.  `allocate` can only be used for n <= 65536
     func allocate(region : Region, n : Nat64) {
       if (region.freeSpace < n) {
         assert region.region.grow(1) != 0xffff_ffff_ffff_ffff;
@@ -210,8 +219,7 @@ module {
       ?node;
     };
 
-    /// Create new leaf and initialize key. Value is initialized later.
-    public func newLeaf(region : Region, key : Blob) : ?Nat64 {
+    func newLeaf(region : Region, key : Blob) : ?Nat64 {
       let leaf = switch (popLeaf(region.region)) {
         case (?leaf) leaf;
         case (null) {
@@ -296,8 +304,7 @@ module {
       return nat32to64(nat16to32(nat8to16((key[nat16toNat(pos >> 3)] << nat16to8(pos & 7)) >> bitshift)));
     };
 
-    /// Find key in a tree. Returns node, child index, child value and bit offset.
-    public func find(nodes : Region.Region, key : Blob) : (Nat64, Nat64, Nat64, Nat16) {
+    func find(nodes : Region.Region, key : Blob) : (Nat64, Nat64, Nat64, Nat16) {
       var idx = keyToRootIndex(key);
       var pos = root_bitlength;
       var node : Nat64 = 0;
@@ -441,20 +448,31 @@ module {
       func(leaf, leaves) = getKey(leaves, leaf),
     );
 
+    /// Iterate entries in forward order.
     public func entries() : Types.Iter<(Blob, Blob)> = entries_(#forward);
 
+    /// Iterate entries in reverse order.
     public func entriesRev() : Types.Iter<(Blob, Blob)> = entries_(#reverse);
 
+    /// Iterate values in forward order.
     public func vals() : Types.Iter<Blob> = vals_(#forward);
 
+    /// Iterate values in reverse order.
     public func valsRev() : Types.Iter<Blob> = vals_(#reverse);
 
+    /// Iterate keys in forward order.
     public func keys() : Types.Iter<Blob> = keys_(#forward);
 
+    /// Iterate keys in reverse order.
     public func keysRev() : Types.Iter<Blob> = keys_(#reverse);
 
+    /// Return current memory stats.
     public func memoryStats() : MemoryStats = {
-      byte_size = nat64toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size);
+      byte_size = if (node_count == 0) {
+        0 // no regions allocated yet
+      } else {
+        nat64toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size)
+      };
       leaf_count = nat64toNat(leaf_count);
       node_count = nat64toNat(node_count);
     };

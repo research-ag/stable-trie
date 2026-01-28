@@ -4,6 +4,7 @@ import Debug "mo:core/Debug";
 import Float "mo:core/Float";
 import Region "mo:core/Region";
 import Prng "mo:prng";
+
 import StableTrie "../src/Enumeration";
 
 let key_size = 8;
