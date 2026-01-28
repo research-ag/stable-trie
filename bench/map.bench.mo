@@ -40,7 +40,7 @@ module {
 
     let schema : Schema = {
       name = "StableTrie Map Benchmark";
-      description = "Insert/delete random 8-byte keys into StableTrie Map. With each row more keys are added, deleted and then added again. Row header `r` means this row brings total keys to `2**r`. Column header equals aridity of the trie.";
+      description = "Insert/delete random 8-byte keys into StableTrie Map. With each row in the table more keys are added, deleted and then added again. Row header `r` means this row brings total keys to `2^r`. Column header equals aridity of the trie.";
       rows = Array.tabulate<Text>(n, func i = i.toText());
       cols = ["2", "4", "16", "256"];
     };

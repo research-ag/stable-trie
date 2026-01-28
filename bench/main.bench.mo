@@ -38,7 +38,7 @@ module {
 
     let schema : Schema = {
       name = "StableTrie Benchmark";
-      description = "Incrementally add random 8-byte keys into StableTrie Enumeration. With each row more keys get added. Row header `r` means this row brings total key to `2**r`. Column header equals aridity of the trie.";
+      description = "Incrementally add random 8-byte keys into StableTrie Enumeration. With each row in the table more keys get added. Row header `r` means this row brings total keys to `2^r`. Column header equals aridity of the trie.";
       rows = Array.tabulate<Text>(n, func i = i.toText());
       cols = ["2", "4", "16", "256"];
     };
