@@ -1,12 +1,12 @@
 # Stable-trie changelog
 
-## Next
+## 0.0.5
 
-* Remove unused test dependency
-* Bump dependencies
-* Organize code with internal/ directory
+* Fix potential underflow trap in memoryStats
 * Improve benchmark accuracy
 * Add documentation
+* Update dependencies
+* Organize code into internal/ directory
 
 ## 0.0.4
 
