@@ -4,6 +4,8 @@
 
 * Remove unused test dependency
 * Bump dependencies
+* Move code to internal/ directory
+* Improve benchmark accuracy
 
 ## 0.0.4
 
