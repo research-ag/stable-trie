@@ -1,5 +1,10 @@
 # Stable-trie changelog
 
+## 0.0.6
+
+* Bump core dependency
+* Simplify bench code (needs mops >= 2.1.0)
+
 ## 0.0.5
 
 * Fix potential underflow trap in memoryStats
