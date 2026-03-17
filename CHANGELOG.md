@@ -1,5 +1,10 @@
 # Stable-trie changelog
 
+## 0.0.7
+
+* Use bench-helper package
+* Bump core dependency
+
 ## 0.0.6
 
 * Bump core dependency

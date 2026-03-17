@@ -7,30 +7,18 @@ import Nat32 "mo:core/Nat32";
 import Nat64 "mo:core/Nat64";
 import Text "mo:core/Text";
 import Prim "mo:prim";
+import Bench "mo:bench-helper";
 
 import StableTrie "../src/Map";
 
 module {
-  type Schema = {
-    name : Text;
-    description : Text;
-    rows : [Text];
-    cols : [Text];
-  };
-
-  class BenchV1(schema : Schema, run : (Nat, Nat) -> ()) {
-    public func getVersion() : Nat = 1;
-    public func getSchema() : Schema = schema;
-    public let runCell = run;
-  };
-
   let nat = Prim.nat32ToNat;
 
-  public func init() : BenchV1 {
+  public func init() : Bench.V1 {
     let n = 9;
     let key_size = 8;
 
-    let schema : Schema = {
+    let schema : Bench.Schema = {
       name = "StableTrie Map Benchmark";
       description = "Insert/delete random 8-byte keys into StableTrie Map. With each row in the table more keys are added, deleted and then added again. Row header `r` means this row brings total keys to `2^r`. Column header equals aridity of the trie.";
       rows = Array.tabulate<Text>(n, func i = i.toText());
@@ -100,6 +88,6 @@ module {
 
     func run(ri : Nat, ci : Nat) = routines[ci * nRows + ri]();
 
-    BenchV1(schema, run);
+    Bench.V1(schema, run);
   };
 };
