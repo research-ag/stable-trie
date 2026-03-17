@@ -1,19 +1,14 @@
 import Prng "mo:prng";
 import Array "mo:core/Array";
 import Blob "mo:core/Blob";
-import Nat "mo:core/Nat";
-import Nat8 "mo:core/Nat8";
+import _Nat "mo:core/Nat";
 import Nat32 "mo:core/Nat32";
 import Nat64 "mo:core/Nat64";
-import Text "mo:core/Text";
-import Prim "mo:prim";
 import Bench "mo:bench-helper";
 
 import StableTrie "../src/Map";
 
 module {
-  let nat = Prim.nat32ToNat;
-
   public func init() : Bench.V1 {
     let n = 9;
     let key_size = 8;
@@ -68,17 +63,17 @@ module {
           func() {
             var j = start;
             while (j < end) {
-              trie.put(keys[nat(j)], "");
+              trie.put(keys[j.toNat()], "");
               j +%= 1;
             };
             j := start;
             while (j < end) {
-              trie.delete(keys[nat(j)]);
+              trie.delete(keys[j.toNat()]);
               j +%= 1;
             };
             j := start;
             while (j < end) {
-              trie.put(keys[nat(j)], "");
+              trie.put(keys[j.toNat()], "");
               j +%= 1;
             };
           };
