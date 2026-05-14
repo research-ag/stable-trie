@@ -62,7 +62,7 @@ for (value_size in value_sizes.vals()) {
         assert trie.size() == i + 1;
         i += 1;
       };
-      
+
       i := 0;
       for (key in keys.vals()) {
         assert trie.get(i) == ?(key, values[i]);
@@ -118,7 +118,7 @@ func _profile() {
   let keys = Array.tabulate<Blob>(
     2 ** n,
     func(i) {
-      Blob.fromArray(Array.tabulate<Nat8>(key_size, func(j) = Nat8.fromIntWrap(rng.next().toNat())))
+      Blob.fromArray(Array.tabulate<Nat8>(key_size, func(j) = Nat8.fromIntWrap(rng.next().toNat())));
     },
   );
   let _rows = Iter.map<Nat, (Text, Types.Iter<Text>)>(

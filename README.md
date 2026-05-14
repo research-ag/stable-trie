@@ -21,7 +21,7 @@ In `StableTrieEnumeration` each key, besides its value, also has an index associ
 which reflects the order of its insertion into the map.
 This index is inherent in the data structure and therefore has no additional memory footprint over `StableTrieMap`.
 Values can be looked up by index or by key
-and index can be looked up by key. 
+and index can be looked up by key.
 But key can not be looked up by index.
 `StableTrieEnumeration` does not allow deletion.
 
@@ -40,21 +40,21 @@ that they can be declared `stable` in Motoko or, equialently,
 that their type is a so-called "stable type".
 This is a Motoko-specific terminology.
 
-Another interpretation of the term "stable" is to characterize a 
+Another interpretation of the term "stable" is to characterize a
 data structure as living in the canister's stable memory as opposed to the heap.
-This is an IC-specific and language-agnostic terminology. 
+This is an IC-specific and language-agnostic terminology.
 
 A data structure of the first kind we call a _stable-type_ data structure. It can be declared `stable` in Motoko but still lives on the heap and is subject to two limitations:
 
-* the 4 GB heap size limit
-* the instruction limit available for serialization/deserialization during preupgrade/postupgrade
+- the 4 GB heap size limit
+- the instruction limit available for serialization/deserialization during preupgrade/postupgrade
 
 A data structure of the second kind we call _stable-memory_ datastructure.
 All of its dynamically sized data must live in the canister's stable memory.
 Heap memory usage must be limited to size `O(1)`.
 For example, when Regions are used, then the Region references live on the heap.
 This is allowed for a constant number of Regions.
-It is also allowed to store `O(1)` metadata on the heap such as a fixed number of pointers to positions in the Regions. 
+It is also allowed to store `O(1)` metadata on the heap such as a fixed number of pointers to positions in the Regions.
 Stable-memory data structures are not subject to the two limitations mentioned above.
 
 Some published Motoko data structures are hybrid.
@@ -68,24 +68,24 @@ and that can compete in performance with a heap implementation.
 
 The trie constructor has two main configuration parameters affecting keys and values:
 
-* The byte size of the keys.
-* The byte size of the values. Values of size 0 are allowed and turn the data structure into a set.
+- The byte size of the keys.
+- The byte size of the values. Values of size 0 are allowed and turn the data structure into a set.
 
-Key size plus value size can be at most 65536. 
+Key size plus value size can be at most 65536.
 
 The other parameters are considered optimization parameters.
 
-* Aridity of the trie, i.e. the number of children per node. Allowed values are 2, 4, 16, 256. The recommended value is 4,
-which is optimal for uniformly distributed keys.
+- Aridity of the trie, i.e. the number of children per node. Allowed values are 2, 4, 16, 256. The recommended value is 4,
+  which is optimal for uniformly distributed keys.
 
-* Root aridity. Multiple levels from the top of the trie can be merged into the root node by specifying a higher aridity for the root node.
-This will save memory if the top levels of the trie are "full",
-i.e. all nodes on those level have all or most of its children used.
-But it will waste memory if they are not full.
+- Root aridity. Multiple levels from the top of the trie can be merged into the root node by specifying a higher aridity for the root node.
+  This will save memory if the top levels of the trie are "full",
+  i.e. all nodes on those level have all or most of its children used.
+  But it will waste memory if they are not full.
 
-* Pointer size. This is the byte size of the internal pointers stored in each node.  
-It can be set lower to save memory but that sets a limit on how large the trie can grow.
-Allowed values are 2,4,5,6,8.
+- Pointer size. This is the byte size of the internal pointers stored in each node.  
+  It can be set lower to save memory but that sets a limit on how large the trie can grow.
+  Allowed values are 2,4,5,6,8.
 
 ## Extensions
 
@@ -96,10 +96,10 @@ In this case the trie provides the lookup by key
 and the other stable-memory data structure only has to store the values.
 
 That way we can get around the size limitation for values.
-We can also store variable size variables 
+We can also store variable size variables
 if the other stable-memory data structure is designed for them.
 
-## Implementation 
+## Implementation
 
 The trie uses two Regions, one for internal nodes and one for leaves.
 Each Region is an array of constant size objects.
@@ -116,10 +116,10 @@ When the pointer space is exceeded the implementation will block the operation a
 
 The implementation only writes or deletes objects,
 it never moves objects.
-In particular, it does not perform de-fragmentation. 
+In particular, it does not perform de-fragmentation.
 The space of deleted objects is re-used in place for new objects.
 
-Deletion is complete in the sense that not only leaves get deleted 
+Deletion is complete in the sense that not only leaves get deleted
 but also inner nodes which end up forming a linear branch get compressed back into a single node.
 
 ## Comparison
@@ -131,13 +131,13 @@ MotokoStableBTree is a stable-memory data structure.
 The results in the following table shows that stable-trie can compete with the heap data structures.
 And it is 2 orders of magnitude faster than the only other stable-memory map.
 
-|method|rb tree|zhus map|stable trie map|motoko stable btree|
-|---|---|---|---|---|
-|put|3_736|3_491|3_136|255_732|
-|inside get|2_196|1_835|2_793|200_453|
-|ouside get|1_605|1_019|1_391|207_289|
-|inside deletion|5_034|2_080|8_906|438_861|
-|outside deletion|4_148|1_016|1_442|401_505|
+| method           | rb tree | zhus map | stable trie map | motoko stable btree |
+| ---------------- | ------- | -------- | --------------- | ------------------- |
+| put              | 3_736   | 3_491    | 3_136           | 255_732             |
+| inside get       | 2_196   | 1_835    | 2_793           | 200_453             |
+| ouside get       | 1_605   | 1_019    | 1_391           | 207_289             |
+| inside deletion  | 5_034   | 2_080    | 8_906           | 438_861             |
+| outside deletion | 4_148   | 1_016    | 1_442           | 401_505             |
 
 "Inside" means that the key that is looked up or deleted is present in the tree.
 "Outside" means that the key is not present.
@@ -156,20 +156,22 @@ The API documentation can be found [here](https://mops.one/stable-trie/docs).
 
 For updates, help, questions, feedback and other requests related to this package join us on:
 
-* [OpenChat group](https://oc.app/2zyqk-iqaaa-aaaar-anmra-cai)
-* [Twitter](https://twitter.com/mr_research_ag)
-* [Dfinity forum](https://forum.dfinity.org/)
+- [OpenChat group](https://oc.app/2zyqk-iqaaa-aaaar-anmra-cai)
+- [Twitter](https://twitter.com/mr_research_ag)
+- [Dfinity forum](https://forum.dfinity.org/)
 
 ## Usage
 
 ### Install with mops
 
 You need `mops` installed. In your project directory run:
+
 ```
 mops add stable-trie
 ```
 
 In the Motoko source file import the package as:
+
 ```
 import StableTrieEnumeration "mo:stable-trie/Enumeration";
 import StableTrieMap "mo:stable-trie/Map";
@@ -179,40 +181,43 @@ import StableTrieMap "mo:stable-trie/Map";
 
 ```motoko
 let m = StableTrie.Map({
-    pointer_size = 2;
-    aridity = 2;
-    root_aridity = null;
-    key_size = 2;
-    value_size = 1;
+  pointer_size = 2;
+  aridity = 2;
+  root_aridity = null;
+  key_size = 2;
+  value_size = 1;
 });
-assert(m.replace("abc", "a") == null);
-assert(m.replace("aaa", "b") == null);
-assert(m.replace("abc", "c") == "a");
+assert (m.replace("abc", "a") == null);
+assert (m.replace("aaa", "b") == null);
+assert (m.replace("abc", "c") == "a");
 
 assert Iter.toArray(m.entries()) == [("aaa", "a"), ("abc", "c")];
 
 m.delete("abc");
 m.delete("aaa");
+
 ```
 
 ```motoko
 let e = StableTrie.Enumeration({
-    pointer_size = 2;
-    aridity = 2;
-    root_aridity = null;
-    key_size = 2;
-    value_size = 1;
+  pointer_size = 2;
+  aridity = 2;
+  root_aridity = null;
+  key_size = 2;
+  value_size = 1;
 });
-assert(e.add("abc", "a") == 0);
-assert(e.add("aaa", "b") == 1);
-assert(e.add("abc", "c") == 0);
+assert (e.add("abc", "a") == 0);
+assert (e.add("aaa", "b") == 1);
+assert (e.add("abc", "c") == 0);
 
 assert e.slice(0, 2) == [("abc", "a"), ("aaa", "b")];
+
 ```
 
 ### Build & test
 
 Run:
+
 ```
 git clone git@github.com:research-ag/stable-trie.git
 mops install
@@ -222,9 +227,11 @@ mops test
 ### Benchmark
 
 Run
+
 ```
 mops bench
 ```
+
 This is the benchmark to compare different versions of stable-trie.
 For comparison of stbale-trie against other data structures see the section Comparisons above.,
 
@@ -238,6 +245,6 @@ Main author: Andrii Stepanov (AStepanov25)
 
 Contributors: Timo Hanke (timohanke)
 
-## License 
+## License
 
 Apache-2.0
