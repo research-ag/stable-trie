@@ -15,7 +15,10 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: latest
+      - uses: dfinity/setup-dfx@main
       - uses: caffeinelabs/setup-mops@v1
+      - name: Stop dfx
+        run: dfx stop
       - run: |
           mops toolchain init
           mops install
