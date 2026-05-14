@@ -14,7 +14,7 @@ bench-helper = "0.0.3"
 prng = "0.0.9"
 
 [requirements]
-moc = "1.6.0"
+moc = "1.4.0"
 
 [toolchain]
 moc = "1.7.0"
