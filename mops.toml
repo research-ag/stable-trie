@@ -19,3 +19,4 @@ moc = "1.4.0"
 [toolchain]
 moc = "1.7.0"
 wasmtime = "42.0.1"
+pocket-ic = "9.0.3"

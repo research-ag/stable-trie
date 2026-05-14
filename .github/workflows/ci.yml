@@ -20,8 +20,7 @@ jobs:
           mops toolchain init
           mops install
       - run: mops test
-      - name: Run benchmarks
-        run: mops bench --replica pocket-ic
+      - run: mops bench
 
   fmt:
     name: Formatting Check
