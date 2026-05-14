@@ -5,6 +5,7 @@
 ### Changed
 
 - Updated `core` from `2.2.0` to `2.5.0`.
+- Updated `[requirements] moc` from `1.0.0` to `1.6.0` (required by `core` package).
 
 ## 0.0.7
 
