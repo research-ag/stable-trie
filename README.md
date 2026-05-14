@@ -135,7 +135,7 @@ And it is 2 orders of magnitude faster than the only other stable-memory map.
 | ---------------- | ------- | -------- | --------------- | ------------------- |
 | put              | 3_736   | 3_491    | 3_136           | 255_732             |
 | inside get       | 2_196   | 1_835    | 2_793           | 200_453             |
-| ouside get       | 1_605   | 1_019    | 1_391           | 207_289             |
+| outside get      | 1_605   | 1_019    | 1_391           | 207_289             |
 | inside deletion  | 5_034   | 2_080    | 8_906           | 438_861             |
 | outside deletion | 4_148   | 1_016    | 1_442           | 401_505             |
 
@@ -166,7 +166,7 @@ For updates, help, questions, feedback and other requests related to this packag
 
 You need `mops` installed. In your project directory run:
 
-```
+```bash
 mops add stable-trie
 ```
 
@@ -228,7 +228,7 @@ mops test
 
 Run
 
-```
+```bash
 mops bench
 ```
 
