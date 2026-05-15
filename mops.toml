@@ -5,6 +5,7 @@ description = "Stable-memory trie-based key-value map"
 repository = "https://github.com/research-ag/stable-trie"
 keywords = [ "set", "enumeration", "lookup", "bijective", "key-value" ]
 license = "Apache-2.0"
+files = [ "**/*.mo" ]
 
 [dependencies]
 core = "2.5.0"
@@ -14,7 +15,7 @@ bench-helper = "0.0.3"
 prng = "0.0.9"
 
 [requirements]
-moc = "1.4.0"
+moc = "1.0.0"
 
 [toolchain]
 moc = "1.7.0"
