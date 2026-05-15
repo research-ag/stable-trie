@@ -35,12 +35,12 @@ do {
 };
 
 let trie = StableTrie.Enumeration({
-    pointer_size;
-    aridity = k;
-    root_aridity = null;
-    key_size;
-    value_size = 0;
-  });
+  pointer_size;
+  aridity = k;
+  root_aridity = null;
+  key_size;
+  value_size = 0;
+});
 
 let max = 512;
 var n1 = max;

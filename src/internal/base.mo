@@ -471,7 +471,7 @@ module {
       byte_size = if (node_count == 0) {
         0 // no regions allocated yet
       } else {
-        nat64toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size)
+        nat64toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size);
       };
       leaf_count = nat64toNat(leaf_count);
       node_count = nat64toNat(node_count);
