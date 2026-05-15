@@ -20,9 +20,8 @@ However, it should be noted that deletion does not allow the Regions to shrink a
 In `StableTrieEnumeration` each key, besides its value, also has an index associated with it
 which reflects the order of its insertion into the map.
 This index is inherent in the data structure and therefore has no additional memory footprint over `StableTrieMap`.
-Values can be looked up by index or by key
-and index can be looked up by key.
-But key can not be looked up by index.
+Value and index can be looked up by key,
+value and key can be looked up by index.
 `StableTrieEnumeration` does not allow deletion.
 
 Both the map and the enumeration variant can be adapted to implement a set simply by setting the value size to 0.
