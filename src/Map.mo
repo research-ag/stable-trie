@@ -17,9 +17,9 @@ import Prim "mo:prim";
 import Base "internal/base";
 
 module {
-  /// Type of stable data of `StableTrie.Map`
+  /// Type of stable data of `StableTrie.Map`. `Base.StableData` already
+  /// includes the empty-nodes linked list; `Map` adds its empty-leaves list.
   public type StableData = Base.StableData and {
-    empty_nodes : (Nat, Nat64);
     empty_leaves : (Nat, Nat64);
   };
 
@@ -38,37 +38,6 @@ module {
     total_leaf_count : Nat;
     /// Number of allocated nodes.
     total_node_count : Nat;
-  };
-
-  /// List of empty items (nodes or leaves) in stable memory.
-  class LinkedList(base : Base.StableTrieBase, getOffset : (Nat64) -> Nat64) {
-    var last_empty_item : Nat64 = base.loadMask;
-    public var count = 0;
-
-    /// Add deleted item to linked list.
-    public func push(region : Region.Region, item : Nat64) {
-      base.storePointer(region, getOffset(item), last_empty_item);
-      last_empty_item := item;
-      count += 1;
-    };
-
-    /// Pop last deleted item to linked list.
-    public func pop(region : Region.Region) : ?Nat64 {
-      if (last_empty_item == base.loadMask) return null;
-
-      let ret = last_empty_item;
-      last_empty_item := base.loadPointer(region, getOffset(last_empty_item));
-      base.storePointer(region, getOffset(ret), 0);
-      count -= 1;
-      ?ret;
-    };
-
-    public func share() : (Nat, Nat64) = (count, last_empty_item);
-
-    public func unshare((c, last) : (Nat, Nat64)) {
-      count := c;
-      last_empty_item := last;
-    };
   };
 
   /// A map from constant-length Blob keys to constant-length Blob values, implemented as a trie in Regions.
@@ -98,14 +67,20 @@ module {
       args with leaf_size = Nat.max(args.key_size + args.value_size, args.pointer_size);
     });
 
-    /// Deleted nodes are stored in a linked list in stable memory so that their space can be reused. This is the head of the list.
-    /// The same for leaves.
+    /// Linked list of freed leaf slots, so the next `put_` can reuse them
+    /// before growing the leaves region. The matching list of freed internal
+    /// nodes lives inside `base` (since Enumeration uses the same machinery).
+    let empty_leaves : Base.LinkedList = Base.LinkedList(
+      base.loadMask,
+      base.loadPointer,
+      base.storePointer,
+      base.getLeafOffset,
+    );
 
-    let empty_leaves : LinkedList = LinkedList(base, base.getLeafOffset);
-    let empty_nodes : LinkedList = LinkedList(base, func(node : Nat64) : Nat64 = base.getNodeOffset(node, 0));
-
-    // callbacks are used in `newInternalNode` and `newLeaf`
-    base.setCallbacks(empty_nodes.pop, empty_leaves.pop);
+    // Wire the leaf-pop callback so `newLeaf` reuses freed slots before
+    // growing the leaves region. (`newInternalNode` consults base's internal
+    // empty-nodes list directly — no callback needed.)
+    base.setLeafPopCallback(empty_leaves.pop);
 
     /// Add the `key` and `value` pair to the map. Existing values are silently overwritten.
     /// Returns `#LimitExceeded` if the pointer size limit is exceeded.
@@ -389,7 +364,7 @@ module {
         // the leftover pointer aliases the leaf through a phantom path in
         // the trie and `entries()` / `put` later read wrong data.
         base.setChild(nodes, node, leaf_slot, 0);
-        empty_nodes.push(nodes, node);
+        base.pushEmptyNode(nodes, node);
       };
       (value, ret_branch_root);
     };
@@ -501,25 +476,23 @@ module {
 
     /// Memory stats.
     public func memoryStats() : MemoryStats {
-      let { byte_size; leaf_count; node_count } = base.memoryStats();
+      let { byte_size; leaf_count; node_count; total_node_count } = base.memoryStats();
       {
         byte_size;
         total_leaf_count = leaf_count;
-        total_node_count = node_count;
+        total_node_count;
         used_leaf_count = leaf_count - empty_leaves.count;
-        used_node_count = node_count - empty_nodes.count;
+        used_node_count = node_count;
       };
     };
 
     /// Convert to stable data.
     public func share() : StableData = {
-      base.share() with empty_nodes = empty_nodes.share();
-      empty_leaves = empty_leaves.share();
+      base.share() with empty_leaves = empty_leaves.share();
     };
 
     /// Create from stable data. Must be the first call after constructor.
     public func unshare(data : StableData) {
-      empty_nodes.unshare(data.empty_nodes);
       empty_leaves.unshare(data.empty_leaves);
       base.unshare(data);
     };

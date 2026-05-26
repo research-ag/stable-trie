@@ -15,7 +15,9 @@ import Types "mo:core/Types";
 import Base "internal/base";
 
 module {
-  /// Type of stable data of `StableTrieEnumeration`.
+  /// Type of stable data of `StableTrieEnumeration`. Includes the empty-nodes
+  /// linked-list state managed by `base` — defined here for forward
+  /// compatibility with later operations that free internal nodes.
   public type StableData = Base.StableData;
 
   /// Memory stats.
@@ -49,6 +51,11 @@ module {
     let base : Base.StableTrieBase = Base.StableTrieBase({
       args with leaf_size = args.key_size + args.value_size
     });
+
+    // No callback wiring needed: base owns the empty-nodes list, and
+    // Enumeration does not reuse freed leaf slots via a callback (it would
+    // reclaim them by decrementing `leaf_count`, which no operation currently
+    // does in this file).
 
     /// Add `key` and `value` to the enumeration.
     /// Returns `#LimitExceeded` if pointer size limit exceeded.
@@ -397,7 +404,8 @@ module {
     /// Number of key-value pairs in enumeration.
     public func size() : Nat = base.leaf_count.toNat();
 
-    /// Number of internal nodes excluding leaves.
+    /// Memory stats. `node_count` is the number of internal nodes currently
+    /// in use; `total_node_count` is the high water (region size).
     public func memoryStats() : MemoryStats = base.memoryStats();
 
     /// Convert to stable data.

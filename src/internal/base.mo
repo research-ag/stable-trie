@@ -38,6 +38,48 @@ module {
     var freeSpace : Nat64;
   };
 
+  /// List of empty items (nodes or leaves) in stable memory.
+  /// Used to implement deletion: freed items are pushed and the next allocation
+  /// pops from the list before growing the region.
+  ///
+  /// Parameterised on the low-level region primitives so it can live anywhere
+  /// — `StableTrieBase` uses one of these internally for empty nodes, and
+  /// `Map` uses another for empty leaves.
+  public class LinkedList(
+    sentinel : Nat64,
+    loadFn : (Region.Region, Nat64) -> Nat64,
+    storeFn : (Region.Region, Nat64, Nat64) -> (),
+    getOffset : (Nat64) -> Nat64,
+  ) {
+    var last_empty_item : Nat64 = sentinel;
+    public var count = 0;
+
+    /// Add deleted item to linked list.
+    public func push(region : Region.Region, item : Nat64) {
+      storeFn(region, getOffset(item), last_empty_item);
+      last_empty_item := item;
+      count += 1;
+    };
+
+    /// Pop last deleted item from linked list.
+    public func pop(region : Region.Region) : ?Nat64 {
+      if (last_empty_item == sentinel) return null;
+
+      let ret = last_empty_item;
+      last_empty_item := loadFn(region, getOffset(last_empty_item));
+      storeFn(region, getOffset(ret), 0);
+      count -= 1;
+      ?ret;
+    };
+
+    public func share() : (Nat, Nat64) = (count, last_empty_item);
+
+    public func unshare((c, last) : (Nat, Nat64)) {
+      count := c;
+      last_empty_item := last;
+    };
+  };
+
   /// Arguments of constructor of `Enumeration` and `Map`.
   /// pointer_size: size of pointer in bytes (2, 4, 5, 6, 8)
   /// aridity: number of children per internal node (2, 4, 16, 256)
@@ -61,18 +103,24 @@ module {
   public type MemoryStats = {
     /// Size of used stable memory in bytes.
     byte_size : Nat;
-    /// Number of allocated leaves.
+    /// Number of allocated leaves (high water — never shrinks).
     leaf_count : Nat;
-    /// Number of allocated nodes.
+    /// Number of internal trie nodes currently in use (`total_node_count`
+    /// minus nodes returned to the empty-nodes free list).
     node_count : Nat;
+    /// Number of internal trie nodes ever allocated (high water — never
+    /// shrinks even when nodes are pushed onto the empty-nodes list).
+    total_node_count : Nat;
   };
 
-  /// Type of stable data of `StableTrieEnumeration`.
+  /// Stable data of `StableTrieBase`. Includes the head of the linked list of
+  /// empty internal nodes so it can be restored across upgrades.
   public type StableData = {
     nodes : Region;
     leaves : Region;
     node_count : Nat64;
     leaf_count : Nat64;
+    empty_nodes : (Nat, Nat64);
   };
 
   /// Base class for stable trie map and enumeration. SHOULD NOT BE USED FROM THE USER'S CODE.
@@ -175,9 +223,6 @@ module {
       };
     };
 
-    /// Pop empty node from empty nodes stack. Used to implement deletion in map.
-    var popNode : (Region.Region) -> ?Nat64 = func(_) = null;
-
     /// Pop empty leaf from empty leaf stack. Used to implement deletion in map.
     var popLeaf : (Region.Region) -> ?Nat64 = func(_) = null;
 
@@ -187,9 +232,10 @@ module {
       x;
     };
 
-    /// Set `popNode` and `popLeaf` callbacks by map constructor.
-    public func setCallbacks(node : (Region.Region) -> ?Nat64, leaf : (Region.Region) -> ?Nat64) {
-      popNode := node;
+    /// Set the `popLeaf` callback. Map calls this with `empty_leaves.pop`;
+    /// Enumeration leaves it at the default (always-null), since it reclaims
+    /// leaf slots implicitly by decrementing `leaf_count`.
+    public func setLeafPopCallback(leaf : (Region.Region) -> ?Nat64) {
       popLeaf := leaf;
     };
 
@@ -204,7 +250,7 @@ module {
 
     /// Create internal node.
     func newInternalNode(region : Region) : ?Nat64 {
-      let node = switch (popNode(region.region)) {
+      let node = switch (empty_nodes_list.pop(region.region)) {
         case (?node) node;
         case (null) {
           if (node_count != max_address) {
@@ -261,6 +307,31 @@ module {
       let offset = getNodeOffset(node, index);
       storePointer(region, offset, child);
     };
+
+    /// Linked list of freed internal-node slots in the nodes region.
+    /// `pushEmptyNode` (called by Map.removeRec) appends freed nodes;
+    /// `newInternalNode` pops from it before falling back to growing the
+    /// region.
+    //
+    // Placed *after* `getNodeOffset` and `loadPointer` are defined so the
+    // closures below don't trigger Motoko's definedness check (M0016).
+    let empty_nodes_list : LinkedList = LinkedList(
+      loadMask,
+      func(region : Region.Region, offset : Nat64) : Nat64 = loadPointer(region, offset),
+      storePointer,
+      func(node : Nat64) : Nat64 = getNodeOffset(node, 0),
+    );
+
+    /// Push a freed internal node onto the empty-nodes list so the next
+    /// `put_` reuses its slot. The caller is responsible for clearing all
+    /// child pointers of `node` before pushing (otherwise stale pointers
+    /// would alias live leaves through phantom trie paths).
+    public func pushEmptyNode(region : Region.Region, node : Nat64) {
+      empty_nodes_list.push(region, node);
+    };
+
+    /// Number of internal nodes currently held in the empty-nodes list.
+    public func emptyNodesCount() : Nat = empty_nodes_list.count;
 
     /// Get offset of leaf number `index`.
     public func getLeafOffset(index : Nat64) : Nat64 = index *% leaf_size;
@@ -466,15 +537,21 @@ module {
     /// Iterate keys in reverse order.
     public func keysRev() : Types.Iter<Blob> = keys_(#reverse);
 
-    /// Return current memory stats.
-    public func memoryStats() : MemoryStats = {
-      byte_size = if (node_count == 0) {
-        0 // no regions allocated yet
-      } else {
-        nat64toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size);
+    /// Return current memory stats. `node_count` reports nodes currently in
+    /// use (`total_node_count - empty_nodes_list.count`); `byte_size` is
+    /// computed from the high water and so never shrinks.
+    public func memoryStats() : MemoryStats {
+      let total_n = nat64toNat(node_count);
+      {
+        byte_size = if (node_count == 0) {
+          0 // no regions allocated yet
+        } else {
+          nat64toNat(root_size + (node_count - 1) * node_size + leaf_count * leaf_size);
+        };
+        leaf_count = nat64toNat(leaf_count);
+        node_count = total_n - empty_nodes_list.count;
+        total_node_count = total_n;
       };
-      leaf_count = nat64toNat(leaf_count);
-      node_count = nat64toNat(node_count);
     };
 
     /// Convert to stable data.
@@ -482,6 +559,7 @@ module {
       regions() with
       node_count;
       leaf_count;
+      empty_nodes = empty_nodes_list.share();
     };
 
     /// Create from stable data. Must be the first call after constructor.
@@ -491,6 +569,7 @@ module {
           regions_ := ?data;
           node_count := data.node_count;
           leaf_count := data.leaf_count;
+          empty_nodes_list.unshare(data.empty_nodes);
         };
         case (_) Runtime.trap("Region is already initialized");
       };
