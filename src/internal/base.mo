@@ -162,7 +162,7 @@ module {
     let aridity_ = args.aridity.toNat64();
     let key_size_ = args.key_size.toNat64();
     let pointer_size_ = args.pointer_size.toNat64();
-    let root_aridity_ = Option.get(args.root_aridity, args.aridity).toNat64();
+    let root_aridity_ = args.root_aridity.get(args.aridity).toNat64();
     /// Mask of `pointer_size * 8` bits.
     public let loadMask = if (args.pointer_size == 8) 0xffff_ffff_ffff_ffff : Nat64 else (1 << (pointer_size_ << 3)) - 1;
 
@@ -641,7 +641,7 @@ module {
       let { nodes; leaves } = state;
       let leaves_region = leaves.region;
       let nodes_region = nodes.region;
-      Iter.map<Nat64, T>(Iterator(nodes_region, dir), func(leaf) = f(leaf, leaves_region));
+      Iterator(nodes_region, dir).map<Nat64, T>(func(leaf) = f(leaf, leaves_region));
     };
 
     func entries_(dir : Dir) : Types.Iter<(Blob, Blob)> = entries_base<(Blob, Blob)>(
