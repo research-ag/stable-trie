@@ -115,12 +115,19 @@ module {
 
   /// Stable data of `StableTrieBase`. Includes the head of the linked list of
   /// empty internal nodes so it can be restored across upgrades.
+  ///
+  /// `empty_nodes` is optional for backward compatibility with v0.0.8 and
+  /// earlier: pre-0.0.9 `Enumeration` had no such field, and pre-0.0.9 `Map`
+  /// had it as a required field directly on `Map.StableData` (rather than
+  /// here on `Base.StableData`). Both old shapes widen into `?(Nat, Nat64)`
+  /// under Motoko's stable-type compatibility rules. `share()` always emits
+  /// the value as `?Some`; `null` only ever appears when loading legacy data.
   public type StableData = {
     nodes : Region;
     leaves : Region;
     node_count : Nat64;
     leaf_count : Nat64;
-    empty_nodes : (Nat, Nat64);
+    empty_nodes : ?(Nat, Nat64);
   };
 
   /// Base class for stable trie map and enumeration. SHOULD NOT BE USED FROM THE USER'S CODE.
@@ -666,17 +673,24 @@ module {
       regions() with
       node_count;
       leaf_count;
-      empty_nodes = empty_nodes_list.share();
+      empty_nodes = ?empty_nodes_list.share();
     };
 
     /// Create from stable data. Must be the first call after constructor.
+    /// `data.empty_nodes` is optional to allow loading legacy data that
+    /// predates this field; missing or `null` is treated as an empty list.
     public func unshare(data : StableData) {
       switch (regions_) {
         case (null) {
           regions_ := ?data;
           node_count := data.node_count;
           leaf_count := data.leaf_count;
-          empty_nodes_list.unshare(data.empty_nodes);
+          empty_nodes_list.unshare(
+            switch (data.empty_nodes) {
+              case (?en) en;
+              case (null) (0, loadMask); // legacy: empty list
+            }
+          );
         };
         case (_) Runtime.trap("Region is already initialized");
       };
