@@ -119,6 +119,7 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
   // them after refilling.
   var stats_full_byte_size : Nat = 0;
   var stats_full_node_count : Nat = 0;
+  var stats_full_total_node_count : Nat = 0;
 
   // ---------- 4. add many entries, undo all in LIFO order ----------
   do {
@@ -131,8 +132,11 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
 
     let stats_full = trie.memoryStats();
     assert stats_full.leaf_count == keys.size();
+    // When no node has ever been freed, used == high water.
+    assert stats_full.node_count == stats_full.total_node_count;
     stats_full_byte_size := stats_full.byte_size;
     stats_full_node_count := stats_full.node_count;
+    stats_full_total_node_count := stats_full.total_node_count;
 
     // Sanity: every key looks up to its index.
     i := 0;
@@ -170,8 +174,10 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
 
     assert trie.size() == 0;
     assert trie.removeLast() == null;
-    // After undoing everything, used node count is back to just the root.
+    // After undoing everything, used node count is back to just the root, but
+    // the high water (total_node_count) remembers how many we allocated.
     assert trie.memoryStats().node_count == 1;
+    assert trie.memoryStats().total_node_count == stats_full_total_node_count;
   };
 
   // ---------- 5. re-adding after fully draining: nodes come from empty-nodes list ----------
@@ -191,8 +197,10 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
 
     let s_refilled = trie.memoryStats();
     assert s_refilled.leaf_count == keys.size();
-    // After refilling, used node count is back to the original "full" value.
+    // After refilling, used node count is back to the original "full" value
+    // and the high water hasn't grown — every freed node was reused.
     assert s_refilled.node_count == stats_full_node_count;
+    assert s_refilled.total_node_count == stats_full_total_node_count;
     // And byte_size is identical to the original "full" state — no new region
     // pages were grown, because every freed node was reused from the linked
     // list and every leaf reused its end-of-region slot.

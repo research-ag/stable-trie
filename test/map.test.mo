@@ -150,3 +150,65 @@ do {
     assert trie.get(key) == null;
   };
 };
+
+// Legacy StableData round-trip. Pre-0.0.9 `Map.StableData` carried
+// `empty_nodes` as a required field on Map's extension; the current schema
+// moves it onto `Base.StableData` as an optional. Build a StableData with
+// `empty_nodes = null` (the value Motoko's stable-type widening would produce
+// for data that predates the field) and verify unshare accepts it and the
+// Map still functions.
+do {
+  let source = StableTrie.Map({
+    pointer_size = 2;
+    aridity = 4;
+    root_aridity = null;
+    key_size = 1;
+    value_size = 1;
+  });
+  source.put("\01", "A");
+  source.put("\02", "B");
+  source.put("\03", "C");
+  // Removing a key populates empty_leaves so the share round-trip is
+  // non-trivial.
+  ignore source.remove("\02");
+
+  let s = source.share();
+  let legacy : StableTrie.StableData = {
+    nodes = s.nodes;
+    leaves = s.leaves;
+    node_count = s.node_count;
+    leaf_count = s.leaf_count;
+    empty_nodes = null; // legacy: field absent in v0.0.8 storage
+    empty_leaves = s.empty_leaves;
+  };
+
+  let restored = StableTrie.Map({
+    pointer_size = 2;
+    aridity = 4;
+    root_aridity = null;
+    key_size = 1;
+    value_size = 1;
+  });
+  restored.unshare(legacy);
+
+  assert restored.size() == 2;
+  assert restored.get("\01") == ?"A";
+  assert restored.get("\02") == null;
+  assert restored.get("\03") == ?"C";
+
+  // empty_leaves survived; empty_nodes starts fresh. Adding a fresh key
+  // should reuse the freed leaf slot, leaving total counts unchanged.
+  let before = restored.memoryStats();
+  restored.put("\04", "D");
+  let after = restored.memoryStats();
+  assert after.used_leaf_count == 3;
+  assert after.total_leaf_count == before.total_leaf_count;
+  assert restored.get("\04") == ?"D";
+
+  // And remove should still cascade-collapse correctly even though we
+  // started with an empty empty_nodes list.
+  ignore restored.remove("\01");
+  ignore restored.remove("\03");
+  ignore restored.remove("\04");
+  assert restored.size() == 0;
+};
