@@ -346,22 +346,31 @@ module {
     /// to zero. A trap here means an upstream invariant has been broken.
     public func scanChildren(region : Region.Region, node : Nat64) : ChildScan {
       let blob = region.loadBlob(getNodeOffset(node, 0), node_size_);
+      let ps = args.pointer_size;
       var lone : Nat64 = 0;
       var lone_slot : Nat64 = 0;
-      var i = 0;
-      while (i < args.aridity) {
+      var i : Nat64 = 0;
+      // `slot_start` and `slot_end` are kept as `Nat` so they can index into
+      // `blob` directly; `i` stays as `Nat64` to avoid the per-iteration
+      // bignum increment a `var i : Nat` would force. Together this also
+      // eliminates the per-byte `i * args.pointer_size` multiplication the
+      // previous shape performed inside the inner loop.
+      var slot_start = 0;
+      while (i < aridity_) {
         var x : Nat64 = 0;
-        var j = (i + 1) * args.pointer_size;
-        while (j > i * args.pointer_size) {
+        let slot_end = slot_start + ps;
+        var j = slot_end;
+        while (j > slot_start) {
           j -= 1;
           x := x * 256 + nat32to64(nat16to32(nat8to16(blob[j])));
         };
         if (x > 0) {
           if (lone != 0) return #multiple;
           lone := x;
-          lone_slot := i.toNat64();
+          lone_slot := i;
         };
-        i += 1;
+        i +%= 1;
+        slot_start := slot_end;
       };
       assert lone != 0; // invariant: deletion never leaves a node with 0 children
       if (lone & 1 == 1) #onlyLeaf(lone, lone_slot) else #onlyInternal(lone);
