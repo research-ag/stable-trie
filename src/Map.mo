@@ -7,12 +7,11 @@
 /// Contributors: Timo Hanke (timohanke)
 
 import Nat "mo:core/Nat";
-import Nat64_ "mo:core/Nat64";
+import Nat64_ "mo:core/Nat64"; // enables `Nat64.toNat()` dot notation below
 import Option "mo:core/Option";
 import Region "mo:core/Region";
 import Result "mo:core/Result";
 import Types "mo:core/Types";
-import Prim "mo:prim";
 
 import Base "internal/base";
 
@@ -311,30 +310,6 @@ module {
       value;
     };
 
-    /// If `node` contains exactly one non-zero child and that child is a leaf,
-    /// returns `(leaf, slot)` where `slot` is the index of the slot holding
-    /// the leaf — the caller is expected to collapse `node` (clear that slot
-    /// and push `node` to the empty-nodes list). Otherwise returns
-    /// `(node, 0)`, and `node` stays in the trie.
-    func branchRoot(region : Region.Region, node : Nat64) : (Nat64, Nat64) {
-      let blob = Region.loadBlob(region, base.getNodeOffset(node, 0), base.node_size_);
-
-      var lastNode : Nat64 = 0;
-      var lastSlot : Nat64 = 0;
-      for (i in Nat.range(0, args.aridity)) {
-        var x : Nat64 = 0;
-        for (j in Nat.rangeByInclusive(i * args.pointer_size + args.pointer_size - 1, i * args.pointer_size, -1)) {
-          x := x * 256 + Prim.nat32ToNat64(Prim.nat16ToNat32(Prim.nat8ToNat16(blob[j])));
-        };
-        if (x > 0) {
-          if (lastNode != 0) return (node, 0);
-          lastNode := x;
-          lastSlot := i.toNat64();
-        };
-      };
-      if (lastNode & 1 == 0) (node, 0) else (lastNode, lastSlot);
-    };
-
     /// Remove recursively starting from child of root node.
     func removeRec(nodes : Region.Region, leaves : Region.Region, key : Blob, node : Nat64, pos : Nat16, ret : Bool) : (?Blob, Nat64) {
       if (node == 0) return (null, node);
@@ -353,20 +328,22 @@ module {
       let child = base.getChild(nodes, node, idx);
       let (value, branch_root) = removeRec(nodes, leaves, key, child, pos +% base.bitlength, ret);
 
-      let (ret_branch_root, leaf_slot) = if (branch_root != child) {
-        base.setChild(nodes, node, idx, branch_root);
-        branchRoot(nodes, node);
-      } else (node, 0 : Nat64);
+      // If the recursive call didn't change anything, neither did we.
+      if (branch_root == child) return (value, node);
 
-      if (ret_branch_root & 1 == 1) {
-        // Collapse: clear the slot still holding the surviving leaf pointer,
-        // so the node is all-zero when popped for reuse later. Without this,
-        // the leftover pointer aliases the leaf through a phantom path in
-        // the trie and `entries()` / `put` later read wrong data.
-        base.setChild(nodes, node, leaf_slot, 0);
-        base.pushEmptyNode(nodes, node);
+      base.setChild(nodes, node, idx, branch_root);
+      switch (base.scanChildren(nodes, node)) {
+        case (#onlyLeaf(leaf, slot)) {
+          // Collapse: clear the surviving slot (so the pushed node is
+          // all-zero when popped later — otherwise the leftover pointer
+          // aliases the leaf through a phantom trie path) and bubble the
+          // leaf up to the parent.
+          base.setChild(nodes, node, slot, 0);
+          base.pushEmptyNode(nodes, node);
+          (value, leaf);
+        };
+        case _ (value, node); // chain-link state or ≥2 children — keep `node`
       };
-      (value, ret_branch_root);
     };
 
     /// Returns all the key-value pairs in the map ordered by `Blob.compare` of keys.

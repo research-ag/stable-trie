@@ -113,6 +113,22 @@ module {
     total_node_count : Nat;
   };
 
+  /// Result of inspecting a non-root internal node's child slots after a
+  /// deletion has just cleared one of them. The variant has no `#none` case
+  /// because that state must never arise under our deletion invariants —
+  /// `scanChildren` traps if it would have produced it.
+  public type ChildScan = {
+    /// Exactly one non-zero slot, holding a leaf pointer. Payload is
+    /// (leaf_pointer, slot_index). Indicates that the node should collapse:
+    /// the caller clears `slot_index` and bubbles the leaf up to the parent.
+    #onlyLeaf : (Nat64, Nat64);
+    /// Exactly one non-zero slot, holding an internal-node pointer. This is
+    /// the chain-link state `put_` produces — the caller keeps the node.
+    #onlyInternal : Nat64;
+    /// Two or more non-zero slots. The caller keeps the node as-is.
+    #multiple;
+  };
+
   /// Stable data of `StableTrieBase`. Includes the head of the linked list of
   /// empty internal nodes so it can be restored across upgrades.
   ///
@@ -315,6 +331,42 @@ module {
       storePointer(region, offset, child);
     };
 
+    /// Inspect the children of an internal `node` and classify which case
+    /// applies (see `ChildScan`). Reads the node as a single blob and parses
+    /// each pointer in-memory, which is meaningfully cheaper than `aridity`
+    /// separate region loads when aridity is large (e.g. 256).
+    ///
+    /// `assert`s that the node has at least one non-zero child. The
+    /// "zero children" case is unreachable under the deletion invariants
+    /// maintained by Map and Enumeration: every internal node is born with
+    /// two children, and the collapse step ensures no node ever has exactly
+    /// one *leaf* child sitting around for the next delete to clear. So when
+    /// we run `scanChildren` after clearing one slot, the worst case is a
+    /// node that drops to a single (internal-chain-link or leaf) child, never
+    /// to zero. A trap here means an upstream invariant has been broken.
+    public func scanChildren(region : Region.Region, node : Nat64) : ChildScan {
+      let blob = region.loadBlob(getNodeOffset(node, 0), node_size_);
+      var lone : Nat64 = 0;
+      var lone_slot : Nat64 = 0;
+      var i = 0;
+      while (i < args.aridity) {
+        var x : Nat64 = 0;
+        var j = (i + 1) * args.pointer_size;
+        while (j > i * args.pointer_size) {
+          j -= 1;
+          x := x * 256 + nat32to64(nat16to32(nat8to16(blob[j])));
+        };
+        if (x > 0) {
+          if (lone != 0) return #multiple;
+          lone := x;
+          lone_slot := i.toNat64();
+        };
+        i += 1;
+      };
+      assert lone != 0; // invariant: deletion never leaves a node with 0 children
+      if (lone & 1 == 1) #onlyLeaf(lone, lone_slot) else #onlyInternal(lone);
+    };
+
     /// Linked list of freed internal-node slots in the nodes region. Populated
     /// by `removeLast` (here) and `pushEmptyNode` (called by Map.removeRec);
     /// consumed by `newInternalNode` before falling back to growing the region.
@@ -442,22 +494,16 @@ module {
       Runtime.trap("Unreacheable");
     };
 
-    /// Recursive walk for `removeLast`. Descends `node` along the path of `key`
-    /// to clear the target leaf, then on the way back up looks at each visited
-    /// internal node and either keeps it, collapses it, or frees it.
+    /// Recursive walk for `removeLast`. Descends `node` along the path of
+    /// `key` to clear the target leaf, then on the way back up classifies
+    /// each visited internal node via `scanChildren` and either keeps it or
+    /// collapses it (single leaf child).
     ///
     /// Returns the new pointer value to be stored in the caller's slot for
-    /// `node`:
-    ///   - `node` itself if `node` is kept as-is;
-    ///   - a leaf pointer if `node` collapses (single leaf child remaining);
-    ///   - `0` if `node` becomes empty (no children).
-    /// In the latter two cases, `node` has been cleared of all child pointers
-    /// and pushed onto `empty_nodes_list` for reuse.
-    ///
-    /// Invariants preserved (mirroring Map's behaviour):
-    ///   - No internal node has exactly one leaf child (it collapses).
-    ///   - Pushed nodes have all child slots set to 0, so the next pop
-    ///     returns a clean node ready for use.
+    /// `node`: either `node` itself (keep) or a bubbled-up leaf pointer
+    /// (collapse). When collapsing, the orphaned node has all child slots
+    /// cleared and is pushed onto `empty_nodes_list` so the next pop hands
+    /// back a clean node.
     func removeLastRec(
       nodes_region : Region.Region,
       key : Blob,
@@ -477,37 +523,17 @@ module {
       if (new_child == child) return node;
 
       setChild(nodes_region, node, idx, new_child);
-
-      // Scan slots to find: 0 children, exactly 1 child (and what it is), or
-      // 2+ children (caller short-circuits via early return).
-      var lone : Nat64 = 0;
-      var lone_slot : Nat64 = 0;
-      var i : Nat64 = 0;
-      while (i < aridity_) {
-        let c = getChild(nodes_region, node, i);
-        if (c != 0) {
-          if (lone != 0) return node; // 2+ children — keep `node` as-is.
-          lone := c;
-          lone_slot := i;
+      switch (scanChildren(nodes_region, node)) {
+        case (#onlyLeaf(leaf, slot)) {
+          // Collapse: clear the surviving slot (so the pushed node is
+          // all-zero) and bubble the leaf up to the parent.
+          setChild(nodes_region, node, slot, 0);
+          empty_nodes_list.push(nodes_region, node);
+          leaf;
         };
-        i +%= 1;
+        case (#onlyInternal _) node; // chain-link state — keep `node`
+        case (#multiple) node;        // ≥2 children — keep `node`
       };
-
-      if (lone == 0) {
-        // 0 children — the subtree is gone.
-        empty_nodes_list.push(nodes_region, node);
-        return 0;
-      };
-      if (lone & 1 == 1) {
-        // 1 leaf child — collapse: clear the slot (so the pushed node is
-        // all-zero) and bubble the leaf up to the parent.
-        setChild(nodes_region, node, lone_slot, 0);
-        empty_nodes_list.push(nodes_region, node);
-        return lone;
-      };
-      // 1 internal child — keep `node` (matches the chain-link state that
-      // `put_` originally produced).
-      node;
     };
 
     /// Remove the most-recently-added leaf (the leaf at index `leaf_count - 1`).
