@@ -308,10 +308,9 @@ module {
       storePointer(region, offset, child);
     };
 
-    /// Linked list of freed internal-node slots in the nodes region.
-    /// `pushEmptyNode` (called by Map.removeRec) appends freed nodes;
-    /// `newInternalNode` pops from it before falling back to growing the
-    /// region.
+    /// Linked list of freed internal-node slots in the nodes region. Populated
+    /// by `removeLast` (here) and `pushEmptyNode` (called by Map.removeRec);
+    /// consumed by `newInternalNode` before falling back to growing the region.
     //
     // Placed *after* `getNodeOffset` and `loadPointer` are defined so the
     // closures below don't trigger Motoko's definedness check (M0016).
@@ -434,6 +433,114 @@ module {
         };
       };
       Runtime.trap("Unreacheable");
+    };
+
+    /// Recursive walk for `removeLast`. Descends `node` along the path of `key`
+    /// to clear the target leaf, then on the way back up looks at each visited
+    /// internal node and either keeps it, collapses it, or frees it.
+    ///
+    /// Returns the new pointer value to be stored in the caller's slot for
+    /// `node`:
+    ///   - `node` itself if `node` is kept as-is;
+    ///   - a leaf pointer if `node` collapses (single leaf child remaining);
+    ///   - `0` if `node` becomes empty (no children).
+    /// In the latter two cases, `node` has been cleared of all child pointers
+    /// and pushed onto `empty_nodes_list` for reuse.
+    ///
+    /// Invariants preserved (mirroring Map's behaviour):
+    ///   - No internal node has exactly one leaf child (it collapses).
+    ///   - Pushed nodes have all child slots set to 0, so the next pop
+    ///     returns a clean node ready for use.
+    func removeLastRec(
+      nodes_region : Region.Region,
+      key : Blob,
+      node : Nat64,
+      pos : Nat16,
+    ) : Nat64 {
+      let idx = keyToIndex(key, pos);
+      let child = getChild(nodes_region, node, idx);
+      let new_child = if (child & 1 == 1) {
+        // Target leaf reached.
+        0 : Nat64;
+      } else {
+        removeLastRec(nodes_region, key, child, pos +% bitlength);
+      };
+
+      // If the slot didn't change, nothing else in `node` did either.
+      if (new_child == child) return node;
+
+      setChild(nodes_region, node, idx, new_child);
+
+      // Scan slots to find: 0 children, exactly 1 child (and what it is), or
+      // 2+ children (caller short-circuits via early return).
+      var lone : Nat64 = 0;
+      var lone_slot : Nat64 = 0;
+      var i : Nat64 = 0;
+      while (i < aridity_) {
+        let c = getChild(nodes_region, node, i);
+        if (c != 0) {
+          if (lone != 0) return node; // 2+ children — keep `node` as-is.
+          lone := c;
+          lone_slot := i;
+        };
+        i +%= 1;
+      };
+
+      if (lone == 0) {
+        // 0 children — the subtree is gone.
+        empty_nodes_list.push(nodes_region, node);
+        return 0;
+      };
+      if (lone & 1 == 1) {
+        // 1 leaf child — collapse: clear the slot (so the pushed node is
+        // all-zero) and bubble the leaf up to the parent.
+        setChild(nodes_region, node, lone_slot, 0);
+        empty_nodes_list.push(nodes_region, node);
+        return lone;
+      };
+      // 1 internal child — keep `node` (matches the chain-link state that
+      // `put_` originally produced).
+      node;
+    };
+
+    /// Remove the most-recently-added leaf (the leaf at index `leaf_count - 1`).
+    /// Returns the removed `(key, value)` or `null` if the trie is empty.
+    ///
+    /// The freed leaf slot at the end of the leaves region is made available
+    /// for reuse by the next `put_` (we just decrement `leaf_count` and bump
+    /// the leaves region's `freeSpace`).
+    ///
+    /// Internal nodes that become empty or that hold only a single leaf
+    /// (which is then bubbled up) are pushed to the internal empty-nodes
+    /// list, where the next `newInternalNode` reclaims them.
+    public func removeLast() : ?(Blob, Blob) {
+      if (leaf_count == 0) return null;
+      let { leaves; nodes } = regions();
+      let leaves_region = leaves.region;
+      let nodes_region = nodes.region;
+
+      let last_index = leaf_count -% 1;
+      let key = getKey(leaves_region, last_index);
+      let value = getValue(leaves_region, last_index);
+
+      // The root node has its own (root_)aridity and bitlength, so handle it
+      // separately. Below the root, recursion uses the regular bitlength.
+      // The root itself is never pushed; we only update its child pointer.
+      let root_idx = keyToRootIndex(key);
+      let root_child = getChild(nodes_region, 0, root_idx);
+      let new_root_child = if (root_child & 1 == 1) {
+        0 : Nat64;
+      } else {
+        removeLastRec(nodes_region, key, root_child, root_bitlength);
+      };
+      if (new_root_child != root_child) {
+        setChild(nodes_region, 0, root_idx, new_root_child);
+      };
+
+      leaf_count -%= 1;
+      leaves.freeSpace +%= leaf_size;
+
+      ?(key, value);
     };
 
     /// Lookup `key` in trie. Returns `value` and index of that leaf or null if not found.

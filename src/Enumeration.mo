@@ -15,12 +15,18 @@ import Types "mo:core/Types";
 import Base "internal/base";
 
 module {
-  /// Type of stable data of `StableTrieEnumeration`. Includes the empty-nodes
-  /// linked-list state managed by `base` — defined here for forward
-  /// compatibility with later operations that free internal nodes.
+  /// Type of stable data of `StableTrieEnumeration`. Includes the state of
+  /// the empty-nodes linked list (managed by `base`). Leaves do not need a
+  /// free list because `removeLast` is LIFO — the freed leaf is always at
+  /// the end of the leaves region and is reused by the next `add`.
   public type StableData = Base.StableData;
 
   /// Memory stats.
+  ///
+  /// `node_count` is the count of internal trie nodes currently in use. After
+  /// undoing every `add` via `removeLast`, `node_count` drops back to `1`
+  /// (the root). `byte_size` reflects the actual underlying region usage,
+  /// which never shrinks.
   public type MemoryStats = Base.MemoryStats;
 
   /// Arguments type of `Enumeration`.
@@ -53,9 +59,7 @@ module {
     });
 
     // No callback wiring needed: base owns the empty-nodes list, and
-    // Enumeration does not reuse freed leaf slots via a callback (it would
-    // reclaim them by decrementing `leaf_count`, which no operation currently
-    // does in this file).
+    // `removeLast` reclaims leaf slots by decrementing `leaf_count`.
 
     /// Add `key` and `value` to the enumeration.
     /// Returns `#LimitExceeded` if pointer size limit exceeded.
@@ -219,6 +223,32 @@ module {
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
     public func lookupOrPut(key : Blob, value : Blob) : (?Blob, Nat) = base.unwrap(lookupOrPutChecked(key, value));
+
+    /// Remove the entry that was last added to the enumeration.
+    /// Returns the removed `?(key, value)` pair or `null` if the enumeration is empty.
+    ///
+    /// Only the leaf for that entry is removed; internal trie nodes that become
+    /// empty are left in place. The space at the end of the leaves region is
+    /// reused by the next `add`.
+    ///
+    /// Example:
+    /// ```motoko
+    /// let e = StableTrie.Enumeration({
+    ///   pointer_size = 2;
+    ///   aridity = 2;
+    ///   root_aridity = null;
+    ///   key_size = 2;
+    ///   value_size = 1;
+    /// });
+    /// assert(e.add("abc", "a") == 0);
+    /// assert(e.add("aaa", "b") == 1);
+    /// assert(e.removeLast() == ?("aaa", "b"));
+    /// assert(e.size() == 1);
+    /// assert(e.removeLast() == ?("abc", "a"));
+    /// assert(e.removeLast() == null);
+    /// ```
+    /// Runtime: O(key_size) accesses to stable memory.
+    public func removeLast() : ?(Blob, Blob) = base.removeLast();
 
     /// Returns `?(value, index)` where `index` is the index of `key` in order it was added to enumeration and `value` is corresponding value to the `key`,
     /// or `null` it `key` wasn't added.
