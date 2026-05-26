@@ -532,7 +532,7 @@ module {
           leaf;
         };
         case (#onlyInternal _) node; // chain-link state — keep `node`
-        case (#multiple) node;        // ≥2 children — keep `node`
+        case (#multiple) node; // ≥2 children — keep `node`
       };
     };
 
