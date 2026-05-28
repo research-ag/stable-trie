@@ -18,6 +18,8 @@ import Types "mo:core/Types";
 import VarArray "mo:core/VarArray";
 import Prim "mo:prim";
 
+import LinkedList "./linked-list";
+
 module {
   // up conversions
   let nat8to16 = Prim.nat8ToNat16;
@@ -36,48 +38,6 @@ module {
   public type Region = {
     region : Region.Region;
     var freeSpace : Nat64;
-  };
-
-  /// List of empty items (nodes or leaves) in stable memory.
-  /// Used to implement deletion: freed items are pushed and the next allocation
-  /// pops from the list before growing the region.
-  ///
-  /// Parameterised on the low-level region primitives so it can live anywhere
-  /// — `StableTrieBase` uses one of these internally for empty nodes, and
-  /// `Map` uses another for empty leaves.
-  public class LinkedList(
-    sentinel : Nat64,
-    loadFn : (Region.Region, Nat64) -> Nat64,
-    storeFn : (Region.Region, Nat64, Nat64) -> (),
-    getOffset : (Nat64) -> Nat64,
-  ) {
-    var last_empty_item : Nat64 = sentinel;
-    public var count = 0;
-
-    /// Add deleted item to linked list.
-    public func push(region : Region.Region, item : Nat64) {
-      storeFn(region, getOffset(item), last_empty_item);
-      last_empty_item := item;
-      count += 1;
-    };
-
-    /// Pop last deleted item from linked list.
-    public func pop(region : Region.Region) : ?Nat64 {
-      if (last_empty_item == sentinel) return null;
-
-      let ret = last_empty_item;
-      last_empty_item := loadFn(region, getOffset(last_empty_item));
-      storeFn(region, getOffset(ret), 0);
-      count -= 1;
-      ?ret;
-    };
-
-    public func share() : (Nat, Nat64) = (count, last_empty_item);
-
-    public func unshare((c, last) : (Nat, Nat64)) {
-      count := c;
-      last_empty_item := last;
-    };
   };
 
   /// Arguments of constructor of `Enumeration` and `Map`.
@@ -382,7 +342,7 @@ module {
     //
     // Placed *after* `getNodeOffset` and `loadPointer` are defined so the
     // closures below don't trigger Motoko's definedness check (M0016).
-    let empty_nodes_list : LinkedList = LinkedList(
+    let empty_nodes_list : LinkedList.LinkedList = LinkedList.LinkedList(
       loadMask,
       func(region : Region.Region, offset : Nat64) : Nat64 = loadPointer(region, offset),
       storePointer,

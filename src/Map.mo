@@ -14,6 +14,7 @@ import Result "mo:core/Result";
 import Types "mo:core/Types";
 
 import Base "internal/base";
+import LinkedList "internal/linked-list";
 
 module {
   /// Type of stable data of `StableTrie.Map`. `Base.StableData` already
@@ -69,7 +70,7 @@ module {
     /// Linked list of freed leaf slots, so the next `put_` can reuse them
     /// before growing the leaves region. The matching list of freed internal
     /// nodes lives inside `base` (since Enumeration uses the same machinery).
-    let empty_leaves : Base.LinkedList = Base.LinkedList(
+    let empty_leaves : LinkedList.LinkedList = LinkedList.LinkedList(
       base.loadMask,
       base.loadPointer,
       base.storePointer,

@@ -234,6 +234,15 @@ mops bench
 This is the benchmark to compare different versions of stable-trie.
 For comparison of stbale-trie against other data structures see the section Comparisons above.,
 
+## Formatting
+
+This project uses `prettier` with `prettier-plugin-motoko` for formatting.
+To format the code, run:
+
+```bash
+npx -y prettier --plugin prettier-plugin-motoko --write '**/*.{mo,json,md}'
+```
+
 ## Copyright
 
 MR Research AG, 2023 - 2025
