@@ -80,8 +80,9 @@ module {
 
     // Wire the leaf-pop callback so `newLeaf` reuses freed slots before
     // growing the leaves region. (`newInternalNode` consults base's internal
-    // empty-nodes list directly — no callback needed.)
-    base.setLeafPopCallback(empty_leaves.pop);
+    // empty-nodes list directly — no callback needed.) Wrapped in a lambda
+    // because `pop` is now a module-level `self`-function, not a bound method.
+    base.setLeafPopCallback(func(region) = empty_leaves.pop(region));
 
     /// Add the `key` and `value` pair to the map. Existing values are silently overwritten.
     /// Returns `#LimitExceeded` if the pointer size limit is exceeded.
