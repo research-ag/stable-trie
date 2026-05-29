@@ -267,7 +267,7 @@ module {
 
     // Get base address of node (the offset of its first child pointer).
     func getNodeBase(node : Nat64) : Nat64 {
-      if (node == 0) return offset_base; // root node
+      if (node == 0) return 0; // root node
       (offset_base +% (node >> 1) *% node_size);
     };
 
