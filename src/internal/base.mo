@@ -265,6 +265,12 @@ module {
       ?((leaf << 1) | 1);
     };
 
+    // Get base address of node (the offset of its first child pointer).
+    func getNodeBase(node : Nat64) : Nat64 {
+      if (node == 0) return offset_base; // root node
+      (offset_base +% (node >> 1) *% node_size);
+    };
+
     /// Get address of pointer of node's `node` child number `index`.
     public func getNodeOffset(node : Nat64, index : Nat64) : Nat64 {
       let delta = index *% pointer_size_;
@@ -274,9 +280,7 @@ module {
 
     /// Load pointer from a region.
     public func loadPointer(region : Region.Region, offset : Nat64) : Nat64 {
-      // region.loadNat64(offset) & loadMask;
-      // workaround for https://github.com/caffeinelabs/motoko/issues/5767
-      Prim.regionLoadNat64(region, offset) & loadMask;
+      region.loadNat64(offset) & loadMask;
     };
 
     /// Load node's `node` child number `index`.
@@ -305,7 +309,7 @@ module {
     /// node that drops to a single (internal-chain-link or leaf) child, never
     /// to zero. A trap here means an upstream invariant has been broken.
     public func scanChildren(region : Region.Region, node : Nat64) : ChildScan {
-      let blob = region.loadBlob(getNodeOffset(node, 0), node_size_);
+      let blob = region.loadBlob(getNodeBase(node), node_size_);
       let ps = args.pointer_size;
       var lone : Nat64 = 0;
       var lone_slot : Nat64 = 0;
@@ -344,9 +348,9 @@ module {
     // closures below don't trigger Motoko's definedness check (M0016).
     let empty_nodes_list : LinkedList.LinkedList = LinkedList.LinkedList(
       loadMask,
-      func(region : Region.Region, offset : Nat64) : Nat64 = loadPointer(region, offset),
+      loadPointer,
       storePointer,
-      func(node : Nat64) : Nat64 = getNodeOffset(node, 0),
+      getNodeBase
     );
 
     /// Push a freed internal node onto the empty-nodes list so the next
