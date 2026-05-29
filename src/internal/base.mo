@@ -234,7 +234,7 @@ module {
     /// Create internal node.
     func newInternalNode(region : Region) : ?Nat64 {
       let node = switch (empty_nodes_list.pop(region.region)) {
-        case (?node) node;
+        case (?index) index << 1; // re-encode reused node index → pointer
         case (null) {
           if (node_count != max_address) {
             allocate(region, node_size);
@@ -343,22 +343,23 @@ module {
     /// Linked list of freed internal-node slots in the nodes region. Populated
     /// by `removeLast` (here) and `pushEmptyNode` (called by Map.removeRec);
     /// consumed by `newInternalNode` before falling back to growing the region.
-    //
-    // Placed *after* `getNodeOffset` and `loadPointer` are defined so the
-    // closures below don't trigger Motoko's definedness check (M0016).
+    ///
+    /// It stores raw node *indices* (`node >> 1`), so callers shift on the way
+    /// in and re-encode (`<< 1`) on the way out. The slot of node index `i`
+    /// sits at `offset_base + i * node_size`, matching `getNodeOffset(i<<1, 0)`.
     let empty_nodes_list : LinkedList.LinkedList = LinkedList.LinkedList(
-      loadMask,
-      loadPointer,
-      storePointer,
-      getNodeBase
+      offset_base,
+      node_size,
+      pointer_size_,
     );
 
     /// Push a freed internal node onto the empty-nodes list so the next
-    /// `put_` reuses its slot. The caller is responsible for clearing all
-    /// child pointers of `node` before pushing (otherwise stale pointers
-    /// would alias live leaves through phantom trie paths).
+    /// `put_` reuses its slot. `node` is the encoded pointer; the list stores
+    /// the bare index. The caller is responsible for clearing all child
+    /// pointers of `node` before pushing (otherwise stale pointers would alias
+    /// live leaves through phantom trie paths).
     public func pushEmptyNode(region : Region.Region, node : Nat64) {
-      empty_nodes_list.push(region, node);
+      empty_nodes_list.push(region, node >> 1);
     };
 
     /// Number of internal nodes currently held in the empty-nodes list.
@@ -499,9 +500,10 @@ module {
       switch (scanChildren(nodes_region, node)) {
         case (#onlyLeaf(leaf, slot)) {
           // Collapse: clear the surviving slot (so the pushed node is
-          // all-zero) and bubble the leaf up to the parent.
+          // all-zero) and bubble the leaf up to the parent. The list stores
+          // the bare node index, so shift off the tag bit.
           setChild(nodes_region, node, slot, 0);
-          empty_nodes_list.push(nodes_region, node);
+          empty_nodes_list.push(nodes_region, node >> 1);
           leaf;
         };
         case (#onlyInternal _) node; // chain-link state — keep `node`

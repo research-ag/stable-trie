@@ -63,18 +63,19 @@ module {
   /// });
   /// ```
   public class Map(args : Args) {
-    let base : Base.StableTrieBase = Base.StableTrieBase({
-      args with leaf_size = Nat.max(args.key_size + args.value_size, args.pointer_size);
-    });
+    let leaf_size = Nat.max(args.key_size + args.value_size, args.pointer_size);
+    let base : Base.StableTrieBase = Base.StableTrieBase({ args with leaf_size });
 
     /// Linked list of freed leaf slots, so the next `put_` can reuse them
     /// before growing the leaves region. The matching list of freed internal
     /// nodes lives inside `base` (since Enumeration uses the same machinery).
+    ///
+    /// Leaves are laid out from offset 0 with stride `leaf_size`, and the list
+    /// stores bare leaf indices, so `offset_base = 0` and `item_size = leaf_size`.
     let empty_leaves : LinkedList.LinkedList = LinkedList.LinkedList(
-      base.loadMask,
-      base.loadPointer,
-      base.storePointer,
-      base.getLeafOffset,
+      0,
+      leaf_size.toNat64(),
+      args.pointer_size.toNat64(),
     );
 
     // Wire the leaf-pop callback so `newLeaf` reuses freed slots before
