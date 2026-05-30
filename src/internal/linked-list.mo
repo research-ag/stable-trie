@@ -114,14 +114,4 @@ module {
     self.count -= 1;
     ?ret;
   };
-
-  public func share(self : LinkedList) : (Nat, Nat64) = (
-    self.count,
-    self.last_empty_item,
-  );
-
-  public func unshare(self : LinkedList, data : (Nat, Nat64)) {
-    self.count := data.0;
-    self.last_empty_item := data.1;
-  };
 };

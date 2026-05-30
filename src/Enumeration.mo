@@ -15,11 +15,15 @@
 ///
 /// Because `Enumeration = Base.StableTrieBase`, any wrapper function here
 /// whose name also appears in `base` (e.g. `lookup`, `removeLast`,
-/// `entries`, `memoryStats`, `share`, `unshare`) is ambiguous with the base
-/// version when both modules are in scope. We avoid the ambiguity by
-/// calling `Base.foo(self, ...)` explicitly in the wrapper bodies. User
-/// code importing only `Enumeration` is fine — only this module's functions
-/// are in scope, so `e.foo()` resolves unambiguously.
+/// `entries`, `memoryStats`) is ambiguous with the base version when both
+/// modules are in scope. We avoid the ambiguity by calling
+/// `Base.foo(self, ...)` explicitly in the wrapper bodies. User code
+/// importing only `Enumeration` is fine — only this module's functions are
+/// in scope, so `e.foo()` resolves unambiguously.
+///
+/// An `Enumeration` value can be declared as a `stable var` directly — there
+/// is no `share`/`unshare` round-trip. All fields (`Region.Region`, `Nat64`,
+/// `LinkedList`) are themselves stable types.
 
 import Array "mo:core/Array";
 import Nat_ "mo:core/Nat";
@@ -30,12 +34,6 @@ import Types "mo:core/Types";
 import Base "internal/base";
 
 module {
-  /// Type of stable data of `StableTrie.Enumeration`. Includes the state of
-  /// the empty-nodes linked list (managed by `base`). Leaves do not need a
-  /// free list because `removeLast` is LIFO — the freed leaf is always at
-  /// the end of the leaves region and is reused by the next `add`.
-  public type StableData = Base.StableData;
-
   /// Memory stats.
   ///
   /// `node_count` is the count of internal trie nodes currently in use. After
@@ -216,9 +214,4 @@ module {
   /// in use; `total_node_count` is the high water (region size).
   public func memoryStats(self : Enumeration) : MemoryStats = Base.memoryStats(self);
 
-  /// Convert to stable data.
-  public func share(self : Enumeration) : StableData = Base.share(self);
-
-  /// Restore from stable data. Must be the first call after `empty()`.
-  public func unshare(self : Enumeration, data : StableData) = Base.unshare(self, data);
 };

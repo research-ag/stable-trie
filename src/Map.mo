@@ -12,12 +12,16 @@
 /// first parameter, so callers use dot-notation (`m.put(k, v)`, `m.get(k)`,
 /// etc.) which Motoko resolves to the matching module-level function.
 ///
-/// Because `Map = Base.StableTrieBase`, any wrapper function here whose name
-/// also appears in `base` (e.g. `entries`, `memoryStats`, `share`, `unshare`)
-/// is ambiguous with the base version when both modules are in scope. We
-/// avoid the ambiguity by calling `Base.foo(self, ...)` explicitly in the
-/// wrapper bodies. User code importing only `Map` is fine — only this
-/// module's functions are in scope, so `m.foo()` resolves unambiguously.
+/// Because `Map = Base.StableTrieBase`, any wrapper function here whose
+/// name also appears in `base` (e.g. `entries`, `memoryStats`) is ambiguous
+/// with the base version when both modules are in scope. We avoid the
+/// ambiguity by calling `Base.foo(self, ...)` explicitly in the wrapper
+/// bodies. User code importing only `Map` is fine — only this module's
+/// functions are in scope, so `m.foo()` resolves unambiguously.
+///
+/// A `Map` value can be declared as a `stable var` directly — there is no
+/// `share`/`unshare` round-trip. All fields (`Region.Region`, `Nat64`,
+/// `LinkedList`) are themselves stable types.
 
 import Nat "mo:core/Nat";
 import Nat64_ "mo:core/Nat64"; // enables `Nat64.toNat()` dot notation below
@@ -28,11 +32,6 @@ import Types "mo:core/Types";
 import Base "internal/base";
 
 module {
-  /// Type of stable data of `StableTrie.Map`. `Base.StableData` now carries
-  /// both the empty-nodes and empty-leaves linked lists, so `Map` no longer
-  /// needs its own extension.
-  public type StableData = Base.StableData;
-
   /// Arguments type of `Map`.
   public type Args = Base.BaseArgs;
 
@@ -238,9 +237,4 @@ module {
     };
   };
 
-  /// Convert to stable data.
-  public func share(self : Map) : StableData = Base.share(self);
-
-  /// Restore from stable data. Must be the first call after `empty()`.
-  public func unshare(self : Map, data : StableData) = Base.unshare(self, data);
 };

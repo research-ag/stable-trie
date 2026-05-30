@@ -88,18 +88,6 @@ module {
     #multiple;
   };
 
-  /// Stable data of `StableTrieBase`.
-  public type StableData = {
-    nodes_region : Region.Region;
-    nodes_freeSpace : Nat64;
-    leaves_region : Region.Region;
-    leaves_freeSpace : Nat64;
-    node_count : Nat64;
-    leaf_count : Nat64;
-    empty_nodes : (Nat, Nat64);
-    empty_leaves : (Nat, Nat64);
-  };
-
   type Dir = { #forward; #reverse };
 
   /// Per-pointer-size store dispatch table, indexed by `storeFuncIndex`
@@ -619,28 +607,4 @@ module {
     };
   };
 
-  /// Convert to stable data.
-  public func share(self : StableTrieBase) : StableData = {
-    nodes_region = self.nodes_region;
-    nodes_freeSpace = self.nodes_freeSpace;
-    leaves_region = self.leaves_region;
-    leaves_freeSpace = self.leaves_freeSpace;
-    node_count = self.node_count;
-    leaf_count = self.leaf_count;
-    empty_nodes = self.empty_nodes_list.share();
-    empty_leaves = self.empty_leaves_list.share();
-  };
-
-  /// Restore from stable data. Overwrites the regions allocated by `empty()`
-  /// (the originals become garbage).
-  public func unshare(self : StableTrieBase, data : StableData) {
-    self.nodes_region := data.nodes_region;
-    self.nodes_freeSpace := data.nodes_freeSpace;
-    self.leaves_region := data.leaves_region;
-    self.leaves_freeSpace := data.leaves_freeSpace;
-    self.node_count := data.node_count;
-    self.leaf_count := data.leaf_count;
-    self.empty_nodes_list.unshare(data.empty_nodes);
-    self.empty_leaves_list.unshare(data.empty_leaves);
-  };
 };

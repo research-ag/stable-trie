@@ -283,35 +283,6 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
     };
   };
 
-  // ---------- 8. share/unshare round-trips through undo state ----------
-  do {
-    // Pop a few entries, share, unshare into a new instance, verify state.
-    assert (trie.removeLast() != null);
-    assert (trie.removeLast() != null);
-    let data = trie.share();
-    let size_before = trie.size();
-    let stats_before = trie.memoryStats();
-
-    let trie2 = StableTrie.empty({
-      pointer_size;
-      aridity;
-      root_aridity;
-      key_size;
-      value_size;
-    });
-    trie2.unshare(data);
-    assert trie2.size() == size_before;
-    assert trie2.memoryStats() == stats_before;
-
-    // trie2 can undo what's left.
-    var j = size_before;
-    while (j > 0) {
-      j -= 1;
-      assert trie2.removeLast() == ?(keys[j], raw_vals[j]);
-    };
-    assert trie2.size() == 0;
-    assert trie2.removeLast() == null;
-  };
 };
 
 // ---------- 8b. interleaved drain/refill keeps the region from growing ----------
