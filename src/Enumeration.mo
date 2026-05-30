@@ -54,7 +54,7 @@ module {
   /// });
   /// ```
   public class Enumeration(args : Args) {
-    let base : Base.StableTrieBase = Base.StableTrieBase({
+    let base : Base.StableTrieBase = Base.empty({
       args with leaf_size = args.key_size + args.value_size
     });
 
@@ -108,7 +108,7 @@ module {
     /// assert(e.add("abc", "c") == 0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func add(key : Blob, value : Blob) : Nat = base.unwrap(addChecked(key, value));
+    public func add(key : Blob, value : Blob) : Nat = Base.unwrap(addChecked(key, value));
 
     /// Add `key` and `value` to enumeration.
     /// Returns `#LimitExceeded` if pointer size limit exceeded.
@@ -167,7 +167,7 @@ module {
     /// assert(e.replace("abc", "c") == (?"a", 0));
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func replace(key : Blob, value : Blob) : (?Blob, Nat) = base.unwrap(replaceChecked(key, value));
+    public func replace(key : Blob, value : Blob) : (?Blob, Nat) = Base.unwrap(replaceChecked(key, value));
 
     /// Add `key` and `value` to enumeration.
     /// Returns `#LimitExceeded` if pointer size limit exceeded.
@@ -222,7 +222,7 @@ module {
     /// assert(e.lookupOrPut("abc", "c") == (?"a", 0);
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func lookupOrPut(key : Blob, value : Blob) : (?Blob, Nat) = base.unwrap(lookupOrPutChecked(key, value));
+    public func lookupOrPut(key : Blob, value : Blob) : (?Blob, Nat) = Base.unwrap(lookupOrPutChecked(key, value));
 
     /// Remove the entry that was last added to the enumeration.
     /// Returns the removed `?(key, value)` pair or `null` if the enumeration is empty.

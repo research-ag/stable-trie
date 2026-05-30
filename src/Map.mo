@@ -64,7 +64,7 @@ module {
   /// ```
   public class Map(args : Args) {
     let leaf_size = Nat.max(args.key_size + args.value_size, args.pointer_size);
-    let base : Base.StableTrieBase = Base.StableTrieBase({ args with leaf_size });
+    let base : Base.StableTrieBase = Base.empty({ args with leaf_size });
 
     /// Linked list of freed leaf slots, so the next `put_` can reuse them
     /// before growing the leaves region. The matching list of freed internal
@@ -128,7 +128,7 @@ module {
     /// m.put("abc", "c");
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func put(key : Blob, value : Blob) = base.unwrap(putChecked(key, value));
+    public func put(key : Blob, value : Blob) = Base.unwrap(putChecked(key, value));
 
     /// Add the `key` and `value` pair to the map. If `key` already exists then the old value is overwritten and returned. If `key` is new then `null` is returned.
     /// Returns `#LimitExceeded` if the pointer size limit is exceeded.
@@ -182,7 +182,7 @@ module {
     /// assert(m.replace("abc", "c") == ?"a");
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func replace(key : Blob, value : Blob) : ?Blob = base.unwrap(replaceChecked(key, value));
+    public func replace(key : Blob, value : Blob) : ?Blob = Base.unwrap(replaceChecked(key, value));
 
     /// Add the `key` and `value` pair to the map. If `key` already exists then the value is not written and the old value is returned (`get` behaviour). If `key` is new then the value is written and `null` is returned (`put` behaviour).
     /// Returns `#LimitExceeded` if the pointer size limit is exceeded.
@@ -236,7 +236,7 @@ module {
     /// assert(m.get("abc") == ?"a");
     /// ```
     /// Runtime: O(key_size) acesses to stable memory.
-    public func getOrPut(key : Blob, value : Blob) : ?Blob = base.unwrap(getOrPutChecked(key, value));
+    public func getOrPut(key : Blob, value : Blob) : ?Blob = Base.unwrap(getOrPutChecked(key, value));
 
     /// Returns the `value` corresponding to `key` or null if `key` is not in the map.
     ///
