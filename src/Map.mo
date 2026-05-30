@@ -72,7 +72,7 @@ module {
     ///
     /// Leaves are laid out from offset 0 with stride `leaf_size`, and the list
     /// stores bare leaf indices, so `offset_base = 0` and `item_size = leaf_size`.
-    let empty_leaves : LinkedList.LinkedList = LinkedList.LinkedList(
+    let empty_leaves : LinkedList.LinkedList = LinkedList.empty(
       0,
       leaf_size.toNat64(),
       args.pointer_size.toNat64(),

@@ -347,7 +347,7 @@ module {
     /// It stores raw node *indices* (`node >> 1`), so callers shift on the way
     /// in and re-encode (`<< 1`) on the way out. The slot of node index `i`
     /// sits at `offset_base + i * node_size`, matching `getNodeOffset(i<<1, 0)`.
-    let empty_nodes_list : LinkedList.LinkedList = LinkedList.LinkedList(
+    let empty_nodes_list : LinkedList.LinkedList = LinkedList.empty(
       offset_base,
       node_size,
       pointer_size_,

@@ -36,19 +36,28 @@ module {
   public type LinkedList = {
     offset_base : Nat64;
     item_size : Nat64;
-    pointer_size : Nat64;
+    storeFuncIndex : Nat;
     loadMask : Nat64;
     var count : Nat;
     var last_empty_item : Nat64;
   };
 
   /// Create an empty free list.
-  public func LinkedList(offset_base : Nat64, item_size : Nat64, pointer_size : Nat64) : LinkedList {
+  public func empty(offset_base : Nat64, item_size : Nat64, pointer_size : Nat64) : LinkedList {
+    assert item_size >= pointer_size;
     let loadMask : Nat64 = if (pointer_size == 8) 0xffff_ffff_ffff_ffff else (1 << (pointer_size << 3)) - 1;
+    let storeFuncIndex = switch (pointer_size) {
+      case (8) 0;
+      case (6) 1;
+      case (5) 2;
+      case (4) 3;
+      case (2) 4;
+      case (_) Runtime.trap("invalid pointer_size");
+    };
     {
       offset_base;
       item_size;
-      pointer_size;
+      storeFuncIndex;
       loadMask;
       var count = 0;
       var last_empty_item = loadMask; // empty: head == sentinel
@@ -59,29 +68,31 @@ module {
   func slotOffset(self : LinkedList, i : Nat64) : Nat64 = self.offset_base +% i *% self.item_size;
 
   /// Load a `pointer_size`-byte link from `offset`.
-  func loadPointer(self : LinkedList, region : Region.Region, offset : Nat64) : Nat64 = region.loadNat64(offset) & self.loadMask;
-
-  /// Store a `pointer_size`-byte link at `offset`.
-  func storePointer(self : LinkedList, region : Region.Region, offset : Nat64, link : Nat64) {
-    switch (self.pointer_size) {
-      case (8) region.storeNat64(offset, link);
-      case (6) {
-        region.storeNat32(offset, nat64to32(link & 0xffff_ffff));
-        region.storeNat16(offset +% 4, nat32to16(nat64to32(link >> 32)));
-      };
-      case (5) {
-        region.storeNat32(offset, nat64to32(link & 0xffff_ffff));
-        region.storeNat8(offset +% 4, natWrap8(nat64toNat(link >> 32)));
-      };
-      case (4) region.storeNat32(offset, nat64to32(link));
-      case (2) region.storeNat16(offset, nat32to16(nat64to32(link)));
-      case (_) Runtime.trap("invalid pointer_size");
-    };
+  func loadPointer(region : Region.Region, offset : Nat64, mask : Nat64) : Nat64 {
+    region.loadNat64(offset) & mask;
   };
+
+  let storePointerFuncs = [
+    Region.storeNat64,
+    func storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
+      region.storeNat32(offset, nat64to32(link & 0xffff_ffff));
+      region.storeNat16(offset +% 4, nat32to16(nat64to32(link >> 32)));
+    },
+    func storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
+      region.storeNat32(offset, nat64to32(link & 0xffff_ffff));
+      region.storeNat8(offset +% 4, natWrap8(nat64toNat(link >> 32)));
+    },
+    func storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
+      region.storeNat32(offset, nat64to32(link));
+    },
+    func storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
+      region.storeNat16(offset, nat32to16(nat64to32(link)));
+    },
+  ];
 
   /// Add a deleted item (by index) to the list.
   public func push(self : LinkedList, region : Region.Region, item : Nat64) {
-    storePointer(self, region, slotOffset(self, item), self.last_empty_item);
+    storePointerFuncs[self.storeFuncIndex](region, self.slotOffset(item), self.last_empty_item);
     self.last_empty_item := item;
     self.count += 1;
   };
@@ -91,13 +102,16 @@ module {
     if (self.last_empty_item == self.loadMask) return null;
 
     let ret = self.last_empty_item;
-    self.last_empty_item := loadPointer(self, region, slotOffset(self, self.last_empty_item));
-    storePointer(self, region, slotOffset(self, ret), 0);
+    self.last_empty_item := loadPointer(region, slotOffset(self, self.last_empty_item), self.loadMask);
+    storePointerFuncs[self.storeFuncIndex](region, slotOffset(self, ret), 0);
     self.count -= 1;
     ?ret;
   };
 
-  public func share(self : LinkedList) : (Nat, Nat64) = (self.count, self.last_empty_item);
+  public func share(self : LinkedList) : (Nat, Nat64) = (
+    self.count,
+    self.last_empty_item,
+  );
 
   public func unshare(self : LinkedList, data : (Nat, Nat64)) {
     self.count := data.0;
