@@ -24,7 +24,7 @@ module {
     let tries = Array.tabulate<StableTrie.Enumeration>(
       nCols,
       func(i) {
-        StableTrie.Enumeration({
+        StableTrie.empty({
           pointer_size = 2;
           aridity = 2 ** (2 ** i);
           root_aridity = null;

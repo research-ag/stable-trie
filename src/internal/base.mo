@@ -45,12 +45,6 @@ module {
   let nat64to32 = Prim.nat64ToNat32;
   let natWrap8 = Prim.intToNat8Wrap;
 
-  /// Stable region with `freeSpace` variable.
-  public type Region = {
-    region : Region.Region;
-    var freeSpace : Nat64;
-  };
-
   /// Arguments of constructor of `Enumeration` and `Map`.
   /// pointer_size: size of pointer in bytes (2, 4, 5, 6, 8)
   /// aridity: number of children per internal node (2, 4, 16, 256)
@@ -96,18 +90,14 @@ module {
 
   /// Stable data of `StableTrieBase`.
   public type StableData = {
-    nodes : Region;
-    leaves : Region;
+    nodes_region : Region.Region;
+    nodes_freeSpace : Nat64;
+    leaves_region : Region.Region;
+    leaves_freeSpace : Nat64;
     node_count : Nat64;
     leaf_count : Nat64;
     empty_nodes : (Nat, Nat64);
     empty_leaves : (Nat, Nat64);
-  };
-
-  /// Pair of nodes and leaves regions.
-  public type State = {
-    nodes : Region;
-    leaves : Region;
   };
 
   type Dir = { #forward; #reverse };
@@ -132,15 +122,6 @@ module {
     },
   ];
 
-  /// Allocate one page if required.  `allocate` can only be used for n <= 65536
-  func allocate(region : Region, n : Nat64) {
-    if (region.freeSpace < n) {
-      assert region.region.grow(1) != 0xffff_ffff_ffff_ffff;
-      region.freeSpace +%= 65536;
-    };
-    region.freeSpace -%= n;
-  };
-
   /// Base record for stable trie map and enumeration.
   /// SHOULD NOT BE USED FROM THE USER'S CODE.
   ///
@@ -149,8 +130,9 @@ module {
   ///   (`pointer_size`, `key_size`, `value_size`) and a host of `Nat64`/`Nat`
   ///   values precomputed from `args` so per-call hot paths don't recompute
   ///   conversions and masks;
-  /// - `empty_nodes_list`, the internal free list of freed internal nodes;
-  /// - the mutable state vars (counts, regions handle, leaf-pop callback).
+  /// - `empty_nodes_list` and `empty_leaves_list`, free lists of freed
+  ///   internal nodes and leaf slots;
+  /// - the mutable state vars: counts and the two regions.
   public type StableTrieBase = {
     pointer_size : Nat;
     key_size : Nat;
@@ -177,7 +159,10 @@ module {
     empty_leaves_list : LinkedList.LinkedList;
     var leaf_count : Nat64;
     var node_count : Nat64;
-    var regions_ : ?State;
+    var nodes_region : Region.Region;
+    var nodes_freeSpace : Nat64;
+    var leaves_region : Region.Region;
+    var leaves_freeSpace : Nat64;
   };
 
   /// Construct an empty stable trie base.
@@ -211,6 +196,15 @@ module {
     let root_size : Nat64 = root_aridity_ * pointer_size_;
     let offset_base : Nat64 = root_size - node_size;
     let leaf_size : Nat64 = args.leaf_size.toNat64();
+    let padding : Nat64 = 8 - pointer_size_;
+
+    // Allocate the nodes and leaves regions eagerly so the region/freeSpace
+    // pairs are plain `var`s (no Option wrapper). The nodes region grows
+    // enough pages to hold the root and its padding; the leaves region
+    // starts at 0 pages and grows on first `newLeaf`.
+    let nodes_region = Region.new();
+    let pages = (root_size + padding + 65536 - 1) / 65536;
+    assert nodes_region.grow(pages) != 0xffff_ffff_ffff_ffff;
 
     {
       pointer_size = args.pointer_size;
@@ -231,7 +225,7 @@ module {
       leaf_size;
       root_size;
       offset_base;
-      padding = 8 - pointer_size_;
+      padding;
       empty_values = args.value_size == 0;
       storeFuncIndex = switch (args.pointer_size) {
         case (8) 0;
@@ -244,46 +238,26 @@ module {
       empty_nodes_list = LinkedList.empty(offset_base, node_size, pointer_size_);
       empty_leaves_list = LinkedList.empty(0, leaf_size, pointer_size_);
       var leaf_count = 0 : Nat64;
-      var node_count = 0 : Nat64;
-      var regions_ : ?State = null;
-    };
-  };
-
-  /// Get or create and initialize regions.
-  public func regions(self : StableTrieBase) : State {
-    switch (self.regions_) {
-      case (?r) r;
-      case (null) {
-        let nodes_region = Region.new();
-        let nodes : Region = {
-          region = nodes_region;
-          var freeSpace = 0;
-        };
-        let pages = (self.root_size + self.padding + 65536 - 1) / 65536;
-        assert nodes.region.grow(pages) != 0xffff_ffff_ffff_ffff;
-        nodes.freeSpace := pages * 65536 - self.root_size - self.padding;
-        self.node_count := 1;
-
-        let leaves : Region = {
-          region = Region.new();
-          var freeSpace = 0;
-        };
-
-        let ret = { nodes; leaves };
-        self.regions_ := ?ret;
-
-        ret;
-      };
+      var node_count = 1 : Nat64;
+      var nodes_region = nodes_region;
+      var nodes_freeSpace = pages * 65536 - root_size - padding;
+      var leaves_region = Region.new();
+      var leaves_freeSpace = 0 : Nat64;
     };
   };
 
   /// Create internal node.
-  func newInternalNode(self : StableTrieBase, region : Region) : ?Nat64 {
-    let node = switch (self.empty_nodes_list.pop(region.region)) {
+  func newInternalNode(self : StableTrieBase) : ?Nat64 {
+    let node = switch (self.empty_nodes_list.pop(self.nodes_region)) {
       case (?index) index << 1; // re-encode reused node index → pointer
       case (null) {
         if (self.node_count != self.max_address) {
-          allocate(region, self.node_size);
+          // Inlined allocate: grow one page if there isn't room for node_size.
+          if (self.nodes_freeSpace < self.node_size) {
+            assert self.nodes_region.grow(1) != 0xffff_ffff_ffff_ffff;
+            self.nodes_freeSpace +%= 65536;
+          };
+          self.nodes_freeSpace -%= self.node_size;
           let nc = self.node_count;
           self.node_count +%= 1;
           nc << 1;
@@ -293,12 +267,17 @@ module {
     ?node;
   };
 
-  func newLeaf(self : StableTrieBase, region : Region, key : Blob) : ?Nat64 {
-    let leaf = switch (self.empty_leaves_list.pop(region.region)) {
+  func newLeaf(self : StableTrieBase, key : Blob) : ?Nat64 {
+    let leaf = switch (self.empty_leaves_list.pop(self.leaves_region)) {
       case (?leaf) leaf;
       case (null) {
         if (self.leaf_count != self.max_address) {
-          allocate(region, self.leaf_size);
+          // Inlined allocate: grow one page if there isn't room for leaf_size.
+          if (self.leaves_freeSpace < self.leaf_size) {
+            assert self.leaves_region.grow(1) != 0xffff_ffff_ffff_ffff;
+            self.leaves_freeSpace +%= 65536;
+          };
+          self.leaves_freeSpace -%= self.leaf_size;
           let lc = self.leaf_count;
           self.leaf_count +%= 1;
           lc;
@@ -306,7 +285,7 @@ module {
       };
     };
 
-    region.region.storeBlob(getLeafOffset(self, leaf), key);
+    self.leaves_region.storeBlob(getLeafOffset(self, leaf), key);
     ?((leaf << 1) | 1);
   };
 
@@ -324,14 +303,14 @@ module {
   };
 
   /// Load node's `node` child number `index`.
-  public func getChild(self : StableTrieBase, region : Region.Region, node : Nat64, index : Nat64) : Nat64 {
-    Prim.regionLoadNat64(region, getNodeOffset(self, node, index)) & self.loadMask;
+  public func getChild(self : StableTrieBase, node : Nat64, index : Nat64) : Nat64 {
+    Prim.regionLoadNat64(self.nodes_region, getNodeOffset(self, node, index)) & self.loadMask;
   };
 
   /// Set node's `node` child number `index`.
-  public func setChild(self : StableTrieBase, region : Region.Region, node : Nat64, index : Nat64, child : Nat64) {
+  public func setChild(self : StableTrieBase, node : Nat64, index : Nat64, child : Nat64) {
     let offset = getNodeOffset(self, node, index);
-    storePointerFuncs[self.storeFuncIndex](region, offset, child);
+    storePointerFuncs[self.storeFuncIndex](self.nodes_region, offset, child);
   };
 
   /// Inspect the children of an internal `node` and classify which case
@@ -342,8 +321,8 @@ module {
   /// `assert`s that the node has at least one non-zero child. The
   /// "zero children" case is unreachable under the deletion invariants
   /// maintained by Map and Enumeration.
-  public func scanChildren(self : StableTrieBase, region : Region.Region, node : Nat64) : ChildScan {
-    let blob = region.loadBlob(getNodeBase(self, node), self.node_size_);
+  public func scanChildren(self : StableTrieBase, node : Nat64) : ChildScan {
+    let blob = self.nodes_region.loadBlob(getNodeBase(self, node), self.node_size_);
     let ps = self.pointer_size;
     var lone : Nat64 = 0;
     var lone_slot : Nat64 = 0;
@@ -373,37 +352,37 @@ module {
   /// `put_` reuses its slot. `node` is the encoded pointer; the list stores
   /// the bare index. The caller is responsible for clearing all child
   /// pointers of `node` before pushing.
-  public func pushEmptyNode(self : StableTrieBase, region : Region.Region, node : Nat64) {
-    self.empty_nodes_list.push(region, node >> 1);
+  public func pushEmptyNode(self : StableTrieBase, node : Nat64) {
+    self.empty_nodes_list.push(self.nodes_region, node >> 1);
   };
 
   /// Push a freed leaf slot onto the empty-leaves list so the next
   /// `newLeaf` reuses it. Map's `removeRec` calls this when a key is
   /// removed; Enumeration never does, so for Enumeration the list stays
   /// empty and `newLeaf` always allocates fresh.
-  public func pushEmptyLeaf(self : StableTrieBase, region : Region.Region, leaf : Nat64) {
-    self.empty_leaves_list.push(region, leaf);
+  public func pushEmptyLeaf(self : StableTrieBase, leaf : Nat64) {
+    self.empty_leaves_list.push(self.leaves_region, leaf);
   };
 
   /// Get offset of leaf number `index`.
   func getLeafOffset(self : StableTrieBase, index : Nat64) : Nat64 = index *% self.leaf_size;
 
   /// Load key of leaf number `index`.
-  public func getKey(self : StableTrieBase, region : Region.Region, index : Nat64) : Blob {
-    region.loadBlob(getLeafOffset(self, index), self.key_size);
+  public func getKey(self : StableTrieBase, index : Nat64) : Blob {
+    self.leaves_region.loadBlob(getLeafOffset(self, index), self.key_size);
   };
 
   /// Load value of leaf number `index`.
-  public func getValue(self : StableTrieBase, region : Region.Region, index : Nat64) : Blob {
+  public func getValue(self : StableTrieBase, index : Nat64) : Blob {
     if (self.empty_values) return "";
-    region.loadBlob(getLeafOffset(self, index) +% self.key_size_, self.value_size);
+    self.leaves_region.loadBlob(getLeafOffset(self, index) +% self.key_size_, self.value_size);
   };
 
   /// Set value of leaf number `index`.
-  public func setValue(self : StableTrieBase, region : Region.Region, index : Nat64, value : Blob) {
+  public func setValue(self : StableTrieBase, index : Nat64, value : Blob) {
     assert value.size() == self.value_size;
     if (self.empty_values) return;
-    region.storeBlob(getLeafOffset(self, index) +% self.key_size_, value);
+    self.leaves_region.storeBlob(getLeafOffset(self, index) +% self.key_size_, value);
   };
 
   /// Get index in root node.
@@ -427,12 +406,12 @@ module {
     return nat32to64(nat16to32(nat8to16((key[nat16toNat(pos >> 3)] << nat16to8(pos & 7)) >> self.bitshift)));
   };
 
-  func find(self : StableTrieBase, nodes : Region.Region, key : Blob) : (Nat64, Nat64, Nat64, Nat16) {
+  func find(self : StableTrieBase, key : Blob) : (Nat64, Nat64, Nat64, Nat16) {
     var idx = keyToRootIndex(self, key);
     var pos = self.root_bitlength;
     var node : Nat64 = 0;
     loop {
-      let child = getChild(self, nodes, node, idx);
+      let child = getChild(self, node, idx);
       if (child == 0 or child & 1 == 1) {
         return (node, idx, child, pos);
       };
@@ -444,41 +423,34 @@ module {
   };
 
   /// Put only `key` into trie. Returns pair (whether new leaf created, index of leaf) or null in case of pointer size overflow.
-  public func put_(
-    self : StableTrieBase,
-    nodes : Region,
-    leaves : Region,
-    nodes_region : Region.Region,
-    leaves_region : Region.Region,
-    key : Blob,
-  ) : ?(Bool, Nat64) {
+  public func put_(self : StableTrieBase, key : Blob) : ?(Bool, Nat64) {
     assert key.size() == self.key_size;
 
-    let (node_, last_, old_leaf, pos_) = find(self, nodes_region, key);
+    let (node_, last_, old_leaf, pos_) = find(self, key);
 
     var last = last_;
     var node = node_;
 
     if (old_leaf == 0) {
-      let ?leaf = newLeaf(self, leaves, key) else return null;
+      let ?leaf = newLeaf(self, key) else return null;
 
-      setChild(self, nodes_region, node, last, leaf);
+      setChild(self, node, last, leaf);
       return ?(true, (leaf >> 1));
     };
 
     let index = old_leaf >> 1;
-    let old_key = getKey(self, leaves_region, index);
+    let old_key = getKey(self, index);
     if (key == old_key) {
       return ?(false, index);
     };
 
     var pos = pos_;
     label l loop {
-      let ?add = self.newInternalNode(nodes) else {
-        setChild(self, nodes_region, node, last, old_leaf);
+      let ?add = newInternalNode(self) else {
+        setChild(self, node, last, old_leaf);
         return null;
       };
-      setChild(self, nodes_region, node, last, add);
+      setChild(self, node, last, add);
       node := add;
 
       let (a, b) = (keyToIndex(self, key, pos), keyToIndex(self, old_key, pos));
@@ -486,9 +458,9 @@ module {
       if (a == b) {
         last := a;
       } else {
-        setChild(self, nodes_region, node, b, old_leaf);
-        let ?leaf = newLeaf(self, leaves, key) else return null;
-        setChild(self, nodes_region, node, a, leaf);
+        setChild(self, node, b, old_leaf);
+        let ?leaf = newLeaf(self, key) else return null;
+        setChild(self, node, a, leaf);
         return ?(true, (leaf >> 1));
       };
     };
@@ -496,28 +468,22 @@ module {
   };
 
   /// Recursive walk for `removeLast`.
-  func removeLastRec(
-    self : StableTrieBase,
-    nodes_region : Region.Region,
-    key : Blob,
-    node : Nat64,
-    pos : Nat16,
-  ) : Nat64 {
+  func removeLastRec(self : StableTrieBase, key : Blob, node : Nat64, pos : Nat16) : Nat64 {
     let idx = keyToIndex(self, key, pos);
-    let child = getChild(self, nodes_region, node, idx);
+    let child = getChild(self, node, idx);
     let new_child = if (child & 1 == 1) {
       0 : Nat64;
     } else {
-      removeLastRec(self, nodes_region, key, child, pos +% self.bitlength);
+      removeLastRec(self, key, child, pos +% self.bitlength);
     };
 
     if (new_child == child) return node;
 
-    setChild(self, nodes_region, node, idx, new_child);
-    switch (scanChildren(self, nodes_region, node)) {
+    setChild(self, node, idx, new_child);
+    switch (scanChildren(self, node)) {
       case (#onlyLeaf(leaf, slot)) {
-        setChild(self, nodes_region, node, slot, 0);
-        self.empty_nodes_list.push(nodes_region, node >> 1);
+        setChild(self, node, slot, 0);
+        pushEmptyNode(self, node);
         leaf;
       };
       case (#onlyInternal _) node;
@@ -528,27 +494,24 @@ module {
   /// Remove the most-recently-added leaf (at index `leaf_count - 1`).
   public func removeLast(self : StableTrieBase) : ?(Blob, Blob) {
     if (self.leaf_count == 0) return null;
-    let { leaves; nodes } = regions(self);
-    let leaves_region = leaves.region;
-    let nodes_region = nodes.region;
 
     let last_index = self.leaf_count -% 1;
-    let key = getKey(self, leaves_region, last_index);
-    let value = getValue(self, leaves_region, last_index);
+    let key = getKey(self, last_index);
+    let value = getValue(self, last_index);
 
     let root_idx = keyToRootIndex(self, key);
-    let root_child = getChild(self, nodes_region, 0, root_idx);
+    let root_child = getChild(self, 0, root_idx);
     let new_root_child = if (root_child & 1 == 1) {
       0 : Nat64;
     } else {
-      removeLastRec(self, nodes_region, key, root_child, self.root_bitlength);
+      removeLastRec(self, key, root_child, self.root_bitlength);
     };
     if (new_root_child != root_child) {
-      setChild(self, nodes_region, 0, root_idx, new_root_child);
+      setChild(self, 0, root_idx, new_root_child);
     };
 
     self.leaf_count -%= 1;
-    leaves.freeSpace +%= self.leaf_size;
+    self.leaves_freeSpace +%= self.leaf_size;
 
     ?(key, value);
   };
@@ -556,15 +519,13 @@ module {
   /// Lookup `key` in trie. Returns `value` and index of that leaf or null if not found.
   public func lookup(self : StableTrieBase, key : Blob) : ?(Blob, Nat) {
     assert key.size() == self.key_size;
-    let { leaves; nodes } = regions(self);
 
-    let (_, _, old_leaf, _) = find(self, nodes.region, key);
+    let (_, _, old_leaf, _) = find(self, key);
     if (old_leaf == 0) return null;
     let index = old_leaf >> 1;
 
-    let leaves_region = leaves.region;
-    return if (getKey(self, leaves_region, index) == key) {
-      ?(getValue(self, leaves_region, index), nat64toNat(index));
+    return if (getKey(self, index) == key) {
+      ?(getValue(self, index), nat64toNat(index));
     } else {
       null;
     };
@@ -572,7 +533,7 @@ module {
 
   /// Closure-based iterator factory returning an `Iter<Nat64>` directly.
   /// The returned iterator owns the traversal stack via closure capture.
-  func makeIter(self : StableTrieBase, nodes : Region.Region, dir : Dir) : Types.Iter<Nat64> {
+  func makeIter(self : StableTrieBase, dir : Dir) : Types.Iter<Nat64> {
     let forward = dir == #forward;
     let stack = VarArray.repeat<(Nat64, Nat64)>((0, 0), self.key_size * 8 / nat16toNat(self.bitlength));
     var depth = 1;
@@ -592,7 +553,7 @@ module {
           let (node, i) = stack[depth - 1];
           let max = if (depth > 1) self.aridity_ else self.root_aridity_;
           if (i < max) {
-            let child = getChild(self, nodes, node, i);
+            let child = getChild(self, node, i);
             if (child == 0) {
               stack[depth - 1] := (node, next_step(i));
               continue l;
@@ -615,30 +576,16 @@ module {
     };
   };
 
-  func entries_base<T>(self : StableTrieBase, dir : Dir, f : (Nat64, Region.Region) -> T) : Types.Iter<T> {
-    let state = regions(self);
-    let { nodes; leaves } = state;
-    let leaves_region = leaves.region;
-    let nodes_region = nodes.region;
-    makeIter(self, nodes_region, dir).map<Nat64, T>(func(leaf) = f(leaf, leaves_region));
-  };
-
-  func entries_(self : StableTrieBase, dir : Dir) : Types.Iter<(Blob, Blob)> = entries_base<(Blob, Blob)>(
-    self,
-    dir,
-    func(leaf, leaves) = (getKey(self, leaves, leaf), getValue(self, leaves, leaf)),
+  func entries_(self : StableTrieBase, dir : Dir) : Types.Iter<(Blob, Blob)> = makeIter(self, dir).map<Nat64, (Blob, Blob)>(
+    func(leaf) = (getKey(self, leaf), getValue(self, leaf))
   );
 
-  func vals_(self : StableTrieBase, dir : Dir) : Types.Iter<Blob> = entries_base<Blob>(
-    self,
-    dir,
-    func(leaf, leaves) = getValue(self, leaves, leaf),
+  func vals_(self : StableTrieBase, dir : Dir) : Types.Iter<Blob> = makeIter(self, dir).map<Nat64, Blob>(
+    func(leaf) = getValue(self, leaf)
   );
 
-  func keys_(self : StableTrieBase, dir : Dir) : Types.Iter<Blob> = entries_base<Blob>(
-    self,
-    dir,
-    func(leaf, leaves) = getKey(self, leaves, leaf),
+  func keys_(self : StableTrieBase, dir : Dir) : Types.Iter<Blob> = makeIter(self, dir).map<Nat64, Blob>(
+    func(leaf) = getKey(self, leaf)
   );
 
   /// Iterate entries in forward order.
@@ -665,11 +612,7 @@ module {
   public func memoryStats(self : StableTrieBase) : MemoryStats {
     let total_n = nat64toNat(self.node_count);
     {
-      byte_size = if (self.node_count == 0) {
-        0 // no regions allocated yet
-      } else {
-        nat64toNat(self.root_size + (self.node_count - 1) * self.node_size + self.leaf_count * self.leaf_size);
-      };
+      byte_size = nat64toNat(self.root_size + (self.node_count - 1) * self.node_size + self.leaf_count * self.leaf_size);
       leaf_count = nat64toNat(self.leaf_count);
       node_count = total_n - self.empty_nodes_list.count;
       total_node_count = total_n;
@@ -678,24 +621,26 @@ module {
 
   /// Convert to stable data.
   public func share(self : StableTrieBase) : StableData = {
-    regions(self) with
+    nodes_region = self.nodes_region;
+    nodes_freeSpace = self.nodes_freeSpace;
+    leaves_region = self.leaves_region;
+    leaves_freeSpace = self.leaves_freeSpace;
     node_count = self.node_count;
     leaf_count = self.leaf_count;
     empty_nodes = self.empty_nodes_list.share();
     empty_leaves = self.empty_leaves_list.share();
   };
 
-  /// Create from stable data. Must be the first call after `empty()`.
+  /// Restore from stable data. Overwrites the regions allocated by `empty()`
+  /// (the originals become garbage).
   public func unshare(self : StableTrieBase, data : StableData) {
-    switch (self.regions_) {
-      case (null) {
-        self.regions_ := ?data;
-        self.node_count := data.node_count;
-        self.leaf_count := data.leaf_count;
-        self.empty_nodes_list.unshare(data.empty_nodes);
-        self.empty_leaves_list.unshare(data.empty_leaves);
-      };
-      case (_) Runtime.trap("Region is already initialized");
-    };
+    self.nodes_region := data.nodes_region;
+    self.nodes_freeSpace := data.nodes_freeSpace;
+    self.leaves_region := data.leaves_region;
+    self.leaves_freeSpace := data.leaves_freeSpace;
+    self.node_count := data.node_count;
+    self.leaf_count := data.leaf_count;
+    self.empty_nodes_list.unshare(data.empty_nodes);
+    self.empty_leaves_list.unshare(data.empty_leaves);
   };
 };

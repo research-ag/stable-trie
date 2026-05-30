@@ -45,7 +45,7 @@ for (value_size in value_sizes.vals()) {
   let values = gen(n, value_size);
   for (bit in bits.vals()) {
     for (pointer in pointers.vals()) {
-      let trie = StableTrie.Map({
+      let trie = StableTrie.empty({
         pointer_size = pointer;
         aridity = bit;
         root_aridity = ?(bit ** 3);
@@ -129,7 +129,7 @@ for (value_size in value_sizes.vals()) {
 };
 
 do {
-  let trie = StableTrie.Map({
+  let trie = StableTrie.empty({
     pointer_size = 2;
     aridity = 4;
     root_aridity = null;

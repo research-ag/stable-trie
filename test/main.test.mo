@@ -48,7 +48,7 @@ for (value_size in value_sizes.vals()) {
   let values = gen(n, value_size);
   for (bit in bits.vals()) {
     for (pointer in pointers.vals()) {
-      let trie = StableTrie.Enumeration({
+      let trie = StableTrie.empty({
         pointer_size = pointer;
         aridity = bit;
         root_aridity = ?(bit ** 3);
@@ -90,7 +90,7 @@ for (value_size in value_sizes.vals()) {
 };
 
 func pointerMaxSizeTest() {
-  let trie = StableTrie.Enumeration({
+  let trie = StableTrie.empty({
     pointer_size = 2;
     aridity = 2;
     root_aridity = null;
@@ -125,7 +125,7 @@ func _profile() {
     children_number.vals(),
     func(k) {
       let first = Nat.toText(k);
-      let trie = StableTrie.Enumeration({
+      let trie = StableTrie.empty({
         pointer_size = 8;
         aridity = k;
         root_aridity = ?k;

@@ -71,7 +71,7 @@ func entriesInOrder(t : StableTrie.Enumeration) : [Blob] {
 };
 
 for ((pointer_size, aridity, root_aridity) in configs.vals()) {
-  let trie = StableTrie.Enumeration({
+  let trie = StableTrie.empty({
     pointer_size;
     aridity;
     root_aridity;
@@ -292,7 +292,7 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
     let size_before = trie.size();
     let stats_before = trie.memoryStats();
 
-    let trie2 = StableTrie.Enumeration({
+    let trie2 = StableTrie.empty({
       pointer_size;
       aridity;
       root_aridity;
@@ -316,7 +316,7 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
 
 // ---------- 8b. interleaved drain/refill keeps the region from growing ----------
 do {
-  let trie = StableTrie.Enumeration({
+  let trie = StableTrie.empty({
     pointer_size = 4;
     aridity = 4;
     root_aridity = ?16;
@@ -390,7 +390,7 @@ do {
 // of the leaves, Map-style collapse should bubble the surviving leaf all the
 // way back up to the root, freeing every node in the chain.
 do {
-  let trie = StableTrie.Enumeration({
+  let trie = StableTrie.empty({
     pointer_size = 4;
     aridity = 2;
     root_aridity = ?2;
@@ -436,7 +436,7 @@ do {
 // ---------- 9. undo of single leaf attached directly to root ----------
 // Use a 1-byte key with aridity 256 so the root holds the leaf directly.
 do {
-  let trie = StableTrie.Enumeration({
+  let trie = StableTrie.empty({
     pointer_size = 2;
     aridity = 4;
     root_aridity = ?256;
@@ -456,7 +456,7 @@ do {
 
 // ---------- 10. value-size = 0 (set-like) undo ----------
 do {
-  let trie = StableTrie.Enumeration({
+  let trie = StableTrie.empty({
     pointer_size = 4;
     aridity = 2;
     root_aridity = null;

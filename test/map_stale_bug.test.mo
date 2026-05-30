@@ -25,7 +25,7 @@
 import Iter "mo:core/Iter";
 import StableTrie "../src/Map";
 
-let m = StableTrie.Map({
+let m = StableTrie.empty({
   pointer_size = 2;
   aridity = 4;
   root_aridity = ?4;

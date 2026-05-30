@@ -34,7 +34,7 @@ do {
   };
 };
 
-let trie = StableTrie.Enumeration({
+let trie = StableTrie.empty({
   pointer_size;
   aridity = k;
   root_aridity = null;
