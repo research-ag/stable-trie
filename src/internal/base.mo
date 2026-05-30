@@ -106,6 +106,24 @@ module {
     empty_nodes : ?(Nat, Nat64);
   };
 
+  let storePointerFuncs = [
+    Region.storeNat64,
+    func storePointer(region : Region.Region, offset : Nat64, child : Nat64) {
+      region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
+      region.storeNat16(offset +% 4, nat32to16(nat64to32(child >> 32)));
+    },
+    func storePointer(region : Region.Region, offset : Nat64, child : Nat64) {
+      region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
+      region.storeNat8(offset +% 4, natWrap8(nat64toNat(child >> 32)));
+    },
+    func storePointer(region : Region.Region, offset : Nat64, child : Nat64) {
+      region.storeNat32(offset, nat64to32(child));
+    },
+    func storePointer(region : Region.Region, offset : Nat64, child : Nat64) {
+      region.storeNat16(offset, nat32to16(nat64to32(child)));
+    },
+  ];
+
   /// Base class for stable trie map and enumeration. SHOULD NOT BE USED FROM THE USER'S CODE.
   public class StableTrieBase(args : Args) {
     assert switch (args.pointer_size) {
@@ -154,7 +172,17 @@ module {
     public var leaf_count : Nat64 = 0;
     var node_count : Nat64 = 0;
 
-    /// Store pointer to a region
+    /// Function to store pointer to a region as index in function array.
+    let storeFuncIndex : Nat = switch (args.pointer_size) {
+      case (8) 0;
+      case (6) 1;
+      case (5) 2;
+      case (4) 3;
+      case (2) 4;
+      case (_) Runtime.trap("invalid pointer_size");
+    };
+
+    /*
     public let storePointer : (region : Region.Region, offset : Nat64, child : Nat64) -> () = switch (pointer_size_) {
       case (8) func(region, offset, child) = region.storeNat64(offset, child);
       case (6) func(region, offset, child) {
@@ -169,6 +197,7 @@ module {
       case (2) func(region, offset, child) = region.storeNat16(offset, nat32to16(nat64to32(child)));
       case (_) Runtime.trap("Can never happen");
     };
+    */
 
     /// Pair of nodes and leaves regions.
     public type State = {
@@ -292,7 +321,7 @@ module {
     /// Set node's `node` child number `index`.
     public func setChild(region : Region.Region, node : Nat64, index : Nat64, child : Nat64) {
       let offset = getNodeOffset(node, index);
-      storePointer(region, offset, child);
+      storePointerFuncs[storeFuncIndex](region, offset, child);
     };
 
     /// Inspect the children of an internal `node` and classify which case
