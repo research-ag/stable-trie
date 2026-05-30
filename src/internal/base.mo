@@ -100,7 +100,8 @@ module {
     leaves : Region;
     node_count : Nat64;
     leaf_count : Nat64;
-    empty_nodes : ?(Nat, Nat64);
+    empty_nodes : (Nat, Nat64);
+    empty_leaves : (Nat, Nat64);
   };
 
   /// Pair of nodes and leaves regions.
@@ -173,10 +174,10 @@ module {
     empty_values : Bool;
     storeFuncIndex : Nat;
     empty_nodes_list : LinkedList.LinkedList;
+    empty_leaves_list : LinkedList.LinkedList;
     var leaf_count : Nat64;
     var node_count : Nat64;
     var regions_ : ?State;
-    var popLeaf : (Region.Region) -> ?Nat64;
   };
 
   /// Construct an empty stable trie base.
@@ -209,6 +210,7 @@ module {
     let node_size : Nat64 = aridity_ * pointer_size_;
     let root_size : Nat64 = root_aridity_ * pointer_size_;
     let offset_base : Nat64 = root_size - node_size;
+    let leaf_size : Nat64 = args.leaf_size.toNat64();
 
     {
       pointer_size = args.pointer_size;
@@ -226,7 +228,7 @@ module {
       root_bitlength = root_bitlength_.toNat16();
       node_size;
       node_size_ = nat64toNat(node_size);
-      leaf_size = args.leaf_size.toNat64();
+      leaf_size;
       root_size;
       offset_base;
       padding = 8 - pointer_size_;
@@ -240,10 +242,10 @@ module {
         case (_) Runtime.trap("invalid pointer_size");
       };
       empty_nodes_list = LinkedList.empty(offset_base, node_size, pointer_size_);
+      empty_leaves_list = LinkedList.empty(0, leaf_size, pointer_size_);
       var leaf_count = 0 : Nat64;
       var node_count = 0 : Nat64;
       var regions_ : ?State = null;
-      var popLeaf = func(_ : Region.Region) : ?Nat64 = null;
     };
   };
 
@@ -275,14 +277,6 @@ module {
     };
   };
 
-  /// Set the `popLeaf` callback. Map calls this with `empty_leaves.pop`;
-  /// Enumeration leaves it at the default (always-null), since it reclaims
-  /// leaf slots implicitly by decrementing `leaf_count`.
-  public func setLeafPopCallback(self : StableTrieBase, leaf : (Region.Region) -> ?Nat64) {
-    self.popLeaf := leaf;
-  };
-
-
   /// Create internal node.
   func newInternalNode(self : StableTrieBase, region : Region) : ?Nat64 {
     let node = switch (self.empty_nodes_list.pop(region.region)) {
@@ -300,7 +294,7 @@ module {
   };
 
   func newLeaf(self : StableTrieBase, region : Region, key : Blob) : ?Nat64 {
-    let leaf = switch (self.popLeaf(region.region)) {
+    let leaf = switch (self.empty_leaves_list.pop(region.region)) {
       case (?leaf) leaf;
       case (null) {
         if (self.leaf_count != self.max_address) {
@@ -381,6 +375,14 @@ module {
   /// pointers of `node` before pushing.
   public func pushEmptyNode(self : StableTrieBase, region : Region.Region, node : Nat64) {
     self.empty_nodes_list.push(region, node >> 1);
+  };
+
+  /// Push a freed leaf slot onto the empty-leaves list so the next
+  /// `newLeaf` reuses it. Map's `removeRec` calls this when a key is
+  /// removed; Enumeration never does, so for Enumeration the list stays
+  /// empty and `newLeaf` always allocates fresh.
+  public func pushEmptyLeaf(self : StableTrieBase, region : Region.Region, leaf : Nat64) {
+    self.empty_leaves_list.push(region, leaf);
   };
 
   /// Get offset of leaf number `index`.
@@ -679,24 +681,19 @@ module {
     regions(self) with
     node_count = self.node_count;
     leaf_count = self.leaf_count;
-    empty_nodes = ?self.empty_nodes_list.share();
+    empty_nodes = self.empty_nodes_list.share();
+    empty_leaves = self.empty_leaves_list.share();
   };
 
   /// Create from stable data. Must be the first call after `empty()`.
-  /// `data.empty_nodes` is optional to allow loading legacy data that
-  /// predates this field; missing or `null` is treated as an empty list.
   public func unshare(self : StableTrieBase, data : StableData) {
     switch (self.regions_) {
       case (null) {
         self.regions_ := ?data;
         self.node_count := data.node_count;
         self.leaf_count := data.leaf_count;
-        self.empty_nodes_list.unshare(
-          switch (data.empty_nodes) {
-            case (?en) en;
-            case (null) (0, self.loadMask); // legacy: empty list
-          }
-        );
+        self.empty_nodes_list.unshare(data.empty_nodes);
+        self.empty_leaves_list.unshare(data.empty_leaves);
       };
       case (_) Runtime.trap("Region is already initialized");
     };

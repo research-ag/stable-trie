@@ -433,58 +433,6 @@ do {
   assert trie.memoryStats().leaf_count == 0;
 };
 
-// ---------- 8d. legacy StableData (empty_nodes = null) loads cleanly ----------
-//
-// `Base.StableData.empty_nodes` is optional so that data persisted by older
-// versions (which had no such field) still upgrades. Simulate that by
-// building a StableData with empty_nodes = null and feeding it through
-// unshare; the trie should come up with an empty empty-nodes list and
-// otherwise behave normally.
-do {
-  let source = StableTrie.Enumeration({
-    pointer_size = 4;
-    aridity = 4;
-    root_aridity = ?16;
-    key_size = 2;
-    value_size = 1;
-  });
-  assert source.add("\00\01", "A") == 0;
-  assert source.add("\00\02", "B") == 1;
-  assert source.add("\03\04", "C") == 2;
-
-  // Take the share() output and strip empty_nodes back to null, simulating
-  // data persisted before this field existed.
-  let s = source.share();
-  let legacy : StableTrie.StableData = {
-    nodes = s.nodes;
-    leaves = s.leaves;
-    node_count = s.node_count;
-    leaf_count = s.leaf_count;
-    empty_nodes = null;
-  };
-
-  let restored = StableTrie.Enumeration({
-    pointer_size = 4;
-    aridity = 4;
-    root_aridity = ?16;
-    key_size = 2;
-    value_size = 1;
-  });
-  restored.unshare(legacy);
-
-  assert restored.size() == 3;
-  assert restored.lookup("\00\01") == ?("A" : Blob, 0);
-  assert restored.lookup("\00\02") == ?("B" : Blob, 1);
-  assert restored.lookup("\03\04") == ?("C" : Blob, 2);
-
-  // empty-nodes list starts empty, so removeLast still works.
-  assert restored.removeLast() == ?("\03\04" : Blob, "C" : Blob);
-  assert restored.removeLast() == ?("\00\02" : Blob, "B" : Blob);
-  assert restored.removeLast() == ?("\00\01" : Blob, "A" : Blob);
-  assert restored.size() == 0;
-  assert restored.memoryStats().node_count == 1;
-};
-
 // ---------- 9. undo of single leaf attached directly to root ----------
 // Use a 1-byte key with aridity 256 so the root holds the leaf directly.
 do {

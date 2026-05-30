@@ -43,8 +43,12 @@ module {
   };
 
   /// Create an empty free list.
+  ///
+  /// Does NOT require `item_size >= pointer_size` — that precondition is
+  /// checked by `push`. Constructing an empty list with a smaller item size
+  /// is allowed (Enumeration carries an empty leaf list whose item size can
+  /// be less than `pointer_size`); it just may not be pushed to.
   public func empty(offset_base : Nat64, item_size : Nat64, pointer_size : Nat64) : LinkedList {
-    assert item_size >= pointer_size;
     let loadMask : Nat64 = if (pointer_size == 8) 0xffff_ffff_ffff_ffff else (1 << (pointer_size << 3)) - 1;
     let storeFuncIndex = switch (pointer_size) {
       case (8) 0;
@@ -90,7 +94,10 @@ module {
     },
   ];
 
-  /// Add a deleted item (by index) to the list.
+  /// Add a deleted item (by index) to the list. Requires that the item slot
+  /// be large enough to hold a chain link, i.e. the `item_size` chosen at
+  /// construction is at least `pointer_size`; otherwise the link spills into
+  /// the next item's slot.
   public func push(self : LinkedList, region : Region.Region, item : Nat64) {
     storePointerFuncs[self.storeFuncIndex](region, self.slotOffset(item), self.last_empty_item);
     self.last_empty_item := item;

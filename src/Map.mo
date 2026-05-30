@@ -14,14 +14,12 @@ import Result "mo:core/Result";
 import Types "mo:core/Types";
 
 import Base "internal/base";
-import LinkedList "internal/linked-list";
 
 module {
-  /// Type of stable data of `StableTrie.Map`. `Base.StableData` already
-  /// includes the empty-nodes linked list; `Map` adds its empty-leaves list.
-  public type StableData = Base.StableData and {
-    empty_leaves : (Nat, Nat64);
-  };
+  /// Type of stable data of `StableTrie.Map`. `Base.StableData` now carries
+  /// both the empty-nodes and empty-leaves linked lists, so `Map` no longer
+  /// needs its own extension.
+  public type StableData = Base.StableData;
 
   /// Arguments type of `Map`.
   public type Args = Base.BaseArgs;
@@ -63,26 +61,12 @@ module {
   /// });
   /// ```
   public class Map(args : Args) {
-    let leaf_size = Nat.max(args.key_size + args.value_size, args.pointer_size);
-    let base : Base.StableTrieBase = Base.empty({ args with leaf_size });
+    let base : Base.StableTrieBase = Base.empty({
+      args with leaf_size = Nat.max(args.key_size + args.value_size, args.pointer_size);
+    });
 
-    /// Linked list of freed leaf slots, so the next `put_` can reuse them
-    /// before growing the leaves region. The matching list of freed internal
-    /// nodes lives inside `base` (since Enumeration uses the same machinery).
-    ///
-    /// Leaves are laid out from offset 0 with stride `leaf_size`, and the list
-    /// stores bare leaf indices, so `offset_base = 0` and `item_size = leaf_size`.
-    let empty_leaves : LinkedList.LinkedList = LinkedList.empty(
-      0,
-      leaf_size.toNat64(),
-      args.pointer_size.toNat64(),
-    );
-
-    // Wire the leaf-pop callback so `newLeaf` reuses freed slots before
-    // growing the leaves region. (`newInternalNode` consults base's internal
-    // empty-nodes list directly — no callback needed.) Wrapped in a lambda
-    // because `pop` is now a module-level `self`-function, not a bound method.
-    base.setLeafPopCallback(func(region) = empty_leaves.pop(region));
+    // Freed-leaf and freed-node lists both live inside `base`. `removeRec`
+    // pushes to base.empty_leaves_list via `base.pushEmptyLeaf` below.
 
     /// Add the `key` and `value` pair to the map. Existing values are silently overwritten.
     /// Returns `#LimitExceeded` if the pointer size limit is exceeded.
@@ -320,7 +304,7 @@ module {
         let leaf = node >> 1;
         if (base.getKey(leaves, leaf) == key) {
           let r = (if (ret) ?base.getValue(leaves, leaf) else null, 0 : Nat64);
-          empty_leaves.push(leaves, leaf);
+          base.pushEmptyLeaf(leaves, leaf);
           return r;
         } else {
           return (null, node);
@@ -452,7 +436,7 @@ module {
     public func keysRev() : Types.Iter<Blob> = base.keysRev();
 
     /// Number of key-value pairs in the map.
-    public func size() : Nat = base.leaf_count.toNat() - empty_leaves.count;
+    public func size() : Nat = base.leaf_count.toNat() - base.empty_leaves_list.count;
 
     /// Memory stats.
     public func memoryStats() : MemoryStats {
@@ -461,20 +445,15 @@ module {
         byte_size;
         total_leaf_count = leaf_count;
         total_node_count;
-        used_leaf_count = leaf_count - empty_leaves.count;
+        used_leaf_count = leaf_count - base.empty_leaves_list.count;
         used_node_count = node_count;
       };
     };
 
     /// Convert to stable data.
-    public func share() : StableData = {
-      base.share() with empty_leaves = empty_leaves.share();
-    };
+    public func share() : StableData = base.share();
 
     /// Create from stable data. Must be the first call after constructor.
-    public func unshare(data : StableData) {
-      empty_leaves.unshare(data.empty_leaves);
-      base.unshare(data);
-    };
+    public func unshare(data : StableData) = base.unshare(data);
   };
 };
