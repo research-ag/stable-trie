@@ -307,14 +307,9 @@ module {
       (offset_base +% (node >> 1) *% node_size) +% delta;
     };
 
-    /// Load pointer from a region.
-    public func loadPointer(region : Region.Region, offset : Nat64) : Nat64 {
-      region.loadNat64(offset) & loadMask;
-    };
-
     /// Load node's `node` child number `index`.
     public func getChild(region : Region.Region, node : Nat64, index : Nat64) : Nat64 {
-      // inline loadPointer(region, getNodeOffset(node, index))
+      // load pointer from getNodeOffset(node, index)
       Prim.regionLoadNat64(region, getNodeOffset(node, index)) & loadMask;
     };
 
@@ -390,9 +385,6 @@ module {
     public func pushEmptyNode(region : Region.Region, node : Nat64) {
       empty_nodes_list.push(region, node >> 1);
     };
-
-    /// Number of internal nodes currently held in the empty-nodes list.
-    public func emptyNodesCount() : Nat = empty_nodes_list.count;
 
     /// Get offset of leaf number `index`.
     public func getLeafOffset(index : Nat64) : Nat64 = index *% leaf_size;
