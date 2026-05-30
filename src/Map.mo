@@ -6,16 +6,16 @@
 ///
 /// Contributors: Timo Hanke (timohanke)
 ///
-/// `Map` is a plain type alias for `Base.StableTrieBase`: this module and
+/// `Map` is a plain type alias for `Trie.StableTrie`: this module and
 /// `Enumeration` are simply two different *interfaces* layered over the same
 /// underlying trie record. Functions live at module level with `self` as the
 /// first parameter, so callers use dot-notation (`m.put(k, v)`, `m.get(k)`,
 /// etc.) which Motoko resolves to the matching module-level function.
 ///
-/// Because `Map = Base.StableTrieBase`, any wrapper function here whose
+/// Because `Map = Trie.StableTrie`, any wrapper function here whose
 /// name also appears in `base` (e.g. `entries`, `memoryStats`) is ambiguous
 /// with the base version when both modules are in scope. We avoid the
-/// ambiguity by calling `Base.foo(self, ...)` explicitly in the wrapper
+/// ambiguity by calling `Trie.foo(self, ...)` explicitly in the wrapper
 /// bodies. User code importing only `Map` is fine — only this module's
 /// functions are in scope, so `m.foo()` resolves unambiguously.
 ///
@@ -29,11 +29,11 @@ import Option "mo:core/Option";
 import Result "mo:core/Result";
 import Types "mo:core/Types";
 
-import Base "internal/base";
+import Trie "internal/trie";
 
 module {
   /// Arguments type of `Map`.
-  public type Args = Base.BaseArgs;
+  public type Args = Trie.BaseArgs;
 
   /// Memory stats.
   public type MemoryStats = {
@@ -52,7 +52,7 @@ module {
   /// A map from constant-length Blob keys to constant-length Blob values,
   /// implemented as a trie in Regions. Same underlying type as
   /// `Enumeration` — `Map` and `Enumeration` are just two interfaces.
-  public type Map = Base.StableTrieBase;
+  public type Map = Trie.StableTrie;
 
   /// Construct an empty `Map`.
   ///
@@ -76,7 +76,7 @@ module {
   ///   value_size = 0;
   /// });
   /// ```
-  public func empty(args : Args) : Map = Base.empty({
+  public func empty(args : Args) : Map = Trie.empty({
     args with leaf_size = Nat.max(args.key_size + args.value_size, args.pointer_size);
   });
 
@@ -85,8 +85,8 @@ module {
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func putChecked(self : Map, key : Blob, value : Blob) : Result.Result<(), { #LimitExceeded }> {
-    let ?(_, leaf) = Base.put_(self, key) else return #err(#LimitExceeded);
-    Base.setValue(self, leaf, value);
+    let ?(_, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
+    Trie.setValue(self, leaf, value);
     #ok();
   };
 
@@ -94,21 +94,21 @@ module {
   /// Traps if the pointer size limit is exceeded.
   ///
   /// Runtime: O(key_size) acesses to stable memory.
-  public func put(self : Map, key : Blob, value : Blob) = Base.unwrap(putChecked(self, key, value));
+  public func put(self : Map, key : Blob, value : Blob) = Trie.unwrap(putChecked(self, key, value));
 
   /// Add the `key` and `value` pair to the map. If `key` already exists then the old value is overwritten and returned. If `key` is new then `null` is returned.
   /// Returns `#LimitExceeded` if the pointer size limit is exceeded.
   ///
   /// Runtime: O(key_size) acesses to stable memory.
   public func replaceChecked(self : Map, key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
-    let ?(added, leaf) = Base.put_(self, key) else return #err(#LimitExceeded);
+    let ?(added, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
     #ok(
       if (added) {
-        Base.setValue(self, leaf, value);
+        Trie.setValue(self, leaf, value);
         null;
       } else {
-        let old_value = Base.getValue(self, leaf);
-        Base.setValue(self, leaf, value);
+        let old_value = Trie.getValue(self, leaf);
+        Trie.setValue(self, leaf, value);
         ?old_value;
       }
     );
@@ -118,20 +118,20 @@ module {
   /// Traps if pointer size limit exceeded.
   ///
   /// Runtime: O(key_size) acesses to stable memory.
-  public func replace(self : Map, key : Blob, value : Blob) : ?Blob = Base.unwrap(replaceChecked(self, key, value));
+  public func replace(self : Map, key : Blob, value : Blob) : ?Blob = Trie.unwrap(replaceChecked(self, key, value));
 
   /// Add the `key` and `value` pair to the map. If `key` already exists then the value is not written and the old value is returned (`get` behaviour). If `key` is new then the value is written and `null` is returned (`put` behaviour).
   /// Returns `#LimitExceeded` if the pointer size limit is exceeded.
   ///
   /// Runtime: O(key_size) acesses to stable memory.
   public func getOrPutChecked(self : Map, key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
-    let ?(added, leaf) = Base.put_(self, key) else return #err(#LimitExceeded);
+    let ?(added, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
     #ok(
       if (added) {
-        Base.setValue(self, leaf, value);
+        Trie.setValue(self, leaf, value);
         null;
       } else {
-        ?Base.getValue(self, leaf);
+        ?Trie.getValue(self, leaf);
       }
     );
   };
@@ -140,12 +140,12 @@ module {
   /// Traps if pointer size limit exceeded.
   ///
   /// Runtime: O(key_size) acesses to stable memory.
-  public func getOrPut(self : Map, key : Blob, value : Blob) : ?Blob = Base.unwrap(getOrPutChecked(self, key, value));
+  public func getOrPut(self : Map, key : Blob, value : Blob) : ?Blob = Trie.unwrap(getOrPutChecked(self, key, value));
 
   /// Returns the `value` corresponding to `key` or null if `key` is not in the map.
   ///
   /// Runtime: O(key_size) acesses to stable memory.
-  public func get(self : Map, key : Blob) : ?Blob = Option.map<(Blob, Nat), Blob>(Base.lookup(self, key), func(a) = a.0);
+  public func get(self : Map, key : Blob) : ?Blob = Option.map<(Blob, Nat), Blob>(Trie.lookup(self, key), func(a) = a.0);
 
   /// Delete the `key` and its corresponding `value` from the map. Returns the deleted `value` or `null` if the key was not present in the map.
   ///
@@ -159,11 +159,11 @@ module {
 
   /// Remove key. `ret` is flag meaning whether to read deleted value or not.
   func removeInternal(self : Map, key : Blob, ret : Bool) : ?Blob {
-    let idx = Base.keyToRootIndex(self, key);
-    let child = Base.getChild(self, 0, idx);
+    let idx = Trie.keyToRootIndex(self, key);
+    let child = Trie.getChild(self, 0, idx);
     let (value, branch_root) = removeRec(self, key, child, self.root_bitlength, ret);
     if (branch_root != child) {
-      Base.setChild(self, 0, idx, branch_root);
+      Trie.setChild(self, 0, idx, branch_root);
     };
     value;
   };
@@ -173,31 +173,31 @@ module {
     if (node == 0) return (null, node);
     if (node & 1 == 1) {
       let leaf = node >> 1;
-      if (Base.getKey(self, leaf) == key) {
-        let r = (if (ret) ?Base.getValue(self, leaf) else null, 0 : Nat64);
-        Base.pushEmptyLeaf(self, leaf);
+      if (Trie.getKey(self, leaf) == key) {
+        let r = (if (ret) ?Trie.getValue(self, leaf) else null, 0 : Nat64);
+        Trie.pushEmptyLeaf(self, leaf);
         return r;
       } else {
         return (null, node);
       };
     };
 
-    let idx = Base.keyToIndex(self, key, pos);
-    let child = Base.getChild(self, node, idx);
+    let idx = Trie.keyToIndex(self, key, pos);
+    let child = Trie.getChild(self, node, idx);
     let (value, branch_root) = removeRec(self, key, child, pos +% self.bitlength, ret);
 
     // If the recursive call didn't change anything, neither did we.
     if (branch_root == child) return (value, node);
 
-    Base.setChild(self, node, idx, branch_root);
-    switch (Base.scanChildren(self, node)) {
+    Trie.setChild(self, node, idx, branch_root);
+    switch (Trie.scanChildren(self, node)) {
       case (#onlyLeaf(leaf, slot)) {
         // Collapse: clear the surviving slot (so the pushed node is
         // all-zero when popped later — otherwise the leftover pointer
         // aliases the leaf through a phantom trie path) and bubble the
         // leaf up to the parent.
-        Base.setChild(self, node, slot, 0);
-        Base.pushEmptyNode(self, node);
+        Trie.setChild(self, node, slot, 0);
+        Trie.pushEmptyNode(self, node);
         (value, leaf);
       };
       case _ (value, node); // chain-link state or ≥2 children — keep `node`
@@ -205,29 +205,29 @@ module {
   };
 
   /// Returns all the key-value pairs in the map ordered by `Blob.compare` of keys.
-  public func entries(self : Map) : Types.Iter<(Blob, Blob)> = Base.entries(self);
+  public func entries(self : Map) : Types.Iter<(Blob, Blob)> = Trie.entries(self);
 
   /// Returns all the key-value pairs in the map reverse ordered by `Blob.compare` of keys.
-  public func entriesRev(self : Map) : Types.Iter<(Blob, Blob)> = Base.entriesRev(self);
+  public func entriesRev(self : Map) : Types.Iter<(Blob, Blob)> = Trie.entriesRev(self);
 
   /// Returns all the values in the map ordered by `Blob.compare` of keys.
-  public func vals(self : Map) : Types.Iter<Blob> = Base.vals(self);
+  public func vals(self : Map) : Types.Iter<Blob> = Trie.vals(self);
 
   /// Returns all the values in the map reverse ordered by `Blob.compare` of keys.
-  public func valsRev(self : Map) : Types.Iter<Blob> = Base.valsRev(self);
+  public func valsRev(self : Map) : Types.Iter<Blob> = Trie.valsRev(self);
 
   /// Returns all the keys in the map ordered by `Blob.compare` of keys.
-  public func keys(self : Map) : Types.Iter<Blob> = Base.keys(self);
+  public func keys(self : Map) : Types.Iter<Blob> = Trie.keys(self);
 
   /// Returns all the keys in the map reverse ordered by `Blob.compare` of keys.
-  public func keysRev(self : Map) : Types.Iter<Blob> = Base.keysRev(self);
+  public func keysRev(self : Map) : Types.Iter<Blob> = Trie.keysRev(self);
 
   /// Number of key-value pairs in the map.
   public func size(self : Map) : Nat = self.leaf_count.toNat() - self.empty_leaves_list.count;
 
   /// Memory stats.
   public func memoryStats(self : Map) : MemoryStats {
-    let { byte_size; leaf_count; node_count; total_node_count } = Base.memoryStats(self);
+    let { byte_size; leaf_count; node_count; total_node_count } = Trie.memoryStats(self);
     {
       byte_size;
       total_leaf_count = leaf_count;

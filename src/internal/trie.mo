@@ -1,4 +1,4 @@
-/// Base for stable trie.
+/// Stable trie underlying `Map` and `Enumeration`.
 ///
 /// Copyright: 2023 - 2025 MR Research AG
 ///
@@ -6,9 +6,9 @@
 ///
 /// Contributors: Timo Hanke (timohanke)
 ///
-/// Implemented as a plain mutable record (`StableTrieBase`) plus module-level
+/// Implemented as a plain mutable record (`StableTrie`) plus module-level
 /// functions whose first argument is `self`. Callers can use dot-notation
-/// (`base.put_(...)`, `base.lookup(...)`, etc.) which Motoko resolves to the
+/// (`trie.put_(...)`, `trie.lookup(...)`, etc.) which Motoko resolves to the
 /// corresponding module-level function.
 
 import Iter "mo:core/Iter";
@@ -17,6 +17,7 @@ import Nat16 "mo:core/Nat16"; // bitcountTrailingZero
 import Nat64 "mo:core/Nat64"; // bitcountTrailingZero
 import Option "mo:core/Option";
 import Region "mo:core/Region";
+import { type Region } "mo:core/Region";
 import Result "mo:core/Result";
 import Runtime "mo:core/Runtime";
 import Types "mo:core/Types";
@@ -59,7 +60,7 @@ module {
     value_size : Nat;
   };
 
-  /// Arguments of constructor of `StableTrieBase`.
+  /// Arguments of constructor of `StableTrie`.
   public type Args = BaseArgs and {
     leaf_size : Nat;
   };
@@ -94,24 +95,24 @@ module {
   /// (see `empty`).
   let storePointerFuncs = [
     Region.storeNat64,
-    func storePointer(region : Region.Region, offset : Nat64, child : Nat64) {
+    func storePointer(region : Region, offset : Nat64, child : Nat64) {
       region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
       region.storeNat16(offset +% 4, nat32to16(nat64to32(child >> 32)));
     },
-    func storePointer(region : Region.Region, offset : Nat64, child : Nat64) {
+    func storePointer(region : Region, offset : Nat64, child : Nat64) {
       region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
       region.storeNat8(offset +% 4, natWrap8(nat64toNat(child >> 32)));
     },
-    func storePointer(region : Region.Region, offset : Nat64, child : Nat64) {
+    func storePointer(region : Region, offset : Nat64, child : Nat64) {
       region.storeNat32(offset, nat64to32(child));
     },
-    func storePointer(region : Region.Region, offset : Nat64, child : Nat64) {
+    func storePointer(region : Region, offset : Nat64, child : Nat64) {
       region.storeNat16(offset, nat32to16(nat64to32(child)));
     },
   ];
 
-  /// Base record for stable trie map and enumeration.
-  /// SHOULD NOT BE USED FROM THE USER'S CODE.
+  /// Stable trie record underlying `Map` and `Enumeration`.
+  /// SHOULD NOT BE USED DIRECTLY FROM USER CODE.
   ///
   /// Holds:
   /// - the three `Nat`-typed user inputs actually read at runtime
@@ -121,7 +122,7 @@ module {
   /// - `empty_nodes_list` and `empty_leaves_list`, free lists of freed
   ///   internal nodes and leaf slots;
   /// - the mutable state vars: counts and the two regions.
-  public type StableTrieBase = {
+  public type StableTrie = {
     pointer_size : Nat;
     key_size : Nat;
     value_size : Nat;
@@ -147,14 +148,14 @@ module {
     empty_leaves_list : LinkedList.LinkedList;
     var leaf_count : Nat64;
     var node_count : Nat64;
-    var nodes_region : Region.Region;
+    var nodes_region : Region;
     var nodes_freeSpace : Nat64;
-    var leaves_region : Region.Region;
+    var leaves_region : Region;
     var leaves_freeSpace : Nat64;
   };
 
-  /// Construct an empty stable trie base.
-  public func empty(args : Args) : StableTrieBase {
+  /// Construct an empty stable trie.
+  public func empty(args : Args) : StableTrie {
     assert switch (args.pointer_size) {
       case (2 or 4 or 5 or 6 or 8) true;
       case (_) false;
@@ -235,7 +236,7 @@ module {
   };
 
   /// Create internal node.
-  func newInternalNode(self : StableTrieBase) : ?Nat64 {
+  func newInternalNode(self : StableTrie) : ?Nat64 {
     let node = switch (self.empty_nodes_list.pop(self.nodes_region)) {
       case (?index) index << 1; // re-encode reused node index → pointer
       case (null) {
@@ -255,7 +256,7 @@ module {
     ?node;
   };
 
-  func newLeaf(self : StableTrieBase, key : Blob) : ?Nat64 {
+  func newLeaf(self : StableTrie, key : Blob) : ?Nat64 {
     let leaf = switch (self.empty_leaves_list.pop(self.leaves_region)) {
       case (?leaf) leaf;
       case (null) {
@@ -278,25 +279,25 @@ module {
   };
 
   // Get base address of node (the offset of its first child pointer).
-  func getNodeBase(self : StableTrieBase, node : Nat64) : Nat64 {
+  func getNodeBase(self : StableTrie, node : Nat64) : Nat64 {
     if (node == 0) return 0; // root node
     (self.offset_base +% (node >> 1) *% self.node_size);
   };
 
   /// Get address of pointer of node's `node` child number `index`.
-  func getNodeOffset(self : StableTrieBase, node : Nat64, index : Nat64) : Nat64 {
+  func getNodeOffset(self : StableTrie, node : Nat64, index : Nat64) : Nat64 {
     let delta = index *% self.pointer_size_;
     if (node == 0) return delta; // root node
     (self.offset_base +% (node >> 1) *% self.node_size) +% delta;
   };
 
   /// Load node's `node` child number `index`.
-  public func getChild(self : StableTrieBase, node : Nat64, index : Nat64) : Nat64 {
+  public func getChild(self : StableTrie, node : Nat64, index : Nat64) : Nat64 {
     Prim.regionLoadNat64(self.nodes_region, getNodeOffset(self, node, index)) & self.loadMask;
   };
 
   /// Set node's `node` child number `index`.
-  public func setChild(self : StableTrieBase, node : Nat64, index : Nat64, child : Nat64) {
+  public func setChild(self : StableTrie, node : Nat64, index : Nat64, child : Nat64) {
     let offset = getNodeOffset(self, node, index);
     storePointerFuncs[self.storeFuncIndex](self.nodes_region, offset, child);
   };
@@ -309,7 +310,7 @@ module {
   /// `assert`s that the node has at least one non-zero child. The
   /// "zero children" case is unreachable under the deletion invariants
   /// maintained by Map and Enumeration.
-  public func scanChildren(self : StableTrieBase, node : Nat64) : ChildScan {
+  public func scanChildren(self : StableTrie, node : Nat64) : ChildScan {
     let blob = self.nodes_region.loadBlob(getNodeBase(self, node), self.node_size_);
     let ps = self.pointer_size;
     var lone : Nat64 = 0;
@@ -340,7 +341,7 @@ module {
   /// `put_` reuses its slot. `node` is the encoded pointer; the list stores
   /// the bare index. The caller is responsible for clearing all child
   /// pointers of `node` before pushing.
-  public func pushEmptyNode(self : StableTrieBase, node : Nat64) {
+  public func pushEmptyNode(self : StableTrie, node : Nat64) {
     self.empty_nodes_list.push(self.nodes_region, node >> 1);
   };
 
@@ -348,33 +349,33 @@ module {
   /// `newLeaf` reuses it. Map's `removeRec` calls this when a key is
   /// removed; Enumeration never does, so for Enumeration the list stays
   /// empty and `newLeaf` always allocates fresh.
-  public func pushEmptyLeaf(self : StableTrieBase, leaf : Nat64) {
+  public func pushEmptyLeaf(self : StableTrie, leaf : Nat64) {
     self.empty_leaves_list.push(self.leaves_region, leaf);
   };
 
   /// Get offset of leaf number `index`.
-  func getLeafOffset(self : StableTrieBase, index : Nat64) : Nat64 = index *% self.leaf_size;
+  func getLeafOffset(self : StableTrie, index : Nat64) : Nat64 = index *% self.leaf_size;
 
   /// Load key of leaf number `index`.
-  public func getKey(self : StableTrieBase, index : Nat64) : Blob {
+  public func getKey(self : StableTrie, index : Nat64) : Blob {
     self.leaves_region.loadBlob(getLeafOffset(self, index), self.key_size);
   };
 
   /// Load value of leaf number `index`.
-  public func getValue(self : StableTrieBase, index : Nat64) : Blob {
+  public func getValue(self : StableTrie, index : Nat64) : Blob {
     if (self.empty_values) return "";
     self.leaves_region.loadBlob(getLeafOffset(self, index) +% self.key_size_, self.value_size);
   };
 
   /// Set value of leaf number `index`.
-  public func setValue(self : StableTrieBase, index : Nat64, value : Blob) {
+  public func setValue(self : StableTrie, index : Nat64, value : Blob) {
     assert value.size() == self.value_size;
     if (self.empty_values) return;
     self.leaves_region.storeBlob(getLeafOffset(self, index) +% self.key_size_, value);
   };
 
   /// Get index in root node.
-  public func keyToRootIndex(self : StableTrieBase, key : Blob) : Nat64 {
+  public func keyToRootIndex(self : StableTrie, key : Blob) : Nat64 {
     var result : Nat64 = 0;
     var i = 0;
     let iters = nat64toNat(self.root_bitlength_ >> 3);
@@ -390,11 +391,11 @@ module {
   };
 
   /// Get index in internal, not root node.
-  public func keyToIndex(self : StableTrieBase, key : Blob, pos : Nat16) : Nat64 {
+  public func keyToIndex(self : StableTrie, key : Blob, pos : Nat16) : Nat64 {
     return nat32to64(nat16to32(nat8to16((key[nat16toNat(pos >> 3)] << nat16to8(pos & 7)) >> self.bitshift)));
   };
 
-  func find(self : StableTrieBase, key : Blob) : (Nat64, Nat64, Nat64, Nat16) {
+  func find(self : StableTrie, key : Blob) : (Nat64, Nat64, Nat64, Nat16) {
     var idx = keyToRootIndex(self, key);
     var pos = self.root_bitlength;
     var node : Nat64 = 0;
@@ -411,7 +412,7 @@ module {
   };
 
   /// Put only `key` into trie. Returns pair (whether new leaf created, index of leaf) or null in case of pointer size overflow.
-  public func put_(self : StableTrieBase, key : Blob) : ?(Bool, Nat64) {
+  public func put_(self : StableTrie, key : Blob) : ?(Bool, Nat64) {
     assert key.size() == self.key_size;
 
     let (node_, last_, old_leaf, pos_) = find(self, key);
@@ -456,7 +457,7 @@ module {
   };
 
   /// Recursive walk for `removeLast`.
-  func removeLastRec(self : StableTrieBase, key : Blob, node : Nat64, pos : Nat16) : Nat64 {
+  func removeLastRec(self : StableTrie, key : Blob, node : Nat64, pos : Nat16) : Nat64 {
     let idx = keyToIndex(self, key, pos);
     let child = getChild(self, node, idx);
     let new_child = if (child & 1 == 1) {
@@ -480,7 +481,7 @@ module {
   };
 
   /// Remove the most-recently-added leaf (at index `leaf_count - 1`).
-  public func removeLast(self : StableTrieBase) : ?(Blob, Blob) {
+  public func removeLast(self : StableTrie) : ?(Blob, Blob) {
     if (self.leaf_count == 0) return null;
 
     let last_index = self.leaf_count -% 1;
@@ -505,7 +506,7 @@ module {
   };
 
   /// Lookup `key` in trie. Returns `value` and index of that leaf or null if not found.
-  public func lookup(self : StableTrieBase, key : Blob) : ?(Blob, Nat) {
+  public func lookup(self : StableTrie, key : Blob) : ?(Blob, Nat) {
     assert key.size() == self.key_size;
 
     let (_, _, old_leaf, _) = find(self, key);
@@ -521,7 +522,7 @@ module {
 
   /// Closure-based iterator factory returning an `Iter<Nat64>` directly.
   /// The returned iterator owns the traversal stack via closure capture.
-  func makeIter(self : StableTrieBase, dir : Dir) : Types.Iter<Nat64> {
+  func makeIter(self : StableTrie, dir : Dir) : Types.Iter<Nat64> {
     let forward = dir == #forward;
     let stack = VarArray.repeat<(Nat64, Nat64)>((0, 0), self.key_size * 8 / nat16toNat(self.bitlength));
     var depth = 1;
@@ -564,40 +565,40 @@ module {
     };
   };
 
-  func entries_(self : StableTrieBase, dir : Dir) : Types.Iter<(Blob, Blob)> = makeIter(self, dir).map<Nat64, (Blob, Blob)>(
+  func entries_(self : StableTrie, dir : Dir) : Types.Iter<(Blob, Blob)> = makeIter(self, dir).map<Nat64, (Blob, Blob)>(
     func(leaf) = (getKey(self, leaf), getValue(self, leaf))
   );
 
-  func vals_(self : StableTrieBase, dir : Dir) : Types.Iter<Blob> = makeIter(self, dir).map<Nat64, Blob>(
+  func vals_(self : StableTrie, dir : Dir) : Types.Iter<Blob> = makeIter(self, dir).map<Nat64, Blob>(
     func(leaf) = getValue(self, leaf)
   );
 
-  func keys_(self : StableTrieBase, dir : Dir) : Types.Iter<Blob> = makeIter(self, dir).map<Nat64, Blob>(
+  func keys_(self : StableTrie, dir : Dir) : Types.Iter<Blob> = makeIter(self, dir).map<Nat64, Blob>(
     func(leaf) = getKey(self, leaf)
   );
 
   /// Iterate entries in forward order.
-  public func entries(self : StableTrieBase) : Types.Iter<(Blob, Blob)> = entries_(self, #forward);
+  public func entries(self : StableTrie) : Types.Iter<(Blob, Blob)> = entries_(self, #forward);
 
   /// Iterate entries in reverse order.
-  public func entriesRev(self : StableTrieBase) : Types.Iter<(Blob, Blob)> = entries_(self, #reverse);
+  public func entriesRev(self : StableTrie) : Types.Iter<(Blob, Blob)> = entries_(self, #reverse);
 
   /// Iterate values in forward order.
-  public func vals(self : StableTrieBase) : Types.Iter<Blob> = vals_(self, #forward);
+  public func vals(self : StableTrie) : Types.Iter<Blob> = vals_(self, #forward);
 
   /// Iterate values in reverse order.
-  public func valsRev(self : StableTrieBase) : Types.Iter<Blob> = vals_(self, #reverse);
+  public func valsRev(self : StableTrie) : Types.Iter<Blob> = vals_(self, #reverse);
 
   /// Iterate keys in forward order.
-  public func keys(self : StableTrieBase) : Types.Iter<Blob> = keys_(self, #forward);
+  public func keys(self : StableTrie) : Types.Iter<Blob> = keys_(self, #forward);
 
   /// Iterate keys in reverse order.
-  public func keysRev(self : StableTrieBase) : Types.Iter<Blob> = keys_(self, #reverse);
+  public func keysRev(self : StableTrie) : Types.Iter<Blob> = keys_(self, #reverse);
 
   /// Return current memory stats. `node_count` reports nodes currently in
   /// use (`total_node_count - empty_nodes_list.count`); `byte_size` is
   /// computed from the high water and so never shrinks.
-  public func memoryStats(self : StableTrieBase) : MemoryStats {
+  public func memoryStats(self : StableTrie) : MemoryStats {
     let total_n = nat64toNat(self.node_count);
     {
       byte_size = nat64toNat(self.root_size + (self.node_count - 1) * self.node_size + self.leaf_count * self.leaf_size);
