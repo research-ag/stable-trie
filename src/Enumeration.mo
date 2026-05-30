@@ -6,12 +6,20 @@
 ///
 /// Contributors: Timo Hanke (timohanke)
 ///
-/// Implemented as a plain record (`Enumeration`) plus module-level functions
-/// whose first argument is `self`. Callers can use dot-notation
-/// (`e.add(k, v)`, `e.get(i)`, etc.) which Motoko resolves to the
-/// corresponding module-level function. The `base` field is wrapped (rather
-/// than aliasing `Enumeration` to `Base.StableTrieBase` directly) so `Map`
-/// and `Enumeration` stay nominally distinct.
+/// `Enumeration` is a plain type alias for `Base.StableTrieBase`: this
+/// module and `Map` are simply two different *interfaces* layered over the
+/// same underlying trie record. Functions live at module level with `self`
+/// as the first parameter, so callers use dot-notation (`e.add(k, v)`,
+/// `e.get(i)`, etc.) which Motoko resolves to the matching module-level
+/// function.
+///
+/// Because `Enumeration = Base.StableTrieBase`, any wrapper function here
+/// whose name also appears in `base` (e.g. `lookup`, `removeLast`,
+/// `entries`, `memoryStats`, `share`, `unshare`) is ambiguous with the base
+/// version when both modules are in scope. We avoid the ambiguity by
+/// calling `Base.foo(self, ...)` explicitly in the wrapper bodies. User
+/// code importing only `Enumeration` is fine — only this module's functions
+/// are in scope, so `e.foo()` resolves unambiguously.
 
 import Array "mo:core/Array";
 import Nat_ "mo:core/Nat";
@@ -40,11 +48,11 @@ module {
   public type Args = Base.BaseArgs;
 
   /// Bidirectional enumeration of any keys in the order they are added.
-  /// For a map from keys to index `Nat` it is implemented as trie in stable memory.
-  /// For a map from index `Nat` to keys the implementation is a consecutive interval of stable memory.
-  public type Enumeration = {
-    base : Base.StableTrieBase;
-  };
+  /// For a map from keys to index `Nat` it is implemented as trie in stable
+  /// memory; for a map from index `Nat` to keys the implementation is a
+  /// consecutive interval of stable memory. Same underlying type as `Map` —
+  /// `Map` and `Enumeration` are just two interfaces.
+  public type Enumeration = Base.StableTrieBase;
 
   /// Construct an empty `Enumeration`.
   ///
@@ -65,11 +73,9 @@ module {
   ///   value_size = 0;
   /// });
   /// ```
-  public func empty(args : Args) : Enumeration = {
-    base = Base.empty({
-      args with leaf_size = args.key_size + args.value_size;
-    });
-  };
+  public func empty(args : Args) : Enumeration = Base.empty({
+    args with leaf_size = args.key_size + args.value_size;
+  });
 
   /// Add `key` and `value` to the enumeration.
   /// Returns `#LimitExceeded` if pointer size limit exceeded.
@@ -78,9 +84,8 @@ module {
   ///
   /// Runtime: O(key_size) acesses to stable memory.
   public func addChecked(self : Enumeration, key : Blob, value : Blob) : Result.Result<Nat, { #LimitExceeded }> {
-    let base = self.base;
-    let ?(_, leaf) = base.put_(key) else return #err(#LimitExceeded);
-    base.setValue(leaf, value);
+    let ?(_, leaf) = Base.put_(self, key) else return #err(#LimitExceeded);
+    Base.setValue(self, leaf, value);
     #ok(leaf.toNat());
   };
 
@@ -99,14 +104,13 @@ module {
   ///
   /// Runtime: O(key_size) acesses to stable memory.
   public func replaceChecked(self : Enumeration, key : Blob, value : Blob) : Result.Result<(?Blob, Nat), { #LimitExceeded }> {
-    let base = self.base;
-    let ?(added, leaf) = base.put_(key) else return #err(#LimitExceeded);
+    let ?(added, leaf) = Base.put_(self, key) else return #err(#LimitExceeded);
     let ret_value = if (added) {
-      base.setValue(leaf, value);
+      Base.setValue(self, leaf, value);
       null;
     } else {
-      let old_value = base.getValue(leaf);
-      base.setValue(leaf, value);
+      let old_value = Base.getValue(self, leaf);
+      Base.setValue(self, leaf, value);
       ?old_value;
     };
     #ok(ret_value, leaf.toNat());
@@ -128,13 +132,12 @@ module {
   ///
   /// Runtime: O(key_size) acesses to stable memory.
   public func lookupOrPutChecked(self : Enumeration, key : Blob, value : Blob) : Result.Result<(?Blob, Nat), { #LimitExceeded }> {
-    let base = self.base;
-    let ?(added, leaf) = base.put_(key) else return #err(#LimitExceeded);
+    let ?(added, leaf) = Base.put_(self, key) else return #err(#LimitExceeded);
     let ret_value = if (added) {
-      base.setValue(leaf, value);
+      Base.setValue(self, leaf, value);
       null;
     } else {
-      ?base.getValue(leaf);
+      ?Base.getValue(self, leaf);
     };
     #ok(ret_value, leaf.toNat());
   };
@@ -155,69 +158,67 @@ module {
   /// reused by the next `add`.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
-  public func removeLast(self : Enumeration) : ?(Blob, Blob) = self.base.removeLast();
+  public func removeLast(self : Enumeration) : ?(Blob, Blob) = Base.removeLast(self);
 
   /// Returns `?(value, index)` where `index` is the index of `key` in order it was added to enumeration and `value` is corresponding value to the `key`,
   /// or `null` it `key` wasn't added.
   ///
   /// Runtime: O(key_size) acesses to stable memory.
-  public func lookup(self : Enumeration, key : Blob) : ?(Blob, Nat) = self.base.lookup(key);
+  public func lookup(self : Enumeration, key : Blob) : ?(Blob, Nat) = Base.lookup(self, key);
 
   /// Returns `key` and `value` with index `index` or null if index is out of bounds.
   ///
   /// Runtime: O(1) accesses to stable memory.
   public func get(self : Enumeration, index : Nat) : ?(Blob, Blob) {
-    let base = self.base;
     let index_ = index.toNat64();
-    if (index_ >= base.leaf_count) return null;
-    ?(base.getKey(index_), base.getValue(index_));
+    if (index_ >= self.leaf_count) return null;
+    ?(Base.getKey(self, index_), Base.getValue(self, index_));
   };
 
   /// Returns slice `key` and `value` with indices from `left` to `right` or traps if `left` or `right` are out of bounds.
   ///
   /// Runtime: O(right - left) accesses to stable memory.
   public func slice(self : Enumeration, left : Nat, right : Nat) : [(Blob, Blob)] {
-    let base = self.base;
     let l = left.toNat64();
     let r = right.toNat64();
-    assert l <= r and r <= base.leaf_count;
+    assert l <= r and r <= self.leaf_count;
     Array.tabulate<(Blob, Blob)>(
       right - left,
       func(i) {
         let index = Nat64.fromIntWrap(i);
-        (base.getKey(index), base.getValue(index));
+        (Base.getKey(self, index), Base.getValue(self, index));
       },
     );
   };
 
   /// Returns all the keys and values in enumeration ordered by `Blob.compare` of keys.
-  public func entries(self : Enumeration) : Types.Iter<(Blob, Blob)> = self.base.entries();
+  public func entries(self : Enumeration) : Types.Iter<(Blob, Blob)> = Base.entries(self);
 
   /// Returns all the keys and values in the enumeration reverse ordered by `Blob.compare` of keys.
-  public func entriesRev(self : Enumeration) : Types.Iter<(Blob, Blob)> = self.base.entriesRev();
+  public func entriesRev(self : Enumeration) : Types.Iter<(Blob, Blob)> = Base.entriesRev(self);
 
   /// Returns all the values in the enumeration ordered by `Blob.compare` of keys.
-  public func vals(self : Enumeration) : Types.Iter<Blob> = self.base.vals();
+  public func vals(self : Enumeration) : Types.Iter<Blob> = Base.vals(self);
 
   /// Returns all the values in the enumeration reverse ordered by `Blob.compare` of keys.
-  public func valsRev(self : Enumeration) : Types.Iter<Blob> = self.base.valsRev();
+  public func valsRev(self : Enumeration) : Types.Iter<Blob> = Base.valsRev(self);
 
   /// Returns all the keys in the enumeration ordered by `Blob.compare` of keys.
-  public func keys(self : Enumeration) : Types.Iter<Blob> = self.base.keys();
+  public func keys(self : Enumeration) : Types.Iter<Blob> = Base.keys(self);
 
   /// Returns all the keys in the enumeration reverse ordered by `Blob.compare` of keys.
-  public func keysRev(self : Enumeration) : Types.Iter<Blob> = self.base.keysRev();
+  public func keysRev(self : Enumeration) : Types.Iter<Blob> = Base.keysRev(self);
 
   /// Number of key-value pairs in enumeration.
-  public func size(self : Enumeration) : Nat = self.base.leaf_count.toNat();
+  public func size(self : Enumeration) : Nat = self.leaf_count.toNat();
 
   /// Memory stats. `node_count` is the number of internal nodes currently
   /// in use; `total_node_count` is the high water (region size).
-  public func memoryStats(self : Enumeration) : MemoryStats = self.base.memoryStats();
+  public func memoryStats(self : Enumeration) : MemoryStats = Base.memoryStats(self);
 
   /// Convert to stable data.
-  public func share(self : Enumeration) : StableData = self.base.share();
+  public func share(self : Enumeration) : StableData = Base.share(self);
 
   /// Restore from stable data. Must be the first call after `empty()`.
-  public func unshare(self : Enumeration, data : StableData) = self.base.unshare(data);
+  public func unshare(self : Enumeration, data : StableData) = Base.unshare(self, data);
 };

@@ -6,13 +6,18 @@
 ///
 /// Contributors: Timo Hanke (timohanke)
 ///
-/// Implemented as a plain record (`Map`) plus module-level functions whose
-/// first argument is `self`. Callers can use dot-notation (`m.put(k, v)`,
-/// `m.get(k)`, etc.) which Motoko resolves to the corresponding module-level
-/// function. The `base` field is wrapped (rather than aliasing `Map` to
-/// `Base.StableTrieBase` directly) so `Map` and `Enumeration` stay nominally
-/// distinct — otherwise dot-notation calls would collide when both modules
-/// are imported in the same scope.
+/// `Map` is a plain type alias for `Base.StableTrieBase`: this module and
+/// `Enumeration` are simply two different *interfaces* layered over the same
+/// underlying trie record. Functions live at module level with `self` as the
+/// first parameter, so callers use dot-notation (`m.put(k, v)`, `m.get(k)`,
+/// etc.) which Motoko resolves to the matching module-level function.
+///
+/// Because `Map = Base.StableTrieBase`, any wrapper function here whose name
+/// also appears in `base` (e.g. `entries`, `memoryStats`, `share`, `unshare`)
+/// is ambiguous with the base version when both modules are in scope. We
+/// avoid the ambiguity by calling `Base.foo(self, ...)` explicitly in the
+/// wrapper bodies. User code importing only `Map` is fine — only this
+/// module's functions are in scope, so `m.foo()` resolves unambiguously.
 
 import Nat "mo:core/Nat";
 import Nat64_ "mo:core/Nat64"; // enables `Nat64.toNat()` dot notation below
@@ -46,10 +51,9 @@ module {
   };
 
   /// A map from constant-length Blob keys to constant-length Blob values,
-  /// implemented as a trie in Regions.
-  public type Map = {
-    base : Base.StableTrieBase;
-  };
+  /// implemented as a trie in Regions. Same underlying type as
+  /// `Enumeration` — `Map` and `Enumeration` are just two interfaces.
+  public type Map = Base.StableTrieBase;
 
   /// Construct an empty `Map`.
   ///
@@ -73,20 +77,17 @@ module {
   ///   value_size = 0;
   /// });
   /// ```
-  public func empty(args : Args) : Map = {
-    base = Base.empty({
-      args with leaf_size = Nat.max(args.key_size + args.value_size, args.pointer_size);
-    });
-  };
+  public func empty(args : Args) : Map = Base.empty({
+    args with leaf_size = Nat.max(args.key_size + args.value_size, args.pointer_size);
+  });
 
   /// Add the `key` and `value` pair to the map. Existing values are silently overwritten.
   /// Returns `#LimitExceeded` if the pointer size limit is exceeded.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func putChecked(self : Map, key : Blob, value : Blob) : Result.Result<(), { #LimitExceeded }> {
-    let base = self.base;
-    let ?(_, leaf) = base.put_(key) else return #err(#LimitExceeded);
-    base.setValue(leaf, value);
+    let ?(_, leaf) = Base.put_(self, key) else return #err(#LimitExceeded);
+    Base.setValue(self, leaf, value);
     #ok();
   };
 
@@ -101,15 +102,14 @@ module {
   ///
   /// Runtime: O(key_size) acesses to stable memory.
   public func replaceChecked(self : Map, key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
-    let base = self.base;
-    let ?(added, leaf) = base.put_(key) else return #err(#LimitExceeded);
+    let ?(added, leaf) = Base.put_(self, key) else return #err(#LimitExceeded);
     #ok(
       if (added) {
-        base.setValue(leaf, value);
+        Base.setValue(self, leaf, value);
         null;
       } else {
-        let old_value = base.getValue(leaf);
-        base.setValue(leaf, value);
+        let old_value = Base.getValue(self, leaf);
+        Base.setValue(self, leaf, value);
         ?old_value;
       }
     );
@@ -126,14 +126,13 @@ module {
   ///
   /// Runtime: O(key_size) acesses to stable memory.
   public func getOrPutChecked(self : Map, key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
-    let base = self.base;
-    let ?(added, leaf) = base.put_(key) else return #err(#LimitExceeded);
+    let ?(added, leaf) = Base.put_(self, key) else return #err(#LimitExceeded);
     #ok(
       if (added) {
-        base.setValue(leaf, value);
+        Base.setValue(self, leaf, value);
         null;
       } else {
-        ?base.getValue(leaf);
+        ?Base.getValue(self, leaf);
       }
     );
   };
@@ -147,7 +146,7 @@ module {
   /// Returns the `value` corresponding to `key` or null if `key` is not in the map.
   ///
   /// Runtime: O(key_size) acesses to stable memory.
-  public func get(self : Map, key : Blob) : ?Blob = Option.map<(Blob, Nat), Blob>(self.base.lookup(key), func(a) = a.0);
+  public func get(self : Map, key : Blob) : ?Blob = Option.map<(Blob, Nat), Blob>(Base.lookup(self, key), func(a) = a.0);
 
   /// Delete the `key` and its corresponding `value` from the map. Returns the deleted `value` or `null` if the key was not present in the map.
   ///
@@ -161,47 +160,45 @@ module {
 
   /// Remove key. `ret` is flag meaning whether to read deleted value or not.
   func removeInternal(self : Map, key : Blob, ret : Bool) : ?Blob {
-    let base = self.base;
-    let idx = base.keyToRootIndex(key);
-    let child = base.getChild(0, idx);
-    let (value, branch_root) = removeRec(self, key, child, base.root_bitlength, ret);
+    let idx = Base.keyToRootIndex(self, key);
+    let child = Base.getChild(self, 0, idx);
+    let (value, branch_root) = removeRec(self, key, child, self.root_bitlength, ret);
     if (branch_root != child) {
-      base.setChild(0, idx, branch_root);
+      Base.setChild(self, 0, idx, branch_root);
     };
     value;
   };
 
   /// Remove recursively starting from child of root node.
   func removeRec(self : Map, key : Blob, node : Nat64, pos : Nat16, ret : Bool) : (?Blob, Nat64) {
-    let base = self.base;
     if (node == 0) return (null, node);
     if (node & 1 == 1) {
       let leaf = node >> 1;
-      if (base.getKey(leaf) == key) {
-        let r = (if (ret) ?base.getValue(leaf) else null, 0 : Nat64);
-        base.pushEmptyLeaf(leaf);
+      if (Base.getKey(self, leaf) == key) {
+        let r = (if (ret) ?Base.getValue(self, leaf) else null, 0 : Nat64);
+        Base.pushEmptyLeaf(self, leaf);
         return r;
       } else {
         return (null, node);
       };
     };
 
-    let idx = base.keyToIndex(key, pos);
-    let child = base.getChild(node, idx);
-    let (value, branch_root) = removeRec(self, key, child, pos +% base.bitlength, ret);
+    let idx = Base.keyToIndex(self, key, pos);
+    let child = Base.getChild(self, node, idx);
+    let (value, branch_root) = removeRec(self, key, child, pos +% self.bitlength, ret);
 
     // If the recursive call didn't change anything, neither did we.
     if (branch_root == child) return (value, node);
 
-    base.setChild(node, idx, branch_root);
-    switch (base.scanChildren(node)) {
+    Base.setChild(self, node, idx, branch_root);
+    switch (Base.scanChildren(self, node)) {
       case (#onlyLeaf(leaf, slot)) {
         // Collapse: clear the surviving slot (so the pushed node is
         // all-zero when popped later — otherwise the leftover pointer
         // aliases the leaf through a phantom trie path) and bubble the
         // leaf up to the parent.
-        base.setChild(node, slot, 0);
-        base.pushEmptyNode(node);
+        Base.setChild(self, node, slot, 0);
+        Base.pushEmptyNode(self, node);
         (value, leaf);
       };
       case _ (value, node); // chain-link state or ≥2 children — keep `node`
@@ -209,42 +206,41 @@ module {
   };
 
   /// Returns all the key-value pairs in the map ordered by `Blob.compare` of keys.
-  public func entries(self : Map) : Types.Iter<(Blob, Blob)> = self.base.entries();
+  public func entries(self : Map) : Types.Iter<(Blob, Blob)> = Base.entries(self);
 
   /// Returns all the key-value pairs in the map reverse ordered by `Blob.compare` of keys.
-  public func entriesRev(self : Map) : Types.Iter<(Blob, Blob)> = self.base.entriesRev();
+  public func entriesRev(self : Map) : Types.Iter<(Blob, Blob)> = Base.entriesRev(self);
 
   /// Returns all the values in the map ordered by `Blob.compare` of keys.
-  public func vals(self : Map) : Types.Iter<Blob> = self.base.vals();
+  public func vals(self : Map) : Types.Iter<Blob> = Base.vals(self);
 
   /// Returns all the values in the map reverse ordered by `Blob.compare` of keys.
-  public func valsRev(self : Map) : Types.Iter<Blob> = self.base.valsRev();
+  public func valsRev(self : Map) : Types.Iter<Blob> = Base.valsRev(self);
 
   /// Returns all the keys in the map ordered by `Blob.compare` of keys.
-  public func keys(self : Map) : Types.Iter<Blob> = self.base.keys();
+  public func keys(self : Map) : Types.Iter<Blob> = Base.keys(self);
 
   /// Returns all the keys in the map reverse ordered by `Blob.compare` of keys.
-  public func keysRev(self : Map) : Types.Iter<Blob> = self.base.keysRev();
+  public func keysRev(self : Map) : Types.Iter<Blob> = Base.keysRev(self);
 
   /// Number of key-value pairs in the map.
-  public func size(self : Map) : Nat = self.base.leaf_count.toNat() - self.base.empty_leaves_list.count;
+  public func size(self : Map) : Nat = self.leaf_count.toNat() - self.empty_leaves_list.count;
 
   /// Memory stats.
   public func memoryStats(self : Map) : MemoryStats {
-    let base = self.base;
-    let { byte_size; leaf_count; node_count; total_node_count } = base.memoryStats();
+    let { byte_size; leaf_count; node_count; total_node_count } = Base.memoryStats(self);
     {
       byte_size;
       total_leaf_count = leaf_count;
       total_node_count;
-      used_leaf_count = leaf_count - base.empty_leaves_list.count;
+      used_leaf_count = leaf_count - self.empty_leaves_list.count;
       used_node_count = node_count;
     };
   };
 
   /// Convert to stable data.
-  public func share(self : Map) : StableData = self.base.share();
+  public func share(self : Map) : StableData = Base.share(self);
 
   /// Restore from stable data. Must be the first call after `empty()`.
-  public func unshare(self : Map, data : StableData) = self.base.unshare(data);
+  public func unshare(self : Map, data : StableData) = Base.unshare(self, data);
 };
