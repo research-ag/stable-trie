@@ -32,6 +32,7 @@ import Result "mo:core/Result";
 import Types "mo:core/Types";
 
 import Trie "internal/trie";
+import Iter "internal/iter";
 
 module {
   /// Memory stats.
@@ -190,22 +191,22 @@ module {
   };
 
   /// Returns all the keys and values in enumeration ordered by `Blob.compare` of keys.
-  public func entries(self : Enumeration) : Types.Iter<(Blob, Blob)> = Trie.entries(self);
+  public func entries(self : Enumeration) : Types.Iter<(Blob, Blob)> = Iter.entries(self);
 
   /// Returns all the keys and values in the enumeration reverse ordered by `Blob.compare` of keys.
-  public func entriesRev(self : Enumeration) : Types.Iter<(Blob, Blob)> = Trie.entriesRev(self);
+  public func entriesRev(self : Enumeration) : Types.Iter<(Blob, Blob)> = Iter.entriesRev(self);
 
   /// Returns all the values in the enumeration ordered by `Blob.compare` of keys.
-  public func vals(self : Enumeration) : Types.Iter<Blob> = Trie.vals(self);
+  public func vals(self : Enumeration) : Types.Iter<Blob> = Iter.vals(self);
 
   /// Returns all the values in the enumeration reverse ordered by `Blob.compare` of keys.
-  public func valsRev(self : Enumeration) : Types.Iter<Blob> = Trie.valsRev(self);
+  public func valsRev(self : Enumeration) : Types.Iter<Blob> = Iter.valsRev(self);
 
   /// Returns all the keys in the enumeration ordered by `Blob.compare` of keys.
-  public func keys(self : Enumeration) : Types.Iter<Blob> = Trie.keys(self);
+  public func keys(self : Enumeration) : Types.Iter<Blob> = Iter.keys(self);
 
   /// Returns all the keys in the enumeration reverse ordered by `Blob.compare` of keys.
-  public func keysRev(self : Enumeration) : Types.Iter<Blob> = Trie.keysRev(self);
+  public func keysRev(self : Enumeration) : Types.Iter<Blob> = Iter.keysRev(self);
 
   /// Number of key-value pairs in enumeration.
   public func size(self : Enumeration) : Nat = self.leaf_count.toNat();

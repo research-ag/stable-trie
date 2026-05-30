@@ -11,17 +11,13 @@
 /// (`trie.put_(...)`, `trie.lookup(...)`, etc.) which Motoko resolves to the
 /// corresponding module-level function.
 
-import Iter "mo:core/Iter";
 import Nat_ "mo:core/Nat";
 import Nat16 "mo:core/Nat16"; // bitcountTrailingZero
 import Nat64 "mo:core/Nat64"; // bitcountTrailingZero
 import Option "mo:core/Option";
 import Region "mo:core/Region";
-import { type Region } "mo:core/Region";
 import Result "mo:core/Result";
 import Runtime "mo:core/Runtime";
-import Types "mo:core/Types";
-import VarArray "mo:core/VarArray";
 import Prim "mo:prim";
 
 import LinkedList "./linked-list";
@@ -88,8 +84,6 @@ module {
     #onlyInternal : Nat64;
     #multiple;
   };
-
-  type Dir = { #forward; #reverse };
 
   /// Per-pointer-size store dispatch table, indexed by `storeFuncIndex`
   /// (see `empty`).
@@ -377,15 +371,15 @@ module {
   /// Get index in root node.
   public func keyToRootIndex(self : StableTrie, key : Blob) : Nat64 {
     var result : Nat64 = 0;
-    var i = 0;
-    let iters = nat64toNat(self.root_bitlength_ >> 3);
+    let iters = self.root_bitlength_ >> 3;
+    var i : Nat64 = 0;
     while (i < iters) {
-      result := (result << 8) | nat32to64(nat16to32(nat8to16(key[i])));
-      i += 1;
+      result := (result << 8) | nat32to64(nat16to32(nat8to16(key[nat64toNat(i)])));
+      i +%= 1;
     };
     let skip = self.root_bitlength_ & 7;
     if (skip != 0) {
-      result := (result << skip) | (nat32to64(nat16to32(nat8to16(key[i]))) >> (8 -% skip));
+      result := (result << skip) | (nat32to64(nat16to32(nat8to16(key[nat64toNat(i)]))) >> (8 -% skip));
     };
     return result;
   };
@@ -519,81 +513,6 @@ module {
       null;
     };
   };
-
-  /// Closure-based iterator factory returning an `Iter<Nat64>` directly.
-  /// The returned iterator owns the traversal stack via closure capture.
-  func makeIter(self : StableTrie, dir : Dir) : Types.Iter<Nat64> {
-    let forward = dir == #forward;
-    let stack = VarArray.repeat<(Nat64, Nat64)>((0, 0), self.key_size * 8 / nat16toNat(self.bitlength));
-    var depth = 1;
-    stack[0] := if (forward) (0, 0) else (0, self.root_aridity_ - 1);
-
-    func next_step(i : Nat64) : Nat64 {
-      if (forward) {
-        i + 1;
-      } else {
-        if (i != 0) i - 1 else self.root_aridity_;
-      };
-    };
-
-    {
-      next = func() : ?Nat64 {
-        let leaf = label l : ?Nat64 loop {
-          let (node, i) = stack[depth - 1];
-          let max = if (depth > 1) self.aridity_ else self.root_aridity_;
-          if (i < max) {
-            let child = getChild(self, node, i);
-            if (child == 0) {
-              stack[depth - 1] := (node, next_step(i));
-              continue l;
-            };
-            if (child & 1 == 1) {
-              stack[depth - 1] := (node, next_step(i));
-              break l(?(child >> 1));
-            };
-            stack[depth] := (child, if (forward) 0 else self.aridity_ - 1);
-            depth += 1;
-          } else {
-            if (depth == 1) break l null;
-            depth -= 1;
-            let (prev_node, prev_i) = stack[depth - 1];
-            stack[depth - 1] := (prev_node, next_step(prev_i));
-          };
-        };
-        leaf;
-      };
-    };
-  };
-
-  func entries_(self : StableTrie, dir : Dir) : Types.Iter<(Blob, Blob)> = makeIter(self, dir).map<Nat64, (Blob, Blob)>(
-    func(leaf) = (getKey(self, leaf), getValue(self, leaf))
-  );
-
-  func vals_(self : StableTrie, dir : Dir) : Types.Iter<Blob> = makeIter(self, dir).map<Nat64, Blob>(
-    func(leaf) = getValue(self, leaf)
-  );
-
-  func keys_(self : StableTrie, dir : Dir) : Types.Iter<Blob> = makeIter(self, dir).map<Nat64, Blob>(
-    func(leaf) = getKey(self, leaf)
-  );
-
-  /// Iterate entries in forward order.
-  public func entries(self : StableTrie) : Types.Iter<(Blob, Blob)> = entries_(self, #forward);
-
-  /// Iterate entries in reverse order.
-  public func entriesRev(self : StableTrie) : Types.Iter<(Blob, Blob)> = entries_(self, #reverse);
-
-  /// Iterate values in forward order.
-  public func vals(self : StableTrie) : Types.Iter<Blob> = vals_(self, #forward);
-
-  /// Iterate values in reverse order.
-  public func valsRev(self : StableTrie) : Types.Iter<Blob> = vals_(self, #reverse);
-
-  /// Iterate keys in forward order.
-  public func keys(self : StableTrie) : Types.Iter<Blob> = keys_(self, #forward);
-
-  /// Iterate keys in reverse order.
-  public func keysRev(self : StableTrie) : Types.Iter<Blob> = keys_(self, #reverse);
 
   /// Return current memory stats. `node_count` reports nodes currently in
   /// use (`total_node_count - empty_nodes_list.count`); `byte_size` is

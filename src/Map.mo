@@ -30,6 +30,7 @@ import Result "mo:core/Result";
 import Types "mo:core/Types";
 
 import Trie "internal/trie";
+import Iter "internal/iter";
 
 module {
   /// Arguments type of `Map`.
@@ -205,22 +206,22 @@ module {
   };
 
   /// Returns all the key-value pairs in the map ordered by `Blob.compare` of keys.
-  public func entries(self : Map) : Types.Iter<(Blob, Blob)> = Trie.entries(self);
+  public func entries(self : Map) : Types.Iter<(Blob, Blob)> = Iter.entries(self);
 
   /// Returns all the key-value pairs in the map reverse ordered by `Blob.compare` of keys.
-  public func entriesRev(self : Map) : Types.Iter<(Blob, Blob)> = Trie.entriesRev(self);
+  public func entriesRev(self : Map) : Types.Iter<(Blob, Blob)> = Iter.entriesRev(self);
 
   /// Returns all the values in the map ordered by `Blob.compare` of keys.
-  public func vals(self : Map) : Types.Iter<Blob> = Trie.vals(self);
+  public func vals(self : Map) : Types.Iter<Blob> = Iter.vals(self);
 
   /// Returns all the values in the map reverse ordered by `Blob.compare` of keys.
-  public func valsRev(self : Map) : Types.Iter<Blob> = Trie.valsRev(self);
+  public func valsRev(self : Map) : Types.Iter<Blob> = Iter.valsRev(self);
 
   /// Returns all the keys in the map ordered by `Blob.compare` of keys.
-  public func keys(self : Map) : Types.Iter<Blob> = Trie.keys(self);
+  public func keys(self : Map) : Types.Iter<Blob> = Iter.keys(self);
 
   /// Returns all the keys in the map reverse ordered by `Blob.compare` of keys.
-  public func keysRev(self : Map) : Types.Iter<Blob> = Trie.keysRev(self);
+  public func keysRev(self : Map) : Types.Iter<Blob> = Iter.keysRev(self);
 
   /// Number of key-value pairs in the map.
   public func size(self : Map) : Nat = self.leaf_count.toNat() - self.empty_leaves_list.count;
