@@ -142,7 +142,7 @@ module {
     let pointer_size_ = args.pointer_size.toNat64();
     let root_aridity_ = args.root_aridity.get(args.aridity).toNat64();
     /// Mask of `pointer_size * 8` bits.
-    public let loadMask = if (args.pointer_size == 8) 0xffff_ffff_ffff_ffff : Nat64 else (1 << (pointer_size_ << 3)) - 1;
+    let loadMask = if (args.pointer_size == 8) 0xffff_ffff_ffff_ffff : Nat64 else (1 << (pointer_size_ << 3)) - 1;
 
     /// Bitlength of aridity - 1
     public let bitlength = Nat16.bitcountTrailingZero(args.aridity.toNat16()); // TODO: use dot notation when available
@@ -161,7 +161,7 @@ module {
 
     let node_size : Nat64 = aridity_ * pointer_size_;
     /// Node size in bytes, equals aridity * pointer_size.
-    public let node_size_ : Nat = nat64toNat(node_size);
+    let node_size_ : Nat = nat64toNat(node_size);
     let leaf_size : Nat64 = args.leaf_size.toNat64();
     let root_size : Nat64 = root_aridity_ * pointer_size_;
     let offset_base : Nat64 = root_size - node_size;
@@ -301,7 +301,7 @@ module {
     };
 
     /// Get address of pointer of node's `node` child number `index`.
-    public func getNodeOffset(node : Nat64, index : Nat64) : Nat64 {
+    func getNodeOffset(node : Nat64, index : Nat64) : Nat64 {
       let delta = index *% pointer_size_;
       if (node == 0) return delta; // root node
       (offset_base +% (node >> 1) *% node_size) +% delta;
@@ -387,7 +387,7 @@ module {
     };
 
     /// Get offset of leaf number `index`.
-    public func getLeafOffset(index : Nat64) : Nat64 = index *% leaf_size;
+    func getLeafOffset(index : Nat64) : Nat64 = index *% leaf_size;
 
     /// Load key of leaf number `index`.
     public func getKey(region : Region.Region, index : Nat64) : Blob {
