@@ -1,4 +1,4 @@
-import Prng "mo:prng";
+import Seiran128 "mo:prng/Seiran128";
 import Array "mo:core/Array";
 import Blob "mo:core/Blob";
 import _Nat "mo:core/Nat";
@@ -33,8 +33,7 @@ module {
       },
     );
 
-    let rng = Prng.Seiran128();
-    rng.init(0);
+    let rng = Seiran128.new(0);
     let keys = Array.tabulate<Blob>(
       2 ** (n - 1),
       func(i) {

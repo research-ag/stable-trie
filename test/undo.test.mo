@@ -7,13 +7,12 @@ import Nat "mo:core/Nat";
 import Nat8 "mo:core/Nat8";
 import Nat64_ "mo:core/Nat64";
 import VarArray "mo:core/VarArray";
-import Prng "mo:prng";
+import Seiran128 "mo:prng/Seiran128";
 
 import StableTrie "../src/Enumeration";
 
 func genKeys(seed : Nat64, n : Nat, size : Nat) : [Blob] {
-  let rng = Prng.Seiran128();
-  rng.init(seed);
+  let rng = Seiran128.new(seed);
   // Generate n distinct keys. We use the structure from main.test.mo: half are
   // random, half are derived from the previous random key with a common prefix,
   // which exercises the branching inside the trie.

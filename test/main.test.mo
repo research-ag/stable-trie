@@ -9,12 +9,11 @@ import Nat64_ "mo:core/Nat64";
 import Iter "mo:core/Iter";
 import Result "mo:core/Result";
 import Types "mo:core/Types";
-import Prng "mo:prng";
+import Seiran128 "mo:prng/Seiran128";
 
 import StableTrie "../src/Enumeration";
 
-let rng = Prng.Seiran128();
-rng.init(0);
+let rng = Seiran128.new(0);
 
 let n = 2 ** 11;
 let key_size = 5;
@@ -113,8 +112,7 @@ func _profile() {
 
   let key_size = 8;
   let n = 20;
-  let rng = Prng.Seiran128();
-  rng.init(0);
+  let rng = Seiran128.new(0);
   let keys = Array.tabulate<Blob>(
     2 ** n,
     func(i) {

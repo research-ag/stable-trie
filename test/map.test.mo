@@ -6,12 +6,11 @@ import Nat_ "mo:core/Nat";
 import Nat8 "mo:core/Nat8";
 import Nat64_ "mo:core/Nat64";
 import Iter "mo:core/Iter";
-import Prng "mo:prng";
+import Seiran128 "mo:prng/Seiran128";
 
 import StableTrie "../src/Map";
 
-let rng = Prng.Seiran128();
-rng.init(0);
+let rng = Seiran128.new(0);
 
 let n = 2 ** 10;
 let key_size = 5;
