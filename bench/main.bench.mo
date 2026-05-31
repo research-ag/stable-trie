@@ -19,10 +19,9 @@ module {
       rows = Array.tabulate<Text>(n, func i = i.toText());
       cols = ["2", "4", "16", "256"];
     };
-    let (nRows, nCols) = (schema.rows.size(), schema.cols.size());
 
     let tries = Array.tabulate<StableTrie.Enumeration>(
-      nCols,
+      schema.cols.size(),
       func(i) {
         StableTrie.empty({
           pointer_size = 2;
@@ -48,31 +47,31 @@ module {
       },
     );
 
-    let routines : [() -> ()] = Array.tabulate<() -> ()>(
-      nRows * nCols,
-      func(i) {
-        let row : Nat = i % nRows;
-        let col : Nat = i / nRows;
-        let trie = tries[col];
-
-        if (row == 0) {
-          func() = ignore trie.add(keys[0], "");
-        } else {
-          let start = Nat32.fromIntWrap(2 ** (row - 1));
-          let end = Nat32.fromIntWrap(2 ** row);
-          func() {
-            var j = start;
-            while (j < end) {
-              ignore trie.add(keys[j.toNat()], "");
-              j +%= 1;
+    let routines : [[() -> ()]] = Array.tabulate<[() -> ()]>(
+      schema.rows.size(),
+      func(row) {
+        Array.tabulate<() -> ()>(
+          schema.cols.size(),
+          func(col) {
+            let trie = tries[col];
+            if (row == 0) {
+              func() = ignore trie.add(keys[0], "");
+            } else {
+              let start = Nat32.fromIntWrap(2 ** (row - 1));
+              let end = Nat32.fromIntWrap(2 ** row);
+              func() {
+                var j = start;
+                while (j < end) {
+                  ignore trie.add(keys[j.toNat()], "");
+                  j +%= 1;
+                };
+              };
             };
-          };
-        };
+          },
+        );
       },
     );
 
-    func run(ri : Nat, ci : Nat) = routines[ci * nRows + ri]();
-
-    Bench.V1(schema, run);
+    Bench.V1(schema, func(ri : Nat, ci : Nat) = routines[ri][ci]());
   };
 };
