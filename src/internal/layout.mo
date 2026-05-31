@@ -65,22 +65,36 @@ module {
     var leaves_freeSpace : Nat64;
   };
 
-  /// Base address of node (the offset of its first child pointer).
-  public func getNodeBase(self : StableTrie, node : Nat64) : Nat64 {
+  // Base address of node (the offset of its first child pointer).
+  // Unused.
+  func _getNodeBase(self : StableTrie, node : Nat64) : Nat64 {
     if (node == 0) return 0; // root node
     (self.offset_base +% (node >> 1) *% self.node_size);
   };
 
-  /// Address of pointer of node's `node` child number `index`.
-  func getNodeOffset(self : StableTrie, node : Nat64, index : Nat64) : Nat64 {
+  /// Load the whole node `node` as a `Blob` of `node_size_` bytes. Used by
+  /// `scanChildren` to parse all child pointers in one region read.
+  /// `getNodeBase` is inlined here.
+  public func getRawNode(self : StableTrie, node : Nat64) : Blob {
+    let base = if (node == 0) 0 : Nat64 else self.offset_base +% (node >> 1) *% self.node_size;
+    self.nodes_region.loadBlob(base, self.node_size_);
+  };
+
+  // Address of pointer of node's `node` child number `index`.
+  // Unused.
+  func _getNodeOffset(self : StableTrie, node : Nat64, index : Nat64) : Nat64 {
     let delta = index *% self.pointer_size_;
     if (node == 0) return delta; // root node
     (self.offset_base +% (node >> 1) *% self.node_size) +% delta;
   };
 
-  /// Load node's `node` child number `index`.
+  /// Load node's `node` child number `index`. getNodeOffset is inlined here
+  /// — moc doesn't auto-inline it, and getChild is called per level inside
+  /// the `find` loop on every put/lookup/remove.
   public func getChild(self : StableTrie, node : Nat64, index : Nat64) : Nat64 {
-    Prim.regionLoadNat64(self.nodes_region, getNodeOffset(self, node, index)) & self.loadMask;
+    let delta = index *% self.pointer_size_;
+    let offset = if (node == 0) delta else (self.offset_base +% (node >> 1) *% self.node_size) +% delta;
+    Prim.regionLoadNat64(self.nodes_region, offset) & self.loadMask;
   };
 
   /// Set node's `node` child number `index`.
@@ -88,8 +102,10 @@ module {
   /// order 2, 4, 5, 6, 8. Use this from sites where setChild is called only
   /// once. From hot sites that call it repeatedly (e.g. `put_`), hoist the
   /// dispatch by picking the matching `setChildN` once and reusing it.
+  /// getNodeOffset is inlined here too — moc doesn't auto-inline it.
   public func setChild(self : StableTrie, node : Nat64, index : Nat64, child : Nat64) {
-    let offset = getNodeOffset(self, node, index);
+    let delta = index *% self.pointer_size_;
+    let offset = if (node == 0) delta else (self.offset_base +% (node >> 1) *% self.node_size) +% delta;
     let region = self.nodes_region;
     let ps = self.pointer_size;
     if (ps == 2) {
@@ -107,68 +123,25 @@ module {
     };
   };
 
-  /// Specialized setChild for pointer_size = 2. getNodeOffset inlined;
-  /// `delta = index *% 2` becomes `index << 1`.
-  public func setChild2(self : StableTrie, node : Nat64, index : Nat64, child : Nat64) {
-    let delta = index << 1;
-    let offset = if (node == 0) delta else (self.offset_base +% (node >> 1) *% self.node_size) +% delta;
-    self.nodes_region.storeNat16(offset, nat32to16(nat64to32(child)));
-  };
-
-  /// Specialized setChild for pointer_size = 4. getNodeOffset inlined;
-  /// `delta = index *% 4` becomes `index << 2`.
-  public func setChild4(self : StableTrie, node : Nat64, index : Nat64, child : Nat64) {
-    let delta = index << 2;
-    let offset = if (node == 0) delta else (self.offset_base +% (node >> 1) *% self.node_size) +% delta;
-    self.nodes_region.storeNat32(offset, nat64to32(child));
-  };
-
-  /// Specialized setChild for pointer_size = 5. getNodeOffset inlined;
-  /// delta = index *% 5 (no shift available, but constant multiplier).
-  public func setChild5(self : StableTrie, node : Nat64, index : Nat64, child : Nat64) {
-    let delta = index *% 5;
-    let offset = if (node == 0) delta else (self.offset_base +% (node >> 1) *% self.node_size) +% delta;
-    let region = self.nodes_region;
-    region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
-    region.storeNat8(offset +% 4, natWrap8(nat64toNat(child >> 32)));
-  };
-
-  /// Specialized setChild for pointer_size = 6. getNodeOffset inlined;
-  /// delta = index *% 6 (no shift available, but constant multiplier).
-  public func setChild6(self : StableTrie, node : Nat64, index : Nat64, child : Nat64) {
-    let delta = index *% 6;
-    let offset = if (node == 0) delta else (self.offset_base +% (node >> 1) *% self.node_size) +% delta;
-    let region = self.nodes_region;
-    region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
-    region.storeNat16(offset +% 4, nat32to16(nat64to32(child >> 32)));
-  };
-
-  /// Specialized setChild for pointer_size = 8. getNodeOffset inlined;
-  /// `delta = index *% 8` becomes `index << 3`.
-  public func setChild8(self : StableTrie, node : Nat64, index : Nat64, child : Nat64) {
-    let delta = index << 3;
-    let offset = if (node == 0) delta else (self.offset_base +% (node >> 1) *% self.node_size) +% delta;
-    self.nodes_region.storeNat64(offset, child);
-  };
-
-  /// Offset of leaf number `index`.
+  /// Offset of leaf number `index`. Kept public for external callers (e.g.
+  /// `trie.newLeaf`); the in-module users below inline its body directly.
   public func getLeafOffset(self : StableTrie, index : Nat64) : Nat64 = index *% self.leaf_size;
 
-  /// Load key of leaf number `index`.
+  /// Load key of leaf number `index`. getLeafOffset inlined.
   public func getKey(self : StableTrie, index : Nat64) : Blob {
-    self.leaves_region.loadBlob(getLeafOffset(self, index), self.key_size);
+    self.leaves_region.loadBlob(index *% self.leaf_size, self.key_size);
   };
 
-  /// Load value of leaf number `index`.
+  /// Load value of leaf number `index`. getLeafOffset inlined.
   public func getValue(self : StableTrie, index : Nat64) : Blob {
     if (self.empty_values) return "";
-    self.leaves_region.loadBlob(getLeafOffset(self, index) +% self.key_size_, self.value_size);
+    self.leaves_region.loadBlob(index *% self.leaf_size +% self.key_size_, self.value_size);
   };
 
-  /// Set value of leaf number `index`.
+  /// Set value of leaf number `index`. getLeafOffset inlined.
   public func setValue(self : StableTrie, index : Nat64, value : Blob) {
     assert value.size() == self.value_size;
     if (self.empty_values) return;
-    self.leaves_region.storeBlob(getLeafOffset(self, index) +% self.key_size_, value);
+    self.leaves_region.storeBlob(index *% self.leaf_size +% self.key_size_, value);
   };
 };

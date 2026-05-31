@@ -217,7 +217,7 @@ module {
   /// "zero children" case is unreachable under the deletion invariants
   /// maintained by Map and Enumeration.
   public func scanChildren(self : StableTrie, node : Nat64) : ChildScan {
-    let blob = self.nodes_region.loadBlob(Layout.getNodeBase(self, node), self.node_size_);
+    let blob = Layout.getRawNode(self, node);
     let ps = self.pointer_size;
     var lone : Nat64 = 0;
     var lone_slot : Nat64 = 0;
@@ -300,17 +300,6 @@ module {
   public func put_(self : StableTrie, key : Blob) : ?(Bool, Nat64) {
     assert key.size() == self.key_size;
 
-    // Hoist the per-call dispatch: pick the specialized setChild once per
-    // put_ call (pointer_size is fixed for the life of the trie) so the
-    // multiple setChild calls below skip the if-else cascade.
-    let setChild = switch (self.pointer_size) {
-      case 2 Layout.setChild2;
-      case 4 Layout.setChild4;
-      case 5 Layout.setChild5;
-      case 6 Layout.setChild6;
-      case _ Layout.setChild8;
-    };
-
     let (node_, last_, old_leaf, pos_) = find(self, key);
 
     var last = last_;
@@ -319,7 +308,7 @@ module {
     if (old_leaf == 0) {
       let ?leaf = newLeaf(self, key) else return null;
 
-      setChild(self, node, last, leaf);
+      Layout.setChild(self, node, last, leaf);
       return ?(true, (leaf >> 1));
     };
 
@@ -332,10 +321,10 @@ module {
     var pos = pos_;
     label l loop {
       let ?add = newInternalNode(self) else {
-        setChild(self, node, last, old_leaf);
+        Layout.setChild(self, node, last, old_leaf);
         return null;
       };
-      setChild(self, node, last, add);
+      Layout.setChild(self, node, last, add);
       node := add;
 
       let (a, b) = (keyToIndex(self, key, pos), keyToIndex(self, old_key, pos));
@@ -343,9 +332,9 @@ module {
       if (a == b) {
         last := a;
       } else {
-        setChild(self, node, b, old_leaf);
+        Layout.setChild(self, node, b, old_leaf);
         let ?leaf = newLeaf(self, key) else return null;
-        setChild(self, node, a, leaf);
+        Layout.setChild(self, node, a, leaf);
         return ?(true, (leaf >> 1));
       };
     };
