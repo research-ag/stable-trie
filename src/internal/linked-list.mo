@@ -15,7 +15,6 @@
 /// `list.push(region, i)`, `list.pop(region)`, etc.
 
 import Region "mo:core/Region";
-import Runtime "mo:core/Runtime";
 import Prim "mo:prim";
 
 module {
@@ -36,7 +35,7 @@ module {
   public type LinkedList = {
     offset_base : Nat64;
     item_size : Nat64;
-    storeFuncIndex : Nat;
+    pointer_size : Nat;
     loadMask : Nat64;
     var count : Nat;
     var last_empty_item : Nat64;
@@ -50,18 +49,10 @@ module {
   /// be less than `pointer_size`); it just may not be pushed to.
   public func empty(offset_base : Nat64, item_size : Nat64, pointer_size : Nat64) : LinkedList {
     let loadMask : Nat64 = if (pointer_size == 8) 0xffff_ffff_ffff_ffff else (1 << (pointer_size << 3)) - 1;
-    let storeFuncIndex = switch (pointer_size) {
-      case (8) 0;
-      case (6) 1;
-      case (5) 2;
-      case (4) 3;
-      case (2) 4;
-      case (_) Runtime.trap("invalid pointer_size");
-    };
     {
       offset_base;
       item_size;
-      storeFuncIndex;
+      pointer_size = nat64toNat(pointer_size);
       loadMask;
       var count = 0;
       var last_empty_item = loadMask; // empty: head == sentinel
@@ -76,32 +67,31 @@ module {
     region.loadNat64(offset) & mask;
   };
 
-  type StorePointer = (Region, Nat64, Nat64) -> ();
-
-  let storePointerFuncs : [StorePointer] = [
-    Region.storeNat64,
-    func _storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
-      region.storeNat32(offset, nat64to32(link & 0xffff_ffff));
-      region.storeNat16(offset +% 4, nat32to16(nat64to32(link >> 32)));
-    },
-    func _storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
+  /// Store a `pointer_size`-byte link at `offset`. Dispatches via if-else
+  /// on `ps`, ordered 2,4,5,6,8 — `pointer_size = 2` is by far the most
+  /// common case, so its branch is first.
+  func storePointer(region : Region.Region, ps : Nat, offset : Nat64, link : Nat64) {
+    if (ps == 2) {
+      region.storeNat16(offset, nat32to16(nat64to32(link)));
+    } else if (ps == 4) {
+      region.storeNat32(offset, nat64to32(link));
+    } else if (ps == 5) {
       region.storeNat32(offset, nat64to32(link & 0xffff_ffff));
       region.storeNat8(offset +% 4, natWrap8(nat64toNat(link >> 32)));
-    },
-    func _storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
-      region.storeNat32(offset, nat64to32(link));
-    },
-    func _storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
-      region.storeNat16(offset, nat32to16(nat64to32(link)));
-    },
-  ];
+    } else if (ps == 6) {
+      region.storeNat32(offset, nat64to32(link & 0xffff_ffff));
+      region.storeNat16(offset +% 4, nat32to16(nat64to32(link >> 32)));
+    } else {
+      region.storeNat64(offset, link);
+    };
+  };
 
   /// Add a deleted item (by index) to the list. Requires that the item slot
   /// be large enough to hold a chain link, i.e. the `item_size` chosen at
   /// construction is at least `pointer_size`; otherwise the link spills into
   /// the next item's slot.
   public func push(self : LinkedList, region : Region.Region, item : Nat64) {
-    storePointerFuncs[self.storeFuncIndex](region, slotOffset(self, item), self.last_empty_item);
+    storePointer(region, self.pointer_size, slotOffset(self, item), self.last_empty_item);
     self.last_empty_item := item;
     self.count += 1;
   };
@@ -112,7 +102,7 @@ module {
 
     let ret = self.last_empty_item;
     self.last_empty_item := loadPointer(region, slotOffset(self, self.last_empty_item), self.loadMask);
-    storePointerFuncs[self.storeFuncIndex](region, slotOffset(self, ret), 0);
+    storePointer(region, self.pointer_size, slotOffset(self, ret), 0);
     self.count -= 1;
     ?ret;
   };
