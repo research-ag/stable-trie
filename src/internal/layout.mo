@@ -55,7 +55,6 @@ module {
     offset_base : Nat64;
     padding : Nat64;
     empty_values : Bool;
-    storeFuncIndex : Nat;
     empty_nodes_list : LinkedList.LinkedList;
     empty_leaves_list : LinkedList.LinkedList;
     var leaf_count : Nat64;
@@ -65,26 +64,6 @@ module {
     var leaves_region : Region.Region;
     var leaves_freeSpace : Nat64;
   };
-
-  /// Per-pointer-size store dispatch table, indexed by `storeFuncIndex`
-  /// (set at construction in `trie.empty`).
-  let storePointerFuncs = [
-    Region.storeNat64,
-    func storePointer(region : Region.Region, offset : Nat64, child : Nat64) {
-      region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
-      region.storeNat16(offset +% 4, nat32to16(nat64to32(child >> 32)));
-    },
-    func storePointer(region : Region.Region, offset : Nat64, child : Nat64) {
-      region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
-      region.storeNat8(offset +% 4, natWrap8(nat64toNat(child >> 32)));
-    },
-    func storePointer(region : Region.Region, offset : Nat64, child : Nat64) {
-      region.storeNat32(offset, nat64to32(child));
-    },
-    func storePointer(region : Region.Region, offset : Nat64, child : Nat64) {
-      region.storeNat16(offset, nat32to16(nat64to32(child)));
-    },
-  ];
 
   /// Base address of node (the offset of its first child pointer).
   public func getNodeBase(self : StableTrie, node : Nat64) : Nat64 {
@@ -105,9 +84,71 @@ module {
   };
 
   /// Set node's `node` child number `index`.
+  /// General version: nested if-else on `pointer_size`, checking sizes in
+  /// order 2, 4, 5, 6, 8. Use this from sites where setChild is called only
+  /// once. From hot sites that call it repeatedly (e.g. `put_`), hoist the
+  /// dispatch by picking the matching `setChildN` once and reusing it.
   public func setChild(self : StableTrie, node : Nat64, index : Nat64, child : Nat64) {
     let offset = getNodeOffset(self, node, index);
-    storePointerFuncs[self.storeFuncIndex](self.nodes_region, offset, child);
+    let region = self.nodes_region;
+    let ps = self.pointer_size;
+    if (ps == 2) {
+      region.storeNat16(offset, nat32to16(nat64to32(child)));
+    } else if (ps == 4) {
+      region.storeNat32(offset, nat64to32(child));
+    } else if (ps == 5) {
+      region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
+      region.storeNat8(offset +% 4, natWrap8(nat64toNat(child >> 32)));
+    } else if (ps == 6) {
+      region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
+      region.storeNat16(offset +% 4, nat32to16(nat64to32(child >> 32)));
+    } else {
+      region.storeNat64(offset, child);
+    };
+  };
+
+  /// Specialized setChild for pointer_size = 2. getNodeOffset inlined;
+  /// `delta = index *% 2` becomes `index << 1`.
+  public func setChild2(self : StableTrie, node : Nat64, index : Nat64, child : Nat64) {
+    let delta = index << 1;
+    let offset = if (node == 0) delta else (self.offset_base +% (node >> 1) *% self.node_size) +% delta;
+    self.nodes_region.storeNat16(offset, nat32to16(nat64to32(child)));
+  };
+
+  /// Specialized setChild for pointer_size = 4. getNodeOffset inlined;
+  /// `delta = index *% 4` becomes `index << 2`.
+  public func setChild4(self : StableTrie, node : Nat64, index : Nat64, child : Nat64) {
+    let delta = index << 2;
+    let offset = if (node == 0) delta else (self.offset_base +% (node >> 1) *% self.node_size) +% delta;
+    self.nodes_region.storeNat32(offset, nat64to32(child));
+  };
+
+  /// Specialized setChild for pointer_size = 5. getNodeOffset inlined;
+  /// delta = index *% 5 (no shift available, but constant multiplier).
+  public func setChild5(self : StableTrie, node : Nat64, index : Nat64, child : Nat64) {
+    let delta = index *% 5;
+    let offset = if (node == 0) delta else (self.offset_base +% (node >> 1) *% self.node_size) +% delta;
+    let region = self.nodes_region;
+    region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
+    region.storeNat8(offset +% 4, natWrap8(nat64toNat(child >> 32)));
+  };
+
+  /// Specialized setChild for pointer_size = 6. getNodeOffset inlined;
+  /// delta = index *% 6 (no shift available, but constant multiplier).
+  public func setChild6(self : StableTrie, node : Nat64, index : Nat64, child : Nat64) {
+    let delta = index *% 6;
+    let offset = if (node == 0) delta else (self.offset_base +% (node >> 1) *% self.node_size) +% delta;
+    let region = self.nodes_region;
+    region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
+    region.storeNat16(offset +% 4, nat32to16(nat64to32(child >> 32)));
+  };
+
+  /// Specialized setChild for pointer_size = 8. getNodeOffset inlined;
+  /// `delta = index *% 8` becomes `index << 3`.
+  public func setChild8(self : StableTrie, node : Nat64, index : Nat64, child : Nat64) {
+    let delta = index << 3;
+    let offset = if (node == 0) delta else (self.offset_base +% (node >> 1) *% self.node_size) +% delta;
+    self.nodes_region.storeNat64(offset, child);
   };
 
   /// Offset of leaf number `index`.
