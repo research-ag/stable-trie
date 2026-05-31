@@ -22,7 +22,11 @@ which reflects the order of its insertion into the map.
 This index is inherent in the data structure and therefore has no additional memory footprint over `StableTrieMap`.
 Value and index can be looked up by key,
 value and key can be looked up by index.
-`StableTrieEnumeration` does not allow deletion.
+`StableTrieEnumeration` supports LIFO removal via `removeLast()`,
+which pops the most-recently-added entry.
+Internal trie nodes that become empty are reclaimed and reused by subsequent `add` calls;
+the leaves region is also reused LIFO.
+Arbitrary-key deletion is not supported in the Enumeration variant.
 
 Both the map and the enumeration variant can be adapted to implement a set simply by setting the value size to 0.
 The map variant gives us a set with deletions.
@@ -188,7 +192,7 @@ let m = Map.empty({
   pointer_size = 2;
   aridity = 2;
   root_aridity = null;
-  key_size = 2;
+  key_size = 3;
   value_size = 1;
 });
 assert (m.replace("abc", "a") == null);
@@ -207,16 +211,42 @@ let e = Enumeration.empty({
   pointer_size = 2;
   aridity = 2;
   root_aridity = null;
-  key_size = 2;
+  key_size = 3;
   value_size = 1;
 });
 assert (e.add("abc", "a") == 0);
 assert (e.add("aaa", "b") == 1);
-assert (e.add("abc", "c") == 0);
+assert (e.add("abc", "c") == 0); // re-adds, overwrites the value at index 0
 
-assert e.slice(0, 2) == [("abc", "a"), ("aaa", "b")];
+assert e.slice(0, 2) == [("abc", "c"), ("aaa", "b")];
+
+assert e.removeLast() == ?("aaa", "b"); // pop most-recently-added
+assert e.size() == 1;
 
 ```
+
+### Persistent actor
+
+Because `Map` and `Enumeration` are records with all-stable fields, an instance can live directly inside a `persistent actor` — no `share` / `unshare` round-trip is needed. A plain `let` is enough: the record's own internal `var` fields handle the mutation, and `stable` is implicit in a persistent actor.
+
+```motoko
+import Map "mo:stable-trie/Map";
+
+persistent actor {
+  let m : Map.Map = Map.empty({
+    pointer_size = 4;
+    aridity = 4;
+    root_aridity = null;
+    key_size = 8;
+    value_size = 4;
+  });
+
+  public func put(k : Blob, v : Blob) : async () { m.put(k, v) };
+  public query func get(k : Blob) : async ?Blob { m.get(k) };
+};
+```
+
+The trie survives canister upgrades automatically; you don't need `preupgrade` / `postupgrade` hooks.
 
 ### Build & test
 
@@ -250,13 +280,13 @@ npx -y prettier --plugin prettier-plugin-motoko --write '**/*.{mo,json,md}'
 
 ## Copyright
 
-MR Research AG, 2023 - 2025
+MR Research AG, 2023 - 2026
 
 ## Authors
 
-Main author: Andrii Stepanov (AStepanov25)
+Main authors: Andrii Stepanov (AStepanov25), Timo Hanke (timohanke)
 
-Contributors: Timo Hanke (timohanke)
+Contributors: Andy Gura (AndyGura)
 
 ## License
 

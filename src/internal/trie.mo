@@ -1,10 +1,10 @@
 /// Stable trie underlying `Map` and `Enumeration`.
 ///
-/// Copyright: 2023 - 2025 MR Research AG
+/// Copyright: 2023 - 2026 MR Research AG
 ///
-/// Main author: Andrii Stepanov (AStepanov25)
+/// Main authors: Andrii Stepanov (AStepanov25), Timo Hanke (timohanke)
 ///
-/// Contributors: Timo Hanke (timohanke)
+/// Contributors: Andy Gura (AndyGura)
 ///
 /// Implemented as a plain mutable record (`StableTrie`) plus module-level
 /// functions whose first argument is `self`. Callers can use dot-notation

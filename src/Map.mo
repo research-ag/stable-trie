@@ -1,10 +1,10 @@
 /// Stable trie map.
 ///
-/// Copyright: 2023 - 2025 MR Research AG
+/// Copyright: 2023 - 2026 MR Research AG
 ///
-/// Main author: Andrii Stepanov (AStepanov25)
+/// Main authors: Andrii Stepanov (AStepanov25), Timo Hanke (timohanke)
 ///
-/// Contributors: Timo Hanke (timohanke)
+/// Contributors: Andy Gura (AndyGura)
 ///
 /// `Map` is a plain type alias for `Trie.StableTrie`: this module and
 /// `Enumeration` are simply two different *interfaces* layered over the same
@@ -19,8 +19,10 @@
 /// bodies. User code importing only `Map` is fine — only this module's
 /// functions are in scope, so `m.foo()` resolves unambiguously.
 ///
-/// A `Map` value can be declared as a `stable var` directly — there is no
-/// `share`/`unshare` round-trip. All fields (`Region.Region`, `Nat64`,
+/// A `Map` value can live directly inside a `persistent actor` — there is
+/// no `share`/`unshare` round-trip. A plain `let` binding is enough; the
+/// record's own internal `var` fields handle the mutation, and `stable` is
+/// implicit in a persistent actor. All fields (`Region.Region`, `Nat64`,
 /// `LinkedList`) are themselves stable types.
 
 import Nat "mo:core/Nat";

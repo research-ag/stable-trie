@@ -1,10 +1,10 @@
 /// Stable trie enumeration.
 ///
-/// Copyright: 2023 - 2025 MR Research AG
+/// Copyright: 2023 - 2026 MR Research AG
 ///
-/// Main author: Andrii Stepanov (AStepanov25)
+/// Main authors: Andrii Stepanov (AStepanov25), Timo Hanke (timohanke)
 ///
-/// Contributors: Timo Hanke (timohanke)
+/// Contributors: Andy Gura (AndyGura)
 ///
 /// `Enumeration` is a plain type alias for `Trie.StableTrie`: this
 /// module and `Map` are simply two different *interfaces* layered over the
@@ -21,9 +21,11 @@
 /// importing only `Enumeration` is fine — only this module's functions are
 /// in scope, so `e.foo()` resolves unambiguously.
 ///
-/// An `Enumeration` value can be declared as a `stable var` directly — there
-/// is no `share`/`unshare` round-trip. All fields (`Region.Region`, `Nat64`,
-/// `LinkedList`) are themselves stable types.
+/// An `Enumeration` value can live directly inside a `persistent actor` —
+/// there is no `share`/`unshare` round-trip. A plain `let` binding is
+/// enough; the record's own internal `var` fields handle the mutation, and
+/// `stable` is implicit in a persistent actor. All fields (`Region.Region`,
+/// `Nat64`, `LinkedList`) are themselves stable types.
 
 import Array "mo:core/Array";
 import Nat_ "mo:core/Nat";
@@ -79,7 +81,7 @@ module {
 
   /// Add `key` and `value` to the enumeration.
   /// Returns `#LimitExceeded` if pointer size limit exceeded.
-  /// Returns `size` if the key in new to the enumeration
+  /// Returns `size` if the key is new to the enumeration
   /// or rewrites value and returns index of key in enumeration otherwise.
   ///
   /// Runtime: O(key_size) acesses to stable memory.
@@ -90,7 +92,7 @@ module {
   };
 
   /// Add `key` and `value` to enumeration.
-  /// Traps if pointer size limit exceeded. Returns `size` if the key in new to the enumeration
+  /// Traps if pointer size limit exceeded. Returns `size` if the key is new to the enumeration
   /// or rewrites value and returns index of key in enumeration otherwise.
   ///
   /// Runtime: O(key_size) acesses to stable memory.
@@ -99,7 +101,7 @@ module {
   /// Add `key` and `value` to enumeration.
   /// Returns `#LimitExceeded` if pointer size limit exceeded.
   /// Rewrites value if key is already present. First return is old value if new wasn't added or `null` otherwise.
-  /// Second return value is `size` if the key in new to the enumeration
+  /// Second return value is `size` if the key is new to the enumeration
   /// or index of key in enumeration otherwise.
   ///
   /// Runtime: O(key_size) acesses to stable memory.
@@ -119,7 +121,7 @@ module {
   /// Add `key` and `value` to enumeration.
   /// Traps if pointer size limit exceeded.
   /// Rewrites value if key is already present. First return is old value if new wasn't added or `null` otherwise.
-  /// Second return value is `size` if the key in new to the enumeration
+  /// Second return value is `size` if the key is new to the enumeration
   /// or index of key in enumeration otherwise.
   ///
   /// Runtime: O(key_size) acesses to stable memory.
