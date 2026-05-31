@@ -171,15 +171,20 @@ mops add stable-trie
 
 In the Motoko source file import the package as:
 
+```motoko
+import Map "mo:stable-trie/Map";
+import Enumeration "mo:stable-trie/Enumeration";
+
 ```
-import StableTrieEnumeration "mo:stable-trie/Enumeration";
-import StableTrieMap "mo:stable-trie/Map";
-```
+
+`Map` and `Enumeration` are records with all-stable fields, so a value
+can be declared as a `stable var` directly in a persistent actor —
+there is no `share` / `unshare` round-trip.
 
 ### Example
 
 ```motoko
-let m = StableTrie.Map({
+let m = Map.empty({
   pointer_size = 2;
   aridity = 2;
   root_aridity = null;
@@ -188,9 +193,9 @@ let m = StableTrie.Map({
 });
 assert (m.replace("abc", "a") == null);
 assert (m.replace("aaa", "b") == null);
-assert (m.replace("abc", "c") == "a");
+assert (m.replace("abc", "c") == ?"a");
 
-assert Iter.toArray(m.entries()) == [("aaa", "a"), ("abc", "c")];
+assert Iter.toArray(m.entries()) == [("aaa", "b"), ("abc", "c")];
 
 m.delete("abc");
 m.delete("aaa");
@@ -198,7 +203,7 @@ m.delete("aaa");
 ```
 
 ```motoko
-let e = StableTrie.Enumeration({
+let e = Enumeration.empty({
   pointer_size = 2;
   aridity = 2;
   root_aridity = null;
@@ -232,7 +237,7 @@ mops bench
 ```
 
 This is the benchmark to compare different versions of stable-trie.
-For comparison of stbale-trie against other data structures see the section Comparisons above.,
+For comparison of stable-trie against other data structures see the section Comparisons above.
 
 ## Formatting
 

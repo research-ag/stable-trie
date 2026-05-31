@@ -80,18 +80,18 @@ module {
 
   let storePointerFuncs : [StorePointer] = [
     Region.storeNat64,
-    func storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
+    func _storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
       region.storeNat32(offset, nat64to32(link & 0xffff_ffff));
       region.storeNat16(offset +% 4, nat32to16(nat64to32(link >> 32)));
     },
-    func storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
+    func _storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
       region.storeNat32(offset, nat64to32(link & 0xffff_ffff));
       region.storeNat8(offset +% 4, natWrap8(nat64toNat(link >> 32)));
     },
-    func storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
+    func _storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
       region.storeNat32(offset, nat64to32(link));
     },
-    func storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
+    func _storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
       region.storeNat16(offset, nat32to16(nat64to32(link)));
     },
   ];
