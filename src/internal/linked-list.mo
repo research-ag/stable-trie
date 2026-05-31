@@ -76,7 +76,9 @@ module {
     region.loadNat64(offset) & mask;
   };
 
-  let storePointerFuncs = [
+  type StorePointer = (Region, Nat64, Nat64) -> ();
+
+  let storePointerFuncs : [StorePointer] = [
     Region.storeNat64,
     func storePointer(region : Region.Region, offset : Nat64, link : Nat64) {
       region.storeNat32(offset, nat64to32(link & 0xffff_ffff));
@@ -99,7 +101,7 @@ module {
   /// construction is at least `pointer_size`; otherwise the link spills into
   /// the next item's slot.
   public func push(self : LinkedList, region : Region.Region, item : Nat64) {
-    storePointerFuncs[self.storeFuncIndex](region, self.slotOffset(item), self.last_empty_item);
+    storePointerFuncs[self.storeFuncIndex](region, slotOffset(self, item), self.last_empty_item);
     self.last_empty_item := item;
     self.count += 1;
   };
