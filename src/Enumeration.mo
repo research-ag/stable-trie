@@ -32,6 +32,7 @@ import Result "mo:core/Result";
 import Types "mo:core/Types";
 
 import Trie "internal/trie";
+import Layout "internal/layout";
 import Iter "internal/iter";
 
 module {
@@ -84,7 +85,7 @@ module {
   /// Runtime: O(key_size) acesses to stable memory.
   public func addChecked(self : Enumeration, key : Blob, value : Blob) : Result.Result<Nat, { #LimitExceeded }> {
     let ?(_, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
-    Trie.setValue(self, leaf, value);
+    Layout.setValue(self, leaf, value);
     #ok(leaf.toNat());
   };
 
@@ -105,11 +106,11 @@ module {
   public func replaceChecked(self : Enumeration, key : Blob, value : Blob) : Result.Result<(?Blob, Nat), { #LimitExceeded }> {
     let ?(added, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
     let ret_value = if (added) {
-      Trie.setValue(self, leaf, value);
+      Layout.setValue(self, leaf, value);
       null;
     } else {
-      let old_value = Trie.getValue(self, leaf);
-      Trie.setValue(self, leaf, value);
+      let old_value = Layout.getValue(self, leaf);
+      Layout.setValue(self, leaf, value);
       ?old_value;
     };
     #ok(ret_value, leaf.toNat());
@@ -133,10 +134,10 @@ module {
   public func lookupOrPutChecked(self : Enumeration, key : Blob, value : Blob) : Result.Result<(?Blob, Nat), { #LimitExceeded }> {
     let ?(added, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
     let ret_value = if (added) {
-      Trie.setValue(self, leaf, value);
+      Layout.setValue(self, leaf, value);
       null;
     } else {
-      ?Trie.getValue(self, leaf);
+      ?Layout.getValue(self, leaf);
     };
     #ok(ret_value, leaf.toNat());
   };
@@ -171,7 +172,7 @@ module {
   public func get(self : Enumeration, index : Nat) : ?(Blob, Blob) {
     let index_ = index.toNat64();
     if (index_ >= self.leaf_count) return null;
-    ?(Trie.getKey(self, index_), Trie.getValue(self, index_));
+    ?(Layout.getKey(self, index_), Layout.getValue(self, index_));
   };
 
   /// Returns slice `key` and `value` with indices from `left` to `right` or traps if `left` or `right` are out of bounds.
@@ -185,7 +186,7 @@ module {
       right - left,
       func(i) {
         let index = Nat64.fromIntWrap(i);
-        (Trie.getKey(self, index), Trie.getValue(self, index));
+        (Layout.getKey(self, index), Layout.getValue(self, index));
       },
     );
   };

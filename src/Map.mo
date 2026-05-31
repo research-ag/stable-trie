@@ -30,6 +30,7 @@ import Result "mo:core/Result";
 import Types "mo:core/Types";
 
 import Trie "internal/trie";
+import Layout "internal/layout";
 import Iter "internal/iter";
 
 module {
@@ -87,7 +88,7 @@ module {
   /// Runtime: O(key_size) accesses to stable memory.
   public func putChecked(self : Map, key : Blob, value : Blob) : Result.Result<(), { #LimitExceeded }> {
     let ?(_, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
-    Trie.setValue(self, leaf, value);
+    Layout.setValue(self, leaf, value);
     #ok();
   };
 
@@ -105,11 +106,11 @@ module {
     let ?(added, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
     #ok(
       if (added) {
-        Trie.setValue(self, leaf, value);
+        Layout.setValue(self, leaf, value);
         null;
       } else {
-        let old_value = Trie.getValue(self, leaf);
-        Trie.setValue(self, leaf, value);
+        let old_value = Layout.getValue(self, leaf);
+        Layout.setValue(self, leaf, value);
         ?old_value;
       }
     );
@@ -129,10 +130,10 @@ module {
     let ?(added, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
     #ok(
       if (added) {
-        Trie.setValue(self, leaf, value);
+        Layout.setValue(self, leaf, value);
         null;
       } else {
-        ?Trie.getValue(self, leaf);
+        ?Layout.getValue(self, leaf);
       }
     );
   };
@@ -161,10 +162,10 @@ module {
   /// Remove key. `ret` is flag meaning whether to read deleted value or not.
   func removeInternal(self : Map, key : Blob, ret : Bool) : ?Blob {
     let idx = Trie.keyToRootIndex(self, key);
-    let child = Trie.getChild(self, 0, idx);
+    let child = Layout.getChild(self, 0, idx);
     let (value, branch_root) = removeRec(self, key, child, self.root_bitlength, ret);
     if (branch_root != child) {
-      Trie.setChild(self, 0, idx, branch_root);
+      Layout.setChild(self, 0, idx, branch_root);
     };
     value;
   };
@@ -174,8 +175,8 @@ module {
     if (node == 0) return (null, node);
     if (node & 1 == 1) {
       let leaf = node >> 1;
-      if (Trie.getKey(self, leaf) == key) {
-        let r = (if (ret) ?Trie.getValue(self, leaf) else null, 0 : Nat64);
+      if (Layout.getKey(self, leaf) == key) {
+        let r = (if (ret) ?Layout.getValue(self, leaf) else null, 0 : Nat64);
         Trie.pushEmptyLeaf(self, leaf);
         return r;
       } else {
@@ -184,20 +185,20 @@ module {
     };
 
     let idx = Trie.keyToIndex(self, key, pos);
-    let child = Trie.getChild(self, node, idx);
+    let child = Layout.getChild(self, node, idx);
     let (value, branch_root) = removeRec(self, key, child, pos +% self.bitlength, ret);
 
     // If the recursive call didn't change anything, neither did we.
     if (branch_root == child) return (value, node);
 
-    Trie.setChild(self, node, idx, branch_root);
+    Layout.setChild(self, node, idx, branch_root);
     switch (Trie.scanChildren(self, node)) {
       case (#onlyLeaf(leaf, slot)) {
         // Collapse: clear the surviving slot (so the pushed node is
         // all-zero when popped later — otherwise the leftover pointer
         // aliases the leaf through a phantom trie path) and bubble the
         // leaf up to the parent.
-        Trie.setChild(self, node, slot, 0);
+        Layout.setChild(self, node, slot, 0);
         Trie.pushEmptyNode(self, node);
         (value, leaf);
       };

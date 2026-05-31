@@ -13,6 +13,7 @@ import VarArray "mo:core/VarArray";
 import Prim "mo:prim";
 
 import Trie "./trie";
+import Layout "./layout";
 
 module {
   let nat16toNat = Prim.nat16ToNat;
@@ -41,7 +42,7 @@ module {
           let (node, i) = stack[depth - 1];
           let max = if (depth > 1) self.aridity_ else self.root_aridity_;
           if (i < max) {
-            let child = Trie.getChild(self, node, i);
+            let child = Layout.getChild(self, node, i);
             if (child == 0) {
               stack[depth - 1] := (node, next_step(i));
               continue l;
@@ -65,15 +66,15 @@ module {
   };
 
   func entries_(self : Trie.StableTrie, dir : Dir) : Types.Iter<(Blob, Blob)> = makeIter(self, dir).map<Nat64, (Blob, Blob)>(
-    func(leaf) = (Trie.getKey(self, leaf), Trie.getValue(self, leaf))
+    func(leaf) = (Layout.getKey(self, leaf), Layout.getValue(self, leaf))
   );
 
   func vals_(self : Trie.StableTrie, dir : Dir) : Types.Iter<Blob> = makeIter(self, dir).map<Nat64, Blob>(
-    func(leaf) = Trie.getValue(self, leaf)
+    func(leaf) = Layout.getValue(self, leaf)
   );
 
   func keys_(self : Trie.StableTrie, dir : Dir) : Types.Iter<Blob> = makeIter(self, dir).map<Nat64, Blob>(
-    func(leaf) = Trie.getKey(self, leaf)
+    func(leaf) = Layout.getKey(self, leaf)
   );
 
   /// Iterate entries in forward order.

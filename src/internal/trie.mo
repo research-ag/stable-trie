@@ -20,6 +20,7 @@ import Result "mo:core/Result";
 import Runtime "mo:core/Runtime";
 import Prim "mo:prim";
 
+import Layout "./layout";
 import LinkedList "./linked-list";
 
 module {
@@ -38,9 +39,6 @@ module {
 
   // down conversions
   let nat16to8 = Prim.nat16ToNat8;
-  let nat32to16 = Prim.nat32ToNat16;
-  let nat64to32 = Prim.nat64ToNat32;
-  let natWrap8 = Prim.intToNat8Wrap;
 
   /// Arguments of constructor of `Enumeration` and `Map`.
   /// pointer_size: size of pointer in bytes (2, 4, 5, 6, 8)
@@ -85,68 +83,14 @@ module {
     #multiple;
   };
 
-  /// Per-pointer-size store dispatch table, indexed by `storeFuncIndex`
-  /// (see `empty`).
-  let storePointerFuncs = [
-    Region.storeNat64,
-    func storePointer(region : Region, offset : Nat64, child : Nat64) {
-      region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
-      region.storeNat16(offset +% 4, nat32to16(nat64to32(child >> 32)));
-    },
-    func storePointer(region : Region, offset : Nat64, child : Nat64) {
-      region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
-      region.storeNat8(offset +% 4, natWrap8(nat64toNat(child >> 32)));
-    },
-    func storePointer(region : Region, offset : Nat64, child : Nat64) {
-      region.storeNat32(offset, nat64to32(child));
-    },
-    func storePointer(region : Region, offset : Nat64, child : Nat64) {
-      region.storeNat16(offset, nat32to16(nat64to32(child)));
-    },
-  ];
-
   /// Stable trie record underlying `Map` and `Enumeration`.
   /// SHOULD NOT BE USED DIRECTLY FROM USER CODE.
   ///
-  /// Holds:
-  /// - the three `Nat`-typed user inputs actually read at runtime
-  ///   (`pointer_size`, `key_size`, `value_size`) and a host of `Nat64`/`Nat`
-  ///   values precomputed from `args` so per-call hot paths don't recompute
-  ///   conversions and masks;
-  /// - `empty_nodes_list` and `empty_leaves_list`, free lists of freed
-  ///   internal nodes and leaf slots;
-  /// - the mutable state vars: counts and the two regions.
-  public type StableTrie = {
-    pointer_size : Nat;
-    key_size : Nat;
-    value_size : Nat;
-    aridity_ : Nat64;
-    key_size_ : Nat64;
-    pointer_size_ : Nat64;
-    root_aridity_ : Nat64;
-    loadMask : Nat64;
-    bitlength : Nat16;
-    bitshift : Nat8;
-    max_address : Nat64;
-    root_bitlength_ : Nat64;
-    root_bitlength : Nat16;
-    node_size : Nat64;
-    node_size_ : Nat;
-    leaf_size : Nat64;
-    root_size : Nat64;
-    offset_base : Nat64;
-    padding : Nat64;
-    empty_values : Bool;
-    storeFuncIndex : Nat;
-    empty_nodes_list : LinkedList.LinkedList;
-    empty_leaves_list : LinkedList.LinkedList;
-    var leaf_count : Nat64;
-    var node_count : Nat64;
-    var nodes_region : Region;
-    var nodes_freeSpace : Nat64;
-    var leaves_region : Region;
-    var leaves_freeSpace : Nat64;
-  };
+  /// Re-export from `layout.mo`, where the record type lives alongside the
+  /// low-level read/write helpers. Defined there to break the otherwise-
+  /// circular dependency (this module's algorithm calls layout helpers, and
+  /// the helpers need the record type).
+  public type StableTrie = Layout.StableTrie;
 
   /// Construct an empty stable trie.
   public func empty(args : Args) : StableTrie {
@@ -268,32 +212,8 @@ module {
       };
     };
 
-    self.leaves_region.storeBlob(getLeafOffset(self, leaf), key);
+    self.leaves_region.storeBlob(Layout.getLeafOffset(self, leaf), key);
     ?((leaf << 1) | 1);
-  };
-
-  // Get base address of node (the offset of its first child pointer).
-  func getNodeBase(self : StableTrie, node : Nat64) : Nat64 {
-    if (node == 0) return 0; // root node
-    (self.offset_base +% (node >> 1) *% self.node_size);
-  };
-
-  /// Get address of pointer of node's `node` child number `index`.
-  func getNodeOffset(self : StableTrie, node : Nat64, index : Nat64) : Nat64 {
-    let delta = index *% self.pointer_size_;
-    if (node == 0) return delta; // root node
-    (self.offset_base +% (node >> 1) *% self.node_size) +% delta;
-  };
-
-  /// Load node's `node` child number `index`.
-  public func getChild(self : StableTrie, node : Nat64, index : Nat64) : Nat64 {
-    Prim.regionLoadNat64(self.nodes_region, getNodeOffset(self, node, index)) & self.loadMask;
-  };
-
-  /// Set node's `node` child number `index`.
-  public func setChild(self : StableTrie, node : Nat64, index : Nat64, child : Nat64) {
-    let offset = getNodeOffset(self, node, index);
-    storePointerFuncs[self.storeFuncIndex](self.nodes_region, offset, child);
   };
 
   /// Inspect the children of an internal `node` and classify which case
@@ -305,7 +225,7 @@ module {
   /// "zero children" case is unreachable under the deletion invariants
   /// maintained by Map and Enumeration.
   public func scanChildren(self : StableTrie, node : Nat64) : ChildScan {
-    let blob = self.nodes_region.loadBlob(getNodeBase(self, node), self.node_size_);
+    let blob = self.nodes_region.loadBlob(Layout.getNodeBase(self, node), self.node_size_);
     let ps = self.pointer_size;
     var lone : Nat64 = 0;
     var lone_slot : Nat64 = 0;
@@ -347,27 +267,6 @@ module {
     self.empty_leaves_list.push(self.leaves_region, leaf);
   };
 
-  /// Get offset of leaf number `index`.
-  func getLeafOffset(self : StableTrie, index : Nat64) : Nat64 = index *% self.leaf_size;
-
-  /// Load key of leaf number `index`.
-  public func getKey(self : StableTrie, index : Nat64) : Blob {
-    self.leaves_region.loadBlob(getLeafOffset(self, index), self.key_size);
-  };
-
-  /// Load value of leaf number `index`.
-  public func getValue(self : StableTrie, index : Nat64) : Blob {
-    if (self.empty_values) return "";
-    self.leaves_region.loadBlob(getLeafOffset(self, index) +% self.key_size_, self.value_size);
-  };
-
-  /// Set value of leaf number `index`.
-  public func setValue(self : StableTrie, index : Nat64, value : Blob) {
-    assert value.size() == self.value_size;
-    if (self.empty_values) return;
-    self.leaves_region.storeBlob(getLeafOffset(self, index) +% self.key_size_, value);
-  };
-
   /// Get index in root node.
   public func keyToRootIndex(self : StableTrie, key : Blob) : Nat64 {
     var result : Nat64 = 0;
@@ -394,7 +293,7 @@ module {
     var pos = self.root_bitlength;
     var node : Nat64 = 0;
     loop {
-      let child = getChild(self, node, idx);
+      let child = Layout.getChild(self, node, idx);
       if (child == 0 or child & 1 == 1) {
         return (node, idx, child, pos);
       };
@@ -417,12 +316,12 @@ module {
     if (old_leaf == 0) {
       let ?leaf = newLeaf(self, key) else return null;
 
-      setChild(self, node, last, leaf);
+      Layout.setChild(self, node, last, leaf);
       return ?(true, (leaf >> 1));
     };
 
     let index = old_leaf >> 1;
-    let old_key = getKey(self, index);
+    let old_key = Layout.getKey(self, index);
     if (key == old_key) {
       return ?(false, index);
     };
@@ -430,10 +329,10 @@ module {
     var pos = pos_;
     label l loop {
       let ?add = newInternalNode(self) else {
-        setChild(self, node, last, old_leaf);
+        Layout.setChild(self, node, last, old_leaf);
         return null;
       };
-      setChild(self, node, last, add);
+      Layout.setChild(self, node, last, add);
       node := add;
 
       let (a, b) = (keyToIndex(self, key, pos), keyToIndex(self, old_key, pos));
@@ -441,9 +340,9 @@ module {
       if (a == b) {
         last := a;
       } else {
-        setChild(self, node, b, old_leaf);
+        Layout.setChild(self, node, b, old_leaf);
         let ?leaf = newLeaf(self, key) else return null;
-        setChild(self, node, a, leaf);
+        Layout.setChild(self, node, a, leaf);
         return ?(true, (leaf >> 1));
       };
     };
@@ -453,7 +352,7 @@ module {
   /// Recursive walk for `removeLast`.
   func removeLastRec(self : StableTrie, key : Blob, node : Nat64, pos : Nat16) : Nat64 {
     let idx = keyToIndex(self, key, pos);
-    let child = getChild(self, node, idx);
+    let child = Layout.getChild(self, node, idx);
     let new_child = if (child & 1 == 1) {
       0 : Nat64;
     } else {
@@ -462,10 +361,10 @@ module {
 
     if (new_child == child) return node;
 
-    setChild(self, node, idx, new_child);
+    Layout.setChild(self, node, idx, new_child);
     switch (scanChildren(self, node)) {
       case (#onlyLeaf(leaf, slot)) {
-        setChild(self, node, slot, 0);
+        Layout.setChild(self, node, slot, 0);
         pushEmptyNode(self, node);
         leaf;
       };
@@ -479,18 +378,18 @@ module {
     if (self.leaf_count == 0) return null;
 
     let last_index = self.leaf_count -% 1;
-    let key = getKey(self, last_index);
-    let value = getValue(self, last_index);
+    let key = Layout.getKey(self, last_index);
+    let value = Layout.getValue(self, last_index);
 
     let root_idx = keyToRootIndex(self, key);
-    let root_child = getChild(self, 0, root_idx);
+    let root_child = Layout.getChild(self, 0, root_idx);
     let new_root_child = if (root_child & 1 == 1) {
       0 : Nat64;
     } else {
       removeLastRec(self, key, root_child, self.root_bitlength);
     };
     if (new_root_child != root_child) {
-      setChild(self, 0, root_idx, new_root_child);
+      Layout.setChild(self, 0, root_idx, new_root_child);
     };
 
     self.leaf_count -%= 1;
@@ -507,8 +406,8 @@ module {
     if (old_leaf == 0) return null;
     let index = old_leaf >> 1;
 
-    return if (getKey(self, index) == key) {
-      ?(getValue(self, index), nat64toNat(index));
+    return if (Layout.getKey(self, index) == key) {
+      ?(Layout.getValue(self, index), nat64toNat(index));
     } else {
       null;
     };
