@@ -131,6 +131,10 @@ module {
     let leaf_size : Nat64 = args.leaf_size.toNat64();
     let padding : Nat64 = 8 - pointer_size_;
 
+    let max_address : Nat64 = 2 ** (pointer_size_ * 8 - 1);
+    let max_chain_depth : Nat64 = (key_size_ * 8 - root_bitlength_) / bitlength.toNat64();
+    let safe_node_bound : Nat64 = if (max_chain_depth >= max_address) 0 else max_address -% max_chain_depth;
+
     // Allocate the nodes and leaves regions eagerly so the region/freeSpace
     // pairs are plain `var`s (no Option wrapper). The nodes region grows
     // enough pages to hold the root and its padding; the leaves region
@@ -150,8 +154,9 @@ module {
       loadMask = if (args.pointer_size == 8) 0xffff_ffff_ffff_ffff : Nat64 else (1 << (pointer_size_ << 3)) - 1;
       bitlength;
       bitshift = (8 - bitlength).toNat8();
-      max_address = 2 ** (pointer_size_ * 8 - 1);
-      max_chain_depth = (key_size_ * 8 - root_bitlength_) / bitlength.toNat64();
+      max_address;
+      max_chain_depth;
+      safe_node_bound;
       root_bitlength_;
       root_bitlength = root_bitlength_.toNat16();
       node_size;
@@ -307,24 +312,33 @@ module {
   /// index of leaf) or `null` if the pointer-size limit would be hit.
   ///
   /// On `null`, the trie is left unchanged — `put_` is atomic. This is
-  /// achieved with a capacity check up front: an O(1) optimistic check
-  /// against a static upper bound on `put_`'s allocation needs, falling
-  /// through to a precise pre-walk only when we're within a worst-case
-  /// chain length of the cap.
+  /// achieved with a three-tier capacity check:
+  ///
+  ///   - Tier 1: two `Nat64` compares against static bounds. Does not
+  ///     touch the empty-list counters at all, so the hot path never
+  ///     pays for a `Nat → Nat64` conversion.
+  ///   - Tier 2 (only on near-capacity): include free-list slots in the
+  ///     check; still O(1).
+  ///   - Tier 3 (only if tier 2 also fails): precise per-call pre-walk
+  ///     to determine actual chain length.
   public func put_(self : StableTrie, key : Blob) : ?(Bool, Nat64) {
     assert key.size() == self.key_size;
 
-    // O(1) optimistic capacity check. `max_chain_depth` is the static
-    // upper bound on how many internal nodes the split loop can create.
+    // Tier 1: conservative bounds. `node_count < safe_node_bound`
+    // guarantees room for the worst-case chain; `leaf_count <
+    // max_address` guarantees room for one fresh leaf.
+    if (self.node_count < self.safe_node_bound and self.leaf_count < self.max_address) {
+      return ?putUnchecked(self, key);
+    };
+
+    // Tier 2: account for free-list reuse before giving up the fast path.
     let avail_internals = self.max_address -% self.node_count +% self.empty_nodes_list.count.toNat64();
     let avail_leaves = self.max_address -% self.leaf_count +% self.empty_leaves_list.count.toNat64();
-
     if (avail_leaves >= 1 and avail_internals >= self.max_chain_depth) {
       return ?putUnchecked(self, key);
     };
 
-    // Near capacity — fall back to a precise pre-walk to decide whether
-    // this specific call actually has room.
+    // Tier 3: precise pre-walk.
     putPreciseCheck(self, key, avail_internals, avail_leaves);
   };
 

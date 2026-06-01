@@ -51,8 +51,13 @@ module {
     /// loop can allocate in one call. Equal to the maximum chain length
     /// from below-root to the bottom of the trie:
     /// `(key_size * 8 - root_bitlength) / bitlength`.
-    /// Used by `put_`'s O(1) optimistic capacity check.
     max_chain_depth : Nat64;
+    /// `max_address - max_chain_depth`, saturated at 0. Used by `put_`'s
+    /// tier-1 capacity check: if `node_count < safe_node_bound`, the
+    /// split loop's worst-case allocation fits without consulting the
+    /// `empty_nodes_list`. Conservative — false alarms fall through to
+    /// the tier-2 check that does account for the free list.
+    safe_node_bound : Nat64;
     root_bitlength_ : Nat64;
     root_bitlength : Nat16;
     node_size : Nat64;
