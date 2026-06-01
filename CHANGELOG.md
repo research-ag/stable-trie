@@ -1,29 +1,14 @@
 # Stable-trie changelog
 
-## 0.2.0
-
-API rename to align with `mo:core/Map` and `mo:core/List` conventions.
-
-Map renames from 0.1.0: `put` → `add`, `replace` (`?V`, always-write) → `swap`, `getOrPut` → `getOrAdd`, `remove` (`?V`) → `take`, `delete` (silent) → `remove`. Iteration: `vals` → `values`, `valsRev` → `reverseValues`, `entriesRev` → `reverseEntries`, `keysRev` → `reverseKeys`.
-
-Map new functions: `insert(k, v) : Bool` (returns "was new"), `replace(k, v) : ?V` (writes only if present), `delete(k) : Bool` (returns "was present"), `containsKey(k) : Bool`, `isEmpty() : Bool`.
-
-Enumeration renames from 0.1.0: `slice` → `sliceToArray`, `lookupOrPut` → `lookupOrAdd`. Iteration: same renames as Map.
-
-Enumeration new functions: `insert(k, v) : (Bool, Nat)`, `put(i, v) : ()` (O(1) by-index value overwrite, traps on OOB), `at(i) : (K, V)` (trapping by-index read), `range(l, r) : Iter<(K, V)>` (lazy index-order iter), `truncate(newSize) : ()` (bulk pop), `containsKey`, `isEmpty`.
-
-Enumeration dropped: `replace` (compose `lookup` + `put` instead — by-index writes are O(1) so no separate primitive is needed).
-
-Each write op that can hit pointer-size overflow has a `*Checked` Result variant; `replace` (Map) and the by-index writes can't overflow so they don't.
-
-Bug fix: `sliceToArray` (formerly `slice`) correctly returns entries from indices `[l, r)`. In 0.0.8/0.1.0 the function returned entries from `[0, r-l)`, so any call with `l > 0` returned wrong data. The 0.0.8/0.1.0 tests only exercised `slice(0, n)` so it went unnoticed.
-
 ## 0.1.0
 
 - Rewrite of `Map` and `Enumeration` as static records, not classes, that can be declared stable.
-- New constructors called `empty()`.
-- New function `Enumeration.removeLast()` that deletes the most-recently-added entry
+- Re-design `Map` API to align with conventions from core/Map
+- Re-design `Enumeration` API to align with conventions from core/List
+- New functions for `Map`: 
+- New functions `removeLast(), truncate()` to delete highest-index elements in `Enumeration`
 - Bumped `core` dependency to `2.5.0`.
+- Bugfix in `Enumeration.slice` (left boundary was ignored)
 
 ## 0.0.8
 
