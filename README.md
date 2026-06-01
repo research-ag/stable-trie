@@ -181,13 +181,17 @@ import Enumeration "mo:stable-trie/Enumeration";
 
 ```
 
-`Map` and `Enumeration` are records with all-stable fields, so a value
-can be declared as a `stable var` directly in a persistent actor —
-there is no `share` / `unshare` round-trip.
+`Map` and `Enumeration` are records with all-stable fields, so an
+instance can live directly inside a `persistent actor` (a plain `let`
+binding is enough; `stable` is implicit there). There is no
+`share` / `unshare` round-trip.
 
 ### Example
 
 ```motoko
+import Iter "mo:core/Iter";
+import Map "mo:stable-trie/Map";
+
 let m = Map.empty({
   pointer_size = 2;
   aridity = 2;
@@ -207,6 +211,8 @@ m.remove("aaa");
 ```
 
 ```motoko
+import Enumeration "mo:stable-trie/Enumeration";
+
 let e = Enumeration.empty({
   pointer_size = 2;
   aridity = 2;
@@ -241,7 +247,7 @@ persistent actor {
     value_size = 4;
   });
 
-  public func put(k : Blob, v : Blob) : async () { m.put(k, v) };
+  public func add(k : Blob, v : Blob) : async () { m.add(k, v) };
   public query func get(k : Blob) : async ?Blob { m.get(k) };
 };
 

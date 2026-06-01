@@ -1,7 +1,8 @@
 // @testmode wasi
 //
-// Runs the `Map` code example shown in README.md, verbatim except for the
-// added `import Iter`. Keeps the example in lock-step with the actual API.
+// Runs the `Map` code example shown in README.md verbatim (except for the
+// `mo:stable-trie/Map` import being rewritten to the in-repo relative
+// path). Keeps the example in lock-step with the actual API.
 
 import Iter "mo:core/Iter";
 import Map "../src/Map";
