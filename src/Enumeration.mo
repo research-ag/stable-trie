@@ -45,9 +45,12 @@
 /// variant returning `Result.Result<_, { #LimitExceeded }>`. `put` cannot
 /// overflow (no new leaf is allocated).
 ///
-/// `swap` / `replace` are intentionally absent from Enumeration: writing
-/// by index is O(1), so a `lookup(k)` + `put(i, v)` composition is cheaper
-/// than a tree-descending always-overwrite primitive would be.
+/// `swap` and `replace` are intentionally absent from Enumeration. In Map
+/// those primitives are useful because they fold the find and the write
+/// into a single tree-descent — there's no other way to overwrite without
+/// descending twice. In Enumeration, `put(i, v)` is O(1), so a `lookup(k)`
+/// + `put(i, v)` composition is no slower than a fused primitive would be
+/// and the user has the index in hand for further use.
 ///
 /// An `Enumeration` value can live directly inside a `persistent actor` —
 /// there is no `share`/`unshare` round-trip. A plain `let` binding is
@@ -67,22 +70,21 @@ import Layout "internal/layout";
 import Iter "internal/iter";
 
 module {
-  /// Memory stats.
-  ///
-  /// `node_count` is the count of internal trie nodes currently in use. After
-  /// truncating every entry, `node_count` drops back to `1` (the root).
-  /// `byte_size` reflects the actual underlying region usage, which never
-  /// shrinks.
+  /// Memory-usage statistics. `node_count` is internal trie nodes
+  /// currently in use; after `truncate(0)` it drops back to `1` (the
+  /// root). `total_node_count` is the high-water mark and never shrinks.
+  /// `byte_size` is also a high-water figure: regions only grow.
   public type MemoryStats = Trie.MemoryStats;
 
-  /// Arguments type of `Enumeration`.
+  /// Arguments to `empty()`. See `empty` for field meanings.
   public type Args = Trie.BaseArgs;
 
-  /// Bidirectional enumeration of any keys in the order they are added.
-  /// For a map from keys to index `Nat` it is implemented as trie in stable
-  /// memory; for a map from index `Nat` to keys the implementation is a
-  /// consecutive interval of stable memory. Same underlying type as `Map` —
-  /// `Map` and `Enumeration` are just two interfaces.
+  /// A key→value→index store: every key has both a value and an inherent
+  /// `Nat` index reflecting its insertion order. Keys live in a trie
+  /// (key→index lookup); values live in a flat array indexed by the index
+  /// (index→key/value lookup). Same underlying record as `Map` — `Map`
+  /// and `Enumeration` are just two interfaces over the same data
+  /// structure.
   public type Enumeration = Trie.StableTrie;
 
   /// Construct an empty `Enumeration`.
@@ -260,22 +262,26 @@ module {
 
   // ─── Iteration & misc ─────────────────────────────────────────────────────
 
-  /// Returns all entries ordered by `Blob.compare` of keys (NOT index order).
+  // Iteration helpers walk the trie, so they visit entries in
+  // **key-sorted** (Blob.compare) order — *not* insertion order. For
+  // index-order iteration, use `range(0, size())` or `sliceToArray`.
+
+  /// Iterate `(key, value)` pairs in ascending key order.
   public func entries(self : Enumeration) : Types.Iter<(Blob, Blob)> = Iter.entries(self);
 
-  /// Returns all entries in reverse key-sorted order.
+  /// Iterate `(key, value)` pairs in descending key order.
   public func reverseEntries(self : Enumeration) : Types.Iter<(Blob, Blob)> = Iter.reverseEntries(self);
 
-  /// Returns all values in key-sorted order.
+  /// Iterate values in ascending key order.
   public func values(self : Enumeration) : Types.Iter<Blob> = Iter.values(self);
 
-  /// Returns all values in reverse key-sorted order.
+  /// Iterate values in descending key order.
   public func reverseValues(self : Enumeration) : Types.Iter<Blob> = Iter.reverseValues(self);
 
-  /// Returns all keys in key-sorted order.
+  /// Iterate keys in ascending key order.
   public func keys(self : Enumeration) : Types.Iter<Blob> = Iter.keys(self);
 
-  /// Returns all keys in reverse key-sorted order.
+  /// Iterate keys in descending key order.
   public func reverseKeys(self : Enumeration) : Types.Iter<Blob> = Iter.reverseKeys(self);
 
   /// Number of entries in the enumeration.
@@ -284,7 +290,6 @@ module {
   /// `true` iff the enumeration has no entries.
   public func isEmpty(self : Enumeration) : Bool = size(self) == 0;
 
-  /// Memory stats. `node_count` is the number of internal nodes currently
-  /// in use; `total_node_count` is the high water (region size).
+  /// Returns memory-usage statistics. See `MemoryStats` for field meanings.
   public func memoryStats(self : Enumeration) : MemoryStats = Trie.memoryStats(self);
 };

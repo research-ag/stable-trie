@@ -1,11 +1,12 @@
 /// Memory layout for the stable-trie record.
 ///
 /// Owns the `StableTrie` record type and the low-level read/write helpers
-/// (`getChild`/`setChild`/`getKey`/`getValue`/`setValue`) plus the address
-/// arithmetic (`getNodeBase`/`getLeafOffset`) and the pointer-size store
-/// dispatch table. Everything in here is "this is where in memory things
-/// live, and how to encode/decode them" — the algorithm itself (find/put/
-/// remove/lookup/iter) lives in `trie.mo`.
+/// (`getChild`/`setChild`/`getKey`/`getValue`/`setValue`/`getRawNode`)
+/// plus the address arithmetic. Everything here is "where in memory
+/// things live, and how to encode/decode them" — the algorithm itself
+/// (find/put/remove/lookup/iter) lives in `trie.mo`. `setChild`
+/// dispatches via an if-else cascade on `pointer_size` ordered
+/// `2 → 4 → 5 → 6 → 8` (most common first).
 ///
 /// The type definition lives here (rather than in `trie.mo`) to break the
 /// otherwise-circular dependency: `trie.mo`'s algorithm calls layout

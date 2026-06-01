@@ -51,20 +51,29 @@ import Layout "internal/layout";
 import Iter "internal/iter";
 
 module {
-  /// Arguments type of `Map`.
+  /// Arguments to `empty()`. See `empty` for field meanings.
   public type Args = Trie.BaseArgs;
 
-  /// Memory stats.
+  /// Memory usage statistics.
+  ///
+  /// The `total_*` counts are high-water marks — they never shrink, even
+  /// after deletions. The `used_*` counts subtract entries currently sitting
+  /// in the free lists (slots freed by `take`/`delete`/`remove`, available
+  /// for reuse by subsequent inserts). `byte_size` is also a high-water
+  /// figure: regions only grow.
   public type MemoryStats = {
-    /// Size of used stable memory in bytes.
+    /// Total bytes occupied by the trie's stable-memory regions
+    /// (high-water mark; never shrinks).
     byte_size : Nat;
-    /// Number of leaves without deleted ones.
+    /// Leaves currently in use (`total_leaf_count` minus those freed by
+    /// removals and waiting in the empty-leaves free list).
     used_leaf_count : Nat;
-    /// Number of nodes without deleted ones.
+    /// Internal nodes currently in use (`total_node_count` minus those
+    /// freed by node-collapse and waiting in the empty-nodes free list).
     used_node_count : Nat;
-    /// Number of allocated leaves.
+    /// Total leaves ever allocated (high-water mark; never shrinks).
     total_leaf_count : Nat;
-    /// Number of allocated nodes.
+    /// Total internal nodes ever allocated (high-water mark; never shrinks).
     total_node_count : Nat;
   };
 
@@ -76,22 +85,31 @@ module {
   /// Construct an empty `Map`.
   ///
   /// Arguments:
-  /// + `pointer_size` is the number of bytes used for internal pointers. Allowed values are 2, 4, 5, 6, 8.
-  ///    There can be at most `N/2` inner nodes in the trie and at most `N/2` leaves where `N = 256 ** pointer_size`.
-  /// + `aridity` is the number of children of any inner node that is not the root node. Allowed values are 2, 4, 16, 256. The recommended value is 4.
-  /// + `root_aridity` is the number of children of the root node. If `null`, then `aridity` is used.
-  /// + `key_size` is the byte length of all keys.
-  /// + `value_size` is the byte length of all values. If `0` then the map becomes a set.
+  /// - `pointer_size : Nat` — bytes used for each internal pointer. One of
+  ///   `2, 4, 5, 6, 8`. Bounds the trie's capacity: at most `N/2` leaves
+  ///   and `N/2` internal nodes where `N = 256 ** pointer_size`.
+  /// - `aridity : Nat` — number of children per non-root internal node.
+  ///   One of `2, 4, 16, 256`. `4` is recommended for uniformly distributed
+  ///   keys.
+  /// - `root_aridity : ?Nat` — children of the root node. `null` defaults
+  ///   to `aridity`; a higher value collapses several upper levels into
+  ///   the root, saving memory when those levels are dense.
+  /// - `key_size : Nat` — byte length of every key (constant for the life
+  ///   of the map).
+  /// - `value_size : Nat` — byte length of every value. `0` makes the map
+  ///   a set.
   ///
-  /// There is a requirement that `key_size + value_size >= pointer_size`.
+  /// If `key_size + value_size < pointer_size`, leaf slots are padded up
+  /// to `pointer_size` bytes so they can carry a chain link in the
+  /// empty-leaves free list. The padding is transparent to the caller.
   public func empty(args : Args) : Map = Trie.empty({
     args with leaf_size = Nat.max(args.key_size + args.value_size, args.pointer_size);
   });
 
   // ─── Writing ──────────────────────────────────────────────────────────────
 
-  /// Add `(key, value)` to the map. Always writes (overwrites any existing
-  /// value). Returns `#LimitExceeded` if pointer size limit is exceeded.
+  /// Insert or overwrite `(key, value)`. Returns `#err(#LimitExceeded)` if
+  /// the pointer-size limit is reached, else `#ok()`.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func addChecked(self : Map, key : Blob, value : Blob) : Result.Result<(), { #LimitExceeded }> {
@@ -100,12 +118,13 @@ module {
     #ok();
   };
 
-  /// Add `(key, value)` to the map. Always writes. Traps on pointer-size overflow.
+  /// Insert or overwrite `(key, value)`. Traps if the pointer-size limit is
+  /// reached.
   public func add(self : Map, key : Blob, value : Blob) = Trie.unwrap(addChecked(self, key, value));
 
-  /// Add `(key, value)` to the map. Always writes. Returns `#LimitExceeded`
-  /// on pointer-size overflow; on success returns `true` if the key was new
-  /// to the map, `false` if it overwrote an existing entry.
+  /// Insert or overwrite `(key, value)`. Returns `#err(#LimitExceeded)` on
+  /// overflow; on success returns `true` if the key was new and `false` if
+  /// the call overwrote an existing entry.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func insertChecked(self : Map, key : Blob, value : Blob) : Result.Result<Bool, { #LimitExceeded }> {
@@ -114,13 +133,13 @@ module {
     #ok(added);
   };
 
-  /// Add `(key, value)` to the map. Always writes. Returns `true` if the
-  /// key was new. Traps on pointer-size overflow.
+  /// Insert or overwrite `(key, value)`. Returns `true` if the key was new.
+  /// Traps if the pointer-size limit is reached.
   public func insert(self : Map, key : Blob, value : Blob) : Bool = Trie.unwrap(insertChecked(self, key, value));
 
-  /// Add `(key, value)` to the map. Always writes. Returns `#LimitExceeded`
-  /// on pointer-size overflow; on success returns the previous value (or
-  /// `null` if the key is new).
+  /// Insert or overwrite `(key, value)`. Returns `#err(#LimitExceeded)` on
+  /// overflow; on success returns the previous value associated with `key`,
+  /// or `null` if the key was new.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func swapChecked(self : Map, key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
@@ -137,13 +156,15 @@ module {
     );
   };
 
-  /// Add `(key, value)` to the map. Always writes. Returns the previous
-  /// value (or `null` if the key is new). Traps on pointer-size overflow.
+  /// Insert or overwrite `(key, value)`. Returns the previous value
+  /// associated with `key`, or `null` if the key was new. Traps if the
+  /// pointer-size limit is reached.
   public func swap(self : Map, key : Blob, value : Blob) : ?Blob = Trie.unwrap(swapChecked(self, key, value));
 
-  /// Replace the value for an existing `key`. Writes ONLY IF the key is
-  /// already present. Returns the previous value, or `null` if the key was
-  /// absent (in which case the map is unchanged). Cannot overflow.
+  /// Overwrite the value at `key` ONLY IF the key is already present.
+  /// Returns the previous value, or `null` if the key was absent (in which
+  /// case the map is unchanged). Cannot overflow — never allocates a new
+  /// leaf — and therefore has no `*Checked` variant.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func replace(self : Map, key : Blob, value : Blob) : ?Blob {
@@ -156,10 +177,10 @@ module {
     };
   };
 
-  /// Add `(key, value)` if `key` is absent. Writes ONLY IF the key is new.
-  /// Returns `#LimitExceeded` on pointer-size overflow; on success returns
-  /// the previous value (if the key was present and untouched) or `null`
-  /// (if the key was new and got inserted).
+  /// Insert `(key, value)` ONLY IF `key` is absent. Returns
+  /// `#err(#LimitExceeded)` on overflow; on success returns `null` (the
+  /// key was new and the value was stored) or the existing value (the key
+  /// was already present and was left untouched).
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func getOrAddChecked(self : Map, key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
@@ -174,9 +195,9 @@ module {
     );
   };
 
-  /// Add `(key, value)` if `key` is absent. Returns the previous value if
-  /// the key was already present, `null` if the key was new and got
-  /// inserted. Traps on pointer-size overflow.
+  /// Insert `(key, value)` ONLY IF `key` is absent. Returns `null` (newly
+  /// inserted) or the existing value (left untouched). Traps if the
+  /// pointer-size limit is reached.
   public func getOrAdd(self : Map, key : Blob, value : Blob) : ?Blob = Trie.unwrap(getOrAddChecked(self, key, value));
 
   // ─── Reading ──────────────────────────────────────────────────────────────
@@ -193,9 +214,9 @@ module {
 
   // ─── Removal ──────────────────────────────────────────────────────────────
 
-  /// Remove `key` from the map. Returns the previous value, or `null` if
-  /// the key was absent. Reads the value via `loadBlob` (allocates a Blob
-  /// on the heap with the bytes copied from stable memory).
+  /// Remove `key` from the map and return the previous value, or `null`
+  /// if the key was absent. The only removal path that reads the leaf's
+  /// value — choose `delete` or `remove` if you don't need it back.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func take(self : Map, key : Blob) : ?Blob {
@@ -203,9 +224,8 @@ module {
     value;
   };
 
-  /// Remove `key` from the map. Returns `true` if the key was present.
-  /// Skips the `loadBlob`/heap allocation that `take` would do — only the
-  /// boolean is propagated up the recursion.
+  /// Remove `key` from the map. Returns `true` if the key was present,
+  /// `false` if it was absent (in which case the map is unchanged).
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func delete(self : Map, key : Blob) : Bool {
@@ -213,9 +233,7 @@ module {
     removed;
   };
 
-  /// Remove `key` from the map. Silent; returns nothing. No-op if absent.
-  /// Wraps `delete`; the boolean is discarded. Shares `delete`'s cheaper
-  /// no-loadBlob path.
+  /// Remove `key` from the map. No-op if absent. Returns nothing.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func remove(self : Map, key : Blob) = ignore delete(self, key);
@@ -274,23 +292,25 @@ module {
   };
 
   // ─── Iteration & misc ─────────────────────────────────────────────────────
+  //
+  // All iteration is in key-sorted (Blob.compare) order.
 
-  /// Returns all the key-value pairs in the map ordered by `Blob.compare` of keys.
+  /// Iterate `(key, value)` pairs in ascending key order.
   public func entries(self : Map) : Types.Iter<(Blob, Blob)> = Iter.entries(self);
 
-  /// Returns all the key-value pairs in the map in reverse key-sorted order.
+  /// Iterate `(key, value)` pairs in descending key order.
   public func reverseEntries(self : Map) : Types.Iter<(Blob, Blob)> = Iter.reverseEntries(self);
 
-  /// Returns all the values in the map ordered by `Blob.compare` of keys.
+  /// Iterate values in ascending key order.
   public func values(self : Map) : Types.Iter<Blob> = Iter.values(self);
 
-  /// Returns all the values in the map in reverse key-sorted order.
+  /// Iterate values in descending key order.
   public func reverseValues(self : Map) : Types.Iter<Blob> = Iter.reverseValues(self);
 
-  /// Returns all the keys in the map ordered by `Blob.compare`.
+  /// Iterate keys in ascending order.
   public func keys(self : Map) : Types.Iter<Blob> = Iter.keys(self);
 
-  /// Returns all the keys in the map in reverse key-sorted order.
+  /// Iterate keys in descending order.
   public func reverseKeys(self : Map) : Types.Iter<Blob> = Iter.reverseKeys(self);
 
   /// Number of key-value pairs in the map.
@@ -299,7 +319,7 @@ module {
   /// `true` iff the map has no entries.
   public func isEmpty(self : Map) : Bool = size(self) == 0;
 
-  /// Memory stats.
+  /// Returns memory-usage statistics. See `MemoryStats` for field meanings.
   public func memoryStats(self : Map) : MemoryStats {
     let { byte_size; leaf_count; node_count; total_node_count } = Trie.memoryStats(self);
     {

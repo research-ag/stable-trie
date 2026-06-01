@@ -40,12 +40,16 @@ module {
   // down conversions
   let nat16to8 = Prim.nat16ToNat8;
 
-  /// Arguments of constructor of `Enumeration` and `Map`.
-  /// pointer_size: size of pointer in bytes (2, 4, 5, 6, 8)
-  /// aridity: number of children per internal node (2, 4, 16, 256)
-  /// root_aridity: number of children for root node (must be power), null means same as aridity
-  /// key_size: size of keys in bytes (>= 1)
-  /// value_size: size of values in bytes (>= 0)
+  /// Constructor arguments shared by `Enumeration` and `Map`. The public
+  /// `empty()` in those modules documents the fields in user-facing terms.
+  ///
+  /// - `pointer_size : Nat` — pointer byte width; one of `2, 4, 5, 6, 8`.
+  /// - `aridity : Nat` — children per non-root internal node; one of
+  ///   `2, 4, 16, 256`.
+  /// - `root_aridity : ?Nat` — children of the root node (must be a power
+  ///   of 2 ≥ `aridity`); `null` defaults to `aridity`.
+  /// - `key_size : Nat` — fixed key byte length, `≥ 1`.
+  /// - `value_size : Nat` — fixed value byte length, `≥ 0`.
   public type BaseArgs = {
     pointer_size : Nat;
     aridity : Nat;
@@ -54,7 +58,9 @@ module {
     value_size : Nat;
   };
 
-  /// Arguments of constructor of `StableTrie`.
+  /// `BaseArgs` plus `leaf_size` — the byte size of a leaf slot. The
+  /// public modules compute this for the user (Map pads up to
+  /// `pointer_size`; Enumeration uses `key_size + value_size` directly).
   public type Args = BaseArgs and {
     leaf_size : Nat;
   };
