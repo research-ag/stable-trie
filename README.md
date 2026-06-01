@@ -186,6 +186,92 @@ instance can live directly inside a `persistent actor` (a plain `let`
 binding is enough; `stable` is implicit there). There is no
 `share` / `unshare` round-trip.
 
+### API
+
+`Map` and `Enumeration` are two views over the same underlying trie record.
+
+- **`Map`** is a key→value map. Its API mirrors `mo:core/Map`: same verbs, same return types, same conventions.
+- **`Enumeration`** is the same trie with each entry carrying its insertion-order index. By-key access follows the same `mo:core/Map` verbs (augmented with the index in the return); by-index access (`get`, `at`, `range`, `sliceToArray`, `removeLast`, `truncate`) mirrors `mo:core/List`.
+
+Both are configured with fixed-width `Blob` keys and values (set `value_size = 0` to use the trie as a set).
+
+#### `Map` — same vocabulary as `mo:core/Map`
+
+Writes (all by key):
+
+| op               | returns | semantics                                             |
+| ---------------- | ------- | ----------------------------------------------------- |
+| `add(k, v)`      | `()`    | always writes; fire-and-forget                        |
+| `insert(k, v)`   | `Bool`  | always writes; `true` iff the key was new             |
+| `swap(k, v)`     | `?V`    | always writes; returns previous value                 |
+| `replace(k, v)`  | `?V`    | writes ONLY if key already present; previous value    |
+| `getOrAdd(k, v)` | `?V`    | writes ONLY if key absent; previous value (else null) |
+
+Reads:
+
+| op               | returns |
+| ---------------- | ------- |
+| `get(k)`         | `?V`    |
+| `containsKey(k)` | `Bool`  |
+
+Removal:
+
+| op          | returns                             |
+| ----------- | ----------------------------------- |
+| `remove(k)` | `()` — silent                       |
+| `delete(k)` | `Bool` — `true` iff key was present |
+| `take(k)`   | `?V` — previous value               |
+
+Iteration is in ascending key order (`Blob.compare`): `entries`, `reverseEntries`, `keys`, `reverseKeys`, `values`, `reverseValues`.
+
+Every write that can hit the pointer-size cap has a `*Checked` variant (`addChecked`, `insertChecked`, `swapChecked`, `getOrAddChecked`) returning `Result.Result<_, { #LimitExceeded }>`. `replace` cannot overflow — it never allocates a new leaf — so there is no `replaceChecked`.
+
+#### `Enumeration` — `mo:core/Map` by key, `mo:core/List` by index
+
+By-key writes — return value is augmented with the entry's insertion-order index:
+
+| op                  | returns       |
+| ------------------- | ------------- |
+| `add(k, v)`         | `Nat`         |
+| `insert(k, v)`      | `(Bool, Nat)` |
+| `lookupOrAdd(k, v)` | `(?V, Nat)`   |
+
+By-index write:
+
+| op          | returns                                                          |
+| ----------- | ---------------------------------------------------------------- |
+| `put(i, v)` | `()` — O(1) value overwrite at index `i`; traps if `i >= size()` |
+
+Reads:
+
+| op                   | returns                                                           |
+| -------------------- | ----------------------------------------------------------------- |
+| `lookup(k)`          | `?(V, Nat)` — by key                                              |
+| `containsKey(k)`     | `Bool`                                                            |
+| `get(i)`             | `?(K, V)` — by index; `null` if out of range (mirrors `List.get`) |
+| `at(i)`              | `(K, V)` — by index; traps if out of range (mirrors `List.at`)    |
+| `range(l, r)`        | `Iter<(K, V)>` — lazy iterator over `[l, r)` in insertion order   |
+| `sliceToArray(l, r)` | `[(K, V)]` — materialized slice                                   |
+
+Removal:
+
+| op             | returns                                                                    |
+| -------------- | -------------------------------------------------------------------------- |
+| `removeLast()` | `?(K, V)` — pops the most-recently-added entry (mirrors `List.removeLast`) |
+| `truncate(n)`  | `()` — keep only the first `n` entries (mirrors `List.truncate`)           |
+
+`*Checked` variants exist for the by-key writes (`addChecked`, `insertChecked`, `lookupOrAddChecked`).
+
+Iteration by key is the same set as `Map`'s (`entries`, `reverseEntries`, `keys`, `reverseKeys`, `values`, `reverseValues`); iteration in insertion order is via `range` and `sliceToArray`.
+
+#### How this differs from `mo:core/Map` and `mo:core/List`
+
+- **Fixed-width `Blob` keys and values.** `core/Map` and `core/List` are generic over their element type. Here every entry is `Blob → Blob` with the byte widths fixed at construction (`key_size`, `value_size`). Variable-width data can be stored indirectly — see the _Extensions_ section above.
+- **Stable-memory backed.** All data lives in `Region`s; the heap footprint is `O(1)` (region handles, counters, free-list heads). A `Map` or `Enumeration` value lives directly inside a `persistent actor` — no `share` / `unshare`.
+- **Bounded capacity.** The pointer size (`pointer_size = 2, 4, 5, 6, 8` bytes) caps how many entries the trie can hold. Writes can return `#err(#LimitExceeded)` via the `*Checked` variants; the trapping (`add`, `insert`, etc.) variants trap on overflow and rely on the IC's message rollback to undo any in-flight mutation. `core/Map` / `core/List` have no such limit.
+- **No `swap` / `replace` on `Enumeration`.** With `lookup` (key → index) and `put` (index → value) both available, the user composes the two when they want swap/replace semantics — cheaper than re-walking the trie under the hood. So `Enumeration`'s key-write surface is intentionally narrower than `Map`'s.
+- **Iteration always sorted.** `Map.entries` and `Enumeration.entries` always iterate in ascending key order. `Enumeration` additionally exposes insertion-order traversal via `range` / `sliceToArray`.
+
 ### Example
 
 ```motoko
