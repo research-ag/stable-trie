@@ -94,7 +94,10 @@ module {
   /// Construct an empty stable trie.
   public func empty(args : Args) : StableTrie {
     assert switch (args.pointer_size) {
-      case (2 or 4 or 5 or 6 or 8) true;
+      // 1 is intended for tests: it shrinks max_address to 2**7 = 128,
+      // making it cheap to construct scenarios that hit the node/leaf
+      // pointer cap. It is not meant to be used in production tries.
+      case (2 or 4 or 5 or 6 or 8 or 1) true;
       case (_) false;
     };
     assert switch (args.aridity) {

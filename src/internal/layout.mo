@@ -111,10 +111,12 @@ module {
 
   /// Set node's `node` child number `index`.
   /// General version: nested if-else on `pointer_size`, checking sizes in
-  /// order 2, 4, 5, 6, 8. Use this from sites where setChild is called only
-  /// once. From hot sites that call it repeatedly (e.g. `put_`), hoist the
-  /// dispatch by picking the matching `setChildN` once and reusing it.
-  /// getNodeOffset is inlined here too — moc doesn't auto-inline it.
+  /// order 2, 4, 5, 6, 8, 1 (most common first; `ps = 1` is a test-only
+  /// configuration and lives at the bottom of the cascade). Use this from
+  /// sites where setChild is called only once. From hot sites that call it
+  /// repeatedly (e.g. `put_`), hoist the dispatch by picking the matching
+  /// `setChildN` once and reusing it. getNodeOffset is inlined here too —
+  /// moc doesn't auto-inline it.
   public func setChild(self : StableTrie, node : Nat64, index : Nat64, child : Nat64) {
     let delta = index *% self.pointer_size_;
     let offset = if (node == 0) delta else (self.offset_base +% (node >> 1) *% self.node_size) +% delta;
@@ -130,8 +132,11 @@ module {
     } else if (ps == 6) {
       region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
       region.storeNat16(offset +% 4, nat32to16(nat64to32(child >> 32)));
-    } else {
+    } else if (ps == 8) {
       region.storeNat64(offset, child);
+    } else {
+      // ps == 1, tests only.
+      region.storeNat8(offset, natWrap8(nat64toNat(child)));
     };
   };
 

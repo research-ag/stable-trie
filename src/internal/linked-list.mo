@@ -68,8 +68,9 @@ module {
   };
 
   /// Store a `pointer_size`-byte link at `offset`. Dispatches via if-else
-  /// on `ps`, ordered 2,4,5,6,8 — `pointer_size = 2` is by far the most
-  /// common case, so its branch is first.
+  /// on `ps`, ordered 2,4,5,6,8,1 — `pointer_size = 2` is by far the most
+  /// common case, so its branch is first; `ps = 1` is a test-only
+  /// configuration at the bottom of the cascade.
   func storePointer(region : Region.Region, ps : Nat, offset : Nat64, link : Nat64) {
     if (ps == 2) {
       region.storeNat16(offset, nat32to16(nat64to32(link)));
@@ -81,8 +82,11 @@ module {
     } else if (ps == 6) {
       region.storeNat32(offset, nat64to32(link & 0xffff_ffff));
       region.storeNat16(offset +% 4, nat32to16(nat64to32(link >> 32)));
-    } else {
+    } else if (ps == 8) {
       region.storeNat64(offset, link);
+    } else {
+      // ps == 1, tests only.
+      region.storeNat8(offset, natWrap8(nat64toNat(link)));
     };
   };
 
