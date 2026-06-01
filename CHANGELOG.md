@@ -5,9 +5,7 @@
 - Rewrite of `Map` and `Enumeration` as static records, not classes, that can be declared stable.
 - Re-design `Map` API to align with conventions from core/Map
 - Re-design `Enumeration` API to align with conventions from core/List
-- New functions for `Map`:
 - New functions `removeLast(), truncate()` to delete highest-index elements in `Enumeration`
-- Bumped `core` dependency to `2.5.0`.
 - Bugfix in `Enumeration.slice` (left boundary was ignored)
 
 ## 0.0.8
