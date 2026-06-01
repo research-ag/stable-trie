@@ -82,7 +82,7 @@ for (value_size in value_sizes.vals()) {
       let vals = Iter.toArray(Iter.map<(Blob, Blob), Blob>(trie.entries(), func((a, _)) = a));
       assert vals == sorted;
 
-      let revVals = Iter.toArray(Iter.map<(Blob, Blob), Blob>(trie.entriesRev(), func((a, _)) = a));
+      let revVals = Iter.toArray(Iter.map<(Blob, Blob), Blob>(trie.reverseEntries(), func((a, _)) = a));
       assert revVals == revSorted;
     };
   };

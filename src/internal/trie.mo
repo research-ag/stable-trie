@@ -405,6 +405,16 @@ module {
     };
   };
 
+  /// Check whether `key` is present in the trie. Cheaper than `lookup`
+  /// because it skips the value blob allocation.
+  public func contains(self : StableTrie, key : Blob) : Bool {
+    assert key.size() == self.key_size;
+
+    let (_, _, old_leaf, _) = find(self, key);
+    if (old_leaf == 0) return false;
+    Layout.getKey(self, old_leaf >> 1) == key;
+  };
+
   /// Return current memory stats. `node_count` reports nodes currently in
   /// use (`total_node_count - empty_nodes_list.count`); `byte_size` is
   /// computed from the high water and so never shrinks.

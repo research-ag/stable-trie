@@ -54,24 +54,24 @@ module {
           func(col) {
             let trie = tries[col];
             if (row == 0) {
-              func() = trie.put(keys[0], "");
+              func() = trie.add(keys[0], "");
             } else {
               let start = Nat32.fromIntWrap(2 ** (row - 1));
               let end = Nat32.fromIntWrap(2 ** row);
               func() {
                 var j = start;
                 while (j < end) {
-                  trie.put(keys[j.toNat()], "");
+                  trie.add(keys[j.toNat()], "");
                   j +%= 1;
                 };
                 j := start;
                 while (j < end) {
-                  trie.delete(keys[j.toNat()]);
+                  trie.remove(keys[j.toNat()]);
                   j +%= 1;
                 };
                 j := start;
                 while (j < end) {
-                  trie.put(keys[j.toNat()], "");
+                  trie.add(keys[j.toNat()], "");
                   j +%= 1;
                 };
               };

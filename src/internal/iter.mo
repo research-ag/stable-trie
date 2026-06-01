@@ -77,21 +77,21 @@ module {
     func(leaf) = Layout.getKey(self, leaf)
   );
 
-  /// Iterate entries in forward order.
+  /// Iterate entries in forward (key-sorted) order.
   public func entries(self : Trie.StableTrie) : Types.Iter<(Blob, Blob)> = entries_(self, #forward);
 
-  /// Iterate entries in reverse order.
-  public func entriesRev(self : Trie.StableTrie) : Types.Iter<(Blob, Blob)> = entries_(self, #reverse);
+  /// Iterate entries in reverse key-sorted order.
+  public func reverseEntries(self : Trie.StableTrie) : Types.Iter<(Blob, Blob)> = entries_(self, #reverse);
 
-  /// Iterate values in forward order.
-  public func vals(self : Trie.StableTrie) : Types.Iter<Blob> = vals_(self, #forward);
+  /// Iterate values in forward (key-sorted) order.
+  public func values(self : Trie.StableTrie) : Types.Iter<Blob> = vals_(self, #forward);
 
-  /// Iterate values in reverse order.
-  public func valsRev(self : Trie.StableTrie) : Types.Iter<Blob> = vals_(self, #reverse);
+  /// Iterate values in reverse key-sorted order.
+  public func reverseValues(self : Trie.StableTrie) : Types.Iter<Blob> = vals_(self, #reverse);
 
-  /// Iterate keys in forward order.
+  /// Iterate keys in forward (key-sorted) order.
   public func keys(self : Trie.StableTrie) : Types.Iter<Blob> = keys_(self, #forward);
 
-  /// Iterate keys in reverse order.
-  public func keysRev(self : Trie.StableTrie) : Types.Iter<Blob> = keys_(self, #reverse);
+  /// Iterate keys in reverse key-sorted order.
+  public func reverseKeys(self : Trie.StableTrie) : Types.Iter<Blob> = keys_(self, #reverse);
 };

@@ -195,14 +195,14 @@ let m = Map.empty({
   key_size = 3;
   value_size = 1;
 });
-assert (m.replace("abc", "a") == null);
-assert (m.replace("aaa", "b") == null);
-assert (m.replace("abc", "c") == ?"a");
+assert (m.swap("abc", "a") == null);
+assert (m.swap("aaa", "b") == null);
+assert (m.swap("abc", "c") == ?"a");
 
 assert Iter.toArray(m.entries()) == [("aaa", "b"), ("abc", "c")];
 
-m.delete("abc");
-m.delete("aaa");
+m.remove("abc");
+m.remove("aaa");
 
 ```
 
@@ -218,7 +218,7 @@ assert (e.add("abc", "a") == 0);
 assert (e.add("aaa", "b") == 1);
 assert (e.add("abc", "c") == 0); // re-adds, overwrites the value at index 0
 
-assert e.slice(0, 2) == [("abc", "c"), ("aaa", "b")];
+assert e.sliceToArray(0, 2) == [("abc", "c"), ("aaa", "b")];
 
 assert e.removeLast() == ?("aaa", "b"); // pop most-recently-added
 assert e.size() == 1;
@@ -244,6 +244,7 @@ persistent actor {
   public func put(k : Blob, v : Blob) : async () { m.put(k, v) };
   public query func get(k : Blob) : async ?Blob { m.get(k) };
 };
+
 ```
 
 The trie survives canister upgrades automatically; you don't need `preupgrade` / `postupgrade` hooks.

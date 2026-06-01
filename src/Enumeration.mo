@@ -13,13 +13,41 @@
 /// `e.get(i)`, etc.) which Motoko resolves to the matching module-level
 /// function.
 ///
-/// Because `Enumeration = Trie.StableTrie`, any wrapper function here
-/// whose name also appears in `base` (e.g. `lookup`, `removeLast`,
-/// `entries`, `memoryStats`) is ambiguous with the base version when both
-/// modules are in scope. We avoid the ambiguity by calling
-/// `Trie.foo(self, ...)` explicitly in the wrapper bodies. User code
-/// importing only `Enumeration` is fine — only this module's functions are
-/// in scope, so `e.foo()` resolves unambiguously.
+/// The Enumeration interface adds an *index* dimension on top of `Map`:
+/// every key has an inherent `Nat` index reflecting its insertion order,
+/// and entries can also be read or written by index. By-index reads
+/// follow `mo:core/List` conventions (`get(i) : ?(K, V)` Option-safe,
+/// `at(i) : (K, V)` trapping, `put(i, v)` write).
+///
+/// Writing (by key):
+/// - `add(k, v) : Nat`               — always writes; returns index
+/// - `insert(k, v) : (Bool, Nat)`    — always writes; (was-new, index)
+/// - `lookupOrAdd(k, v) : (?V, Nat)` — writes ONLY if key absent
+///
+/// Writing (by index):
+/// - `put(i, v) : ()`                — overwrite value at `i`; traps on OOB
+///
+/// Reading (by key):
+/// - `lookup(k) : ?(V, Nat)`         — Option-safe
+/// - `containsKey(k) : Bool`
+///
+/// Reading (by index):
+/// - `get(i) : ?(K, V)`              — Option-safe, mo:core/List style
+/// - `at(i) : (K, V)`                — traps on OOB
+/// - `sliceToArray(l, r) : [(K, V)]` — bulk range read (mirrors `List.sliceToArray`)
+/// - `range(l, r) : Iter<(K, V)>`    — lazy range iter in index order (mirrors `List.range`)
+///
+/// Removal (LIFO only — arbitrary deletion would break the index):
+/// - `removeLast() : ?(K, V)`
+/// - `truncate(newSize : Nat) : ()`  — drop entries from `newSize` onwards
+///
+/// Each by-key write op that can hit pointer-size overflow has a `*Checked`
+/// variant returning `Result.Result<_, { #LimitExceeded }>`. `put` cannot
+/// overflow (no new leaf is allocated).
+///
+/// `swap` / `replace` are intentionally absent from Enumeration: writing
+/// by index is O(1), so a `lookup(k)` + `put(i, v)` composition is cheaper
+/// than a tree-descending always-overwrite primitive would be.
 ///
 /// An `Enumeration` value can live directly inside a `persistent actor` —
 /// there is no `share`/`unshare` round-trip. A plain `let` binding is
@@ -32,6 +60,7 @@ import Nat_ "mo:core/Nat";
 import Nat64 "mo:core/Nat64";
 import Result "mo:core/Result";
 import Types "mo:core/Types";
+import Prim "mo:prim";
 
 import Trie "internal/trie";
 import Layout "internal/layout";
@@ -41,9 +70,9 @@ module {
   /// Memory stats.
   ///
   /// `node_count` is the count of internal trie nodes currently in use. After
-  /// undoing every `add` via `removeLast`, `node_count` drops back to `1`
-  /// (the root). `byte_size` reflects the actual underlying region usage,
-  /// which never shrinks.
+  /// truncating every entry, `node_count` drops back to `1` (the root).
+  /// `byte_size` reflects the actual underlying region usage, which never
+  /// shrinks.
   public type MemoryStats = Trie.MemoryStats;
 
   /// Arguments type of `Enumeration`.
@@ -59,81 +88,54 @@ module {
   /// Construct an empty `Enumeration`.
   ///
   /// Arguments:
-  /// + `pointer_size` is size of pointer of address space, first bit is reserved for internal use,
-  ///   so max amount of nodes in stable trie is `2 ** (pointer_size * 8 - 1)`. Should be one of 2, 4, 5, 6, 8.
-  /// + `aridity` is amount of children of any non leaf node except in trie. Should be one of 2, 4, 16, 256.
-  /// + `root_aridity` is amount of children of root node.
-  /// + `key_size` and `value_size` are sizes of key and value which should be constant per one instance of `Enumeration`
-  ///
-  /// Example:
-  /// ```motoko
-  /// let e = StableTrie.empty({
-  ///   pointer_size = 2;
-  ///   aridity = 2;
-  ///   root_aridity = null;
-  ///   key_size = 2;
-  ///   value_size = 0;
-  /// });
-  /// ```
+  /// + `pointer_size` — bytes for internal pointers (2, 4, 5, 6, 8).
+  /// + `aridity` — children per non-root internal node (2, 4, 16, 256).
+  /// + `root_aridity` — children for the root node, or `null` to default
+  ///   to `aridity`.
+  /// + `key_size` — byte length of every key.
+  /// + `value_size` — byte length of every value (`0` makes it a set).
   public func empty(args : Args) : Enumeration = Trie.empty({
     args with leaf_size = args.key_size + args.value_size;
   });
 
-  /// Add `key` and `value` to the enumeration.
-  /// Returns `#LimitExceeded` if pointer size limit exceeded.
-  /// Returns `size` if the key is new to the enumeration
-  /// or rewrites value and returns index of key in enumeration otherwise.
+  // ─── Writing (by key) ─────────────────────────────────────────────────────
+
+  /// Add `(key, value)`. Always writes. Returns `#LimitExceeded` on
+  /// pointer-size overflow; on success returns the entry's index.
   ///
-  /// Runtime: O(key_size) acesses to stable memory.
+  /// Runtime: O(key_size) accesses to stable memory.
   public func addChecked(self : Enumeration, key : Blob, value : Blob) : Result.Result<Nat, { #LimitExceeded }> {
     let ?(_, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
     Layout.setValue(self, leaf, value);
     #ok(leaf.toNat());
   };
 
-  /// Add `key` and `value` to enumeration.
-  /// Traps if pointer size limit exceeded. Returns `size` if the key is new to the enumeration
-  /// or rewrites value and returns index of key in enumeration otherwise.
-  ///
-  /// Runtime: O(key_size) acesses to stable memory.
+  /// Add `(key, value)`. Always writes. Returns the index. Traps on
+  /// pointer-size overflow.
   public func add(self : Enumeration, key : Blob, value : Blob) : Nat = Trie.unwrap(addChecked(self, key, value));
 
-  /// Add `key` and `value` to enumeration.
-  /// Returns `#LimitExceeded` if pointer size limit exceeded.
-  /// Rewrites value if key is already present. First return is old value if new wasn't added or `null` otherwise.
-  /// Second return value is `size` if the key is new to the enumeration
-  /// or index of key in enumeration otherwise.
+  /// Add `(key, value)`. Always writes. Returns `#LimitExceeded` on
+  /// pointer-size overflow; on success returns `(was-new, index)`.
   ///
-  /// Runtime: O(key_size) acesses to stable memory.
-  public func replaceChecked(self : Enumeration, key : Blob, value : Blob) : Result.Result<(?Blob, Nat), { #LimitExceeded }> {
+  /// Runtime: O(key_size) accesses to stable memory.
+  public func insertChecked(self : Enumeration, key : Blob, value : Blob) : Result.Result<(Bool, Nat), { #LimitExceeded }> {
     let ?(added, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
-    let ret_value = if (added) {
-      Layout.setValue(self, leaf, value);
-      null;
-    } else {
-      let old_value = Layout.getValue(self, leaf);
-      Layout.setValue(self, leaf, value);
-      ?old_value;
-    };
-    #ok(ret_value, leaf.toNat());
+    Layout.setValue(self, leaf, value);
+    #ok(added, leaf.toNat());
   };
 
-  /// Add `key` and `value` to enumeration.
-  /// Traps if pointer size limit exceeded.
-  /// Rewrites value if key is already present. First return is old value if new wasn't added or `null` otherwise.
-  /// Second return value is `size` if the key is new to the enumeration
-  /// or index of key in enumeration otherwise.
-  ///
-  /// Runtime: O(key_size) acesses to stable memory.
-  public func replace(self : Enumeration, key : Blob, value : Blob) : (?Blob, Nat) = Trie.unwrap(replaceChecked(self, key, value));
+  /// Add `(key, value)`. Always writes. Returns `(was-new, index)`.
+  /// Traps on pointer-size overflow.
+  public func insert(self : Enumeration, key : Blob, value : Blob) : (Bool, Nat) = Trie.unwrap(insertChecked(self, key, value));
 
-  /// Add `key` and `value` to enumeration.
-  /// Returns `#LimitExceeded` if pointer size limit exceeded.
-  /// Lookup value if key is already present. First return value `size` is if the key in new to the enumeration
-  /// or index of key in enumeration otherwise. Second return is old value if new wasn't added or null otherwise.
+  /// Add `(key, value)` if `key` is absent. Writes ONLY if the key is new.
+  /// Returns `#LimitExceeded` on overflow; on success returns
+  /// `(previous-value-or-null, index)`. If the key was already present the
+  /// value is left untouched and `?old_value` is returned; if it was new
+  /// the value is stored and `null` is returned.
   ///
-  /// Runtime: O(key_size) acesses to stable memory.
-  public func lookupOrPutChecked(self : Enumeration, key : Blob, value : Blob) : Result.Result<(?Blob, Nat), { #LimitExceeded }> {
+  /// Runtime: O(key_size) accesses to stable memory.
+  public func lookupOrAddChecked(self : Enumeration, key : Blob, value : Blob) : Result.Result<(?Blob, Nat), { #LimitExceeded }> {
     let ?(added, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
     let ret_value = if (added) {
       Layout.setValue(self, leaf, value);
@@ -144,78 +146,145 @@ module {
     #ok(ret_value, leaf.toNat());
   };
 
-  /// Add `key` and `value` to enumeration.
-  /// Traps if pointer size limit exceeded.
-  /// Lookup value if key is already present. First return value `size` is if the key in new to the enumeration
-  /// or index of key in enumeration otherwise. Second return is old value if new wasn't added or a new one otherwise.
-  ///
-  /// Runtime: O(key_size) acesses to stable memory.
-  public func lookupOrPut(self : Enumeration, key : Blob, value : Blob) : (?Blob, Nat) = Trie.unwrap(lookupOrPutChecked(self, key, value));
+  /// Add `(key, value)` if `key` is absent. Returns `(?prev_value, index)`.
+  /// Traps on pointer-size overflow.
+  public func lookupOrAdd(self : Enumeration, key : Blob, value : Blob) : (?Blob, Nat) = Trie.unwrap(lookupOrAddChecked(self, key, value));
 
-  /// Remove the entry that was last added to the enumeration.
-  /// Returns the removed `?(key, value)` pair or `null` if the enumeration is empty.
+  // ─── Writing (by index) ───────────────────────────────────────────────────
+
+  /// Overwrite the value at index `i`. Traps if `i >= size()` or if
+  /// `value.size() != value_size`. The key at index `i` is unchanged.
   ///
-  /// Only the leaf for that entry is removed; internal trie nodes that become
-  /// empty are left in place. The space at the end of the leaves region is
-  /// reused by the next `add`.
+  /// Runtime: O(1) accesses to stable memory.
+  public func put(self : Enumeration, index : Nat, value : Blob) {
+    let i = index.toNat64();
+    if (i >= self.leaf_count) Prim.trap("Enumeration.put: index out of bounds");
+    Layout.setValue(self, i, value);
+  };
+
+  // ─── Reading (by key) ─────────────────────────────────────────────────────
+
+  /// Look up `key`. Returns `?(value, index)`, or `null` if absent.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
-  public func removeLast(self : Enumeration) : ?(Blob, Blob) = Trie.removeLast(self);
-
-  /// Returns `?(value, index)` where `index` is the index of `key` in order it was added to enumeration and `value` is corresponding value to the `key`,
-  /// or `null` it `key` wasn't added.
-  ///
-  /// Runtime: O(key_size) acesses to stable memory.
   public func lookup(self : Enumeration, key : Blob) : ?(Blob, Nat) = Trie.lookup(self, key);
 
-  /// Returns `key` and `value` with index `index` or null if index is out of bounds.
+  /// Check whether `key` is present.
+  ///
+  /// Runtime: O(key_size) accesses to stable memory.
+  public func containsKey(self : Enumeration, key : Blob) : Bool = Trie.contains(self, key);
+
+  // ─── Reading (by index) ───────────────────────────────────────────────────
+
+  /// Read the entry at index `i`. Returns `?(key, value)`, or `null` if
+  /// `i >= size()`. Matches `mo:core/List.get` semantics.
   ///
   /// Runtime: O(1) accesses to stable memory.
   public func get(self : Enumeration, index : Nat) : ?(Blob, Blob) {
-    let index_ = index.toNat64();
-    if (index_ >= self.leaf_count) return null;
-    ?(Layout.getKey(self, index_), Layout.getValue(self, index_));
+    let i = index.toNat64();
+    if (i >= self.leaf_count) return null;
+    ?(Layout.getKey(self, i), Layout.getValue(self, i));
   };
 
-  /// Returns slice `key` and `value` with indices from `left` to `right` or traps if `left` or `right` are out of bounds.
+  /// Read the entry at index `i`. Traps if `i >= size()`. Matches
+  /// `mo:core/List.at` semantics.
+  ///
+  /// Runtime: O(1) accesses to stable memory.
+  public func at(self : Enumeration, index : Nat) : (Blob, Blob) {
+    let i = index.toNat64();
+    if (i >= self.leaf_count) Prim.trap("Enumeration.at: index out of bounds");
+    (Layout.getKey(self, i), Layout.getValue(self, i));
+  };
+
+  /// Return entries in index range `[left, right)` as an Array. Traps if
+  /// `right > size()` or `left > right`. Mirrors `mo:core/List.sliceToArray`.
   ///
   /// Runtime: O(right - left) accesses to stable memory.
-  public func slice(self : Enumeration, left : Nat, right : Nat) : [(Blob, Blob)] {
+  public func sliceToArray(self : Enumeration, left : Nat, right : Nat) : [(Blob, Blob)] {
     let l = left.toNat64();
     let r = right.toNat64();
     assert l <= r and r <= self.leaf_count;
     Array.tabulate<(Blob, Blob)>(
       right - left,
       func(i) {
-        let index = Nat64.fromIntWrap(i);
+        let index = Nat64.fromIntWrap(i) +% l;
         (Layout.getKey(self, index), Layout.getValue(self, index));
       },
     );
   };
 
-  /// Returns all the keys and values in enumeration ordered by `Blob.compare` of keys.
+  /// Return entries in index range `[left, right)` as a lazy iterator.
+  /// Traps if `right > size()` or `left > right`. Mirrors
+  /// `mo:core/List.range`.
+  ///
+  /// Runtime: O(1) per `next` call, no upfront work.
+  public func range(self : Enumeration, left : Nat, right : Nat) : Types.Iter<(Blob, Blob)> {
+    let l = left.toNat64();
+    let r = right.toNat64();
+    assert l <= r and r <= self.leaf_count;
+    var i = l;
+    {
+      next = func() : ?(Blob, Blob) {
+        if (i >= r) return null;
+        let entry = (Layout.getKey(self, i), Layout.getValue(self, i));
+        i +%= 1;
+        ?entry;
+      };
+    };
+  };
+
+  // ─── Removal ──────────────────────────────────────────────────────────────
+
+  /// Remove the most-recently-added entry. Returns `?(key, value)`, or
+  /// `null` if the enumeration is empty. Matches `mo:core/List.removeLast`.
+  ///
+  /// Internal trie nodes that become empty are reclaimed and reused by
+  /// subsequent `add` calls; the leaves region is also reused LIFO.
+  ///
+  /// Runtime: O(key_size) accesses to stable memory.
+  public func removeLast(self : Enumeration) : ?(Blob, Blob) = Trie.removeLast(self);
+
+  /// Truncate to `newSize`. If `newSize >= size()`, no-op. Otherwise drops
+  /// entries from index `newSize` onwards; surviving entries are at
+  /// indices `0..newSize-1`. Matches `mo:core/List.truncate`.
+  ///
+  /// Composes useful idioms: `truncate(0)` clears all entries; `truncate(
+  /// size() - n)` drops the last `n` entries.
+  ///
+  /// Runtime: O((size() - newSize) * key_size) accesses to stable memory.
+  public func truncate(self : Enumeration, newSize : Nat) {
+    while (size(self) > newSize) {
+      ignore Trie.removeLast(self);
+    };
+  };
+
+  // ─── Iteration & misc ─────────────────────────────────────────────────────
+
+  /// Returns all entries ordered by `Blob.compare` of keys (NOT index order).
   public func entries(self : Enumeration) : Types.Iter<(Blob, Blob)> = Iter.entries(self);
 
-  /// Returns all the keys and values in the enumeration reverse ordered by `Blob.compare` of keys.
-  public func entriesRev(self : Enumeration) : Types.Iter<(Blob, Blob)> = Iter.entriesRev(self);
+  /// Returns all entries in reverse key-sorted order.
+  public func reverseEntries(self : Enumeration) : Types.Iter<(Blob, Blob)> = Iter.reverseEntries(self);
 
-  /// Returns all the values in the enumeration ordered by `Blob.compare` of keys.
-  public func vals(self : Enumeration) : Types.Iter<Blob> = Iter.vals(self);
+  /// Returns all values in key-sorted order.
+  public func values(self : Enumeration) : Types.Iter<Blob> = Iter.values(self);
 
-  /// Returns all the values in the enumeration reverse ordered by `Blob.compare` of keys.
-  public func valsRev(self : Enumeration) : Types.Iter<Blob> = Iter.valsRev(self);
+  /// Returns all values in reverse key-sorted order.
+  public func reverseValues(self : Enumeration) : Types.Iter<Blob> = Iter.reverseValues(self);
 
-  /// Returns all the keys in the enumeration ordered by `Blob.compare` of keys.
+  /// Returns all keys in key-sorted order.
   public func keys(self : Enumeration) : Types.Iter<Blob> = Iter.keys(self);
 
-  /// Returns all the keys in the enumeration reverse ordered by `Blob.compare` of keys.
-  public func keysRev(self : Enumeration) : Types.Iter<Blob> = Iter.keysRev(self);
+  /// Returns all keys in reverse key-sorted order.
+  public func reverseKeys(self : Enumeration) : Types.Iter<Blob> = Iter.reverseKeys(self);
 
-  /// Number of key-value pairs in enumeration.
+  /// Number of entries in the enumeration.
   public func size(self : Enumeration) : Nat = self.leaf_count.toNat();
+
+  /// `true` iff the enumeration has no entries.
+  public func isEmpty(self : Enumeration) : Bool = size(self) == 0;
 
   /// Memory stats. `node_count` is the number of internal nodes currently
   /// in use; `total_node_count` is the high water (region size).
   public func memoryStats(self : Enumeration) : MemoryStats = Trie.memoryStats(self);
-
 };

@@ -16,7 +16,7 @@ assert (e.add("aaa", "b") == 1);
 assert (e.add("abc", "c") == 0);
 
 // Third `add` above overwrote the value at index 0 from "a" to "c".
-assert e.slice(0, 2) == [("abc", "c"), ("aaa", "b")];
+assert e.sliceToArray(0, 2) == [("abc", "c"), ("aaa", "b")];
 
 assert e.removeLast() == ?("aaa", "b"); // pop most-recently-added
 assert e.size() == 1;

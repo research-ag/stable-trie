@@ -37,31 +37,31 @@ let m = StableTrie.empty({
 // and 3 of the bottom inner node). put_ builds the chain
 //   root[0] -> I1 -> I2 -> I3
 // with I3[0] = leafA, I3[3] = leafB.
-m.put("\00", "A");
-m.put("\03", "B");
+m.add("\00", "A");
+m.add("\03", "B");
 
 // Step 2. Remove "\00". branchRoot(I3) returns leafB (the surviving leaf at
 // slot 3); the cascade collapses I2 and I1 too. All three nodes are pushed to
 // empty_nodes. CRITICAL: when I3 is pushed, push only overwrites slot 0 —
 // slot 3 still contains the leafB pointer.
-ignore m.remove("\00");
+m.remove("\00");
 
 // Step 3. Add a fresh pair "\40", "\41" under root[1]. They share bits 0-5
 // and differ at bits 6-7 (slots 0 and 1 of the bottom inner node). put_ pops
 // I1, I2, I3 from empty_nodes (LIFO) and reuses I3 as the split point,
 // writing leaves at slots 0 and 1. Slot 3 (the stale pointer) is never
 // touched — `pop` only cleared slot 0.
-m.put("\40", "C");
-m.put("\41", "D");
+m.add("\40", "C");
+m.add("\41", "D");
 
 // Step 4. Remove "\03" via its legitimate path at root[0]. The leaf slot
 // (the index that I3[3] still points to) lands on empty_leaves.
-ignore m.remove("\03");
+m.remove("\03");
 
 // Step 5. Add "\80". newLeaf pops the freed slot, so the leaf at that index
 // now holds key "\80", value "X". I3[3] still encodes a pointer to that
 // same index — silently aliasing root[2].
-m.put("\80", "X");
+m.add("\80", "X");
 
 // The trie has exactly three live entries.
 assert m.size() == 3;

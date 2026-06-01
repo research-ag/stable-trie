@@ -13,11 +13,11 @@ let m = Map.empty({
   key_size = 3;
   value_size = 1;
 });
-assert (m.replace("abc", "a") == null);
-assert (m.replace("aaa", "b") == null);
-assert (m.replace("abc", "c") == ?"a");
+assert (m.swap("abc", "a") == null);
+assert (m.swap("aaa", "b") == null);
+assert (m.swap("abc", "c") == ?"a");
 
 assert Iter.toArray(m.entries()) == [("aaa", "b"), ("abc", "c")];
 
-m.delete("abc");
-m.delete("aaa");
+m.remove("abc");
+m.remove("aaa");
