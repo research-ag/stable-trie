@@ -151,6 +151,7 @@ module {
       bitlength;
       bitshift = (8 - bitlength).toNat8();
       max_address = 2 ** (pointer_size_ * 8 - 1);
+      max_chain_depth = (key_size_ * 8 - root_bitlength_) / bitlength.toNat64();
       root_bitlength_;
       root_bitlength = root_bitlength_.toNat16();
       node_size;
@@ -302,34 +303,88 @@ module {
     Runtime.trap("Unreacheable");
   };
 
-  /// Put only `key` into trie. Returns pair (whether new leaf created, index of leaf) or null in case of pointer size overflow.
+  /// Put only `key` into trie. Returns pair (whether new leaf created,
+  /// index of leaf) or `null` if the pointer-size limit would be hit.
+  ///
+  /// On `null`, the trie is left unchanged — `put_` is atomic. This is
+  /// achieved with a capacity check up front: an O(1) optimistic check
+  /// against a static upper bound on `put_`'s allocation needs, falling
+  /// through to a precise pre-walk only when we're within a worst-case
+  /// chain length of the cap.
   public func put_(self : StableTrie, key : Blob) : ?(Bool, Nat64) {
     assert key.size() == self.key_size;
 
-    let (node_, last_, old_leaf, pos_) = find(self, key);
+    // O(1) optimistic capacity check. `max_chain_depth` is the static
+    // upper bound on how many internal nodes the split loop can create.
+    let avail_internals = self.max_address -% self.node_count +% self.empty_nodes_list.count.toNat64();
+    let avail_leaves = self.max_address -% self.leaf_count +% self.empty_leaves_list.count.toNat64();
 
-    var last = last_;
-    var node = node_;
+    if (avail_leaves >= 1 and avail_internals >= self.max_chain_depth) {
+      return ?putUnchecked(self, key);
+    };
+
+    // Near capacity — fall back to a precise pre-walk to decide whether
+    // this specific call actually has room.
+    putPreciseCheck(self, key, avail_internals, avail_leaves);
+  };
+
+  /// Slow-path capacity check: walk the trie + key bits to determine the
+  /// exact allocation need, then either commit via `putUnchecked` or
+  /// return `null` with the trie untouched.
+  func putPreciseCheck(
+    self : StableTrie,
+    key : Blob,
+    avail_internals : Nat64,
+    avail_leaves : Nat64,
+  ) : ?(Bool, Nat64) {
+    let (_, _, old_leaf, pos_) = find(self, key);
 
     if (old_leaf == 0) {
-      let ?leaf = newLeaf(self, key) else return null;
+      // Empty slot — only a new leaf is needed.
+      if (avail_leaves < 1) return null;
+      return ?putUnchecked(self, key);
+    };
 
-      Layout.setChild(self, node, last, leaf);
-      return ?(true, (leaf >> 1));
+    let old_key = Layout.getKey(self, old_leaf >> 1);
+    if (key == old_key) {
+      // Pure overwrite — no allocation needed at all.
+      return ?putUnchecked(self, key);
+    };
+
+    // Split needed: count exact chain length by walking shared-bit prefix.
+    var pos = pos_;
+    var k : Nat64 = 1;
+    loop {
+      let (a, b) = (keyToIndex(self, key, pos), keyToIndex(self, old_key, pos));
+      pos +%= self.bitlength;
+      if (a != b) {
+        return if (avail_internals >= k and avail_leaves >= 1) ?putUnchecked(self, key) else null;
+      };
+      k +%= 1;
+    };
+  };
+
+  /// Fast path: the body of `put_` assuming capacity has already been
+  /// verified. `newInternalNode` and `newLeaf` cannot fail here — the
+  /// `else` branches assert the precondition the caller promised.
+  func putUnchecked(self : StableTrie, key : Blob) : (Bool, Nat64) {
+    let (node_, last_, old_leaf, pos_) = find(self, key);
+
+    if (old_leaf == 0) {
+      let ?leaf = newLeaf(self, key) else Runtime.trap("put_: capacity invariant violated");
+      Layout.setChild(self, node_, last_, leaf);
+      return (true, leaf >> 1);
     };
 
     let index = old_leaf >> 1;
     let old_key = Layout.getKey(self, index);
-    if (key == old_key) {
-      return ?(false, index);
-    };
+    if (key == old_key) return (false, index);
 
     var pos = pos_;
+    var node = node_;
+    var last = last_;
     label l loop {
-      let ?add = newInternalNode(self) else {
-        Layout.setChild(self, node, last, old_leaf);
-        return null;
-      };
+      let ?add = newInternalNode(self) else Runtime.trap("put_: capacity invariant violated");
       Layout.setChild(self, node, last, add);
       node := add;
 
@@ -339,9 +394,9 @@ module {
         last := a;
       } else {
         Layout.setChild(self, node, b, old_leaf);
-        let ?leaf = newLeaf(self, key) else return null;
+        let ?leaf = newLeaf(self, key) else Runtime.trap("put_: capacity invariant violated");
         Layout.setChild(self, node, a, leaf);
-        return ?(true, (leaf >> 1));
+        return (true, leaf >> 1);
       };
     };
     Runtime.trap("Unreacheable");

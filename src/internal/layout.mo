@@ -47,6 +47,12 @@ module {
     bitlength : Nat16;
     bitshift : Nat8;
     max_address : Nat64;
+    /// Static upper bound on the number of internal nodes `put_`'s split
+    /// loop can allocate in one call. Equal to the maximum chain length
+    /// from below-root to the bottom of the trie:
+    /// `(key_size * 8 - root_bitlength) / bitlength`.
+    /// Used by `put_`'s O(1) optimistic capacity check.
+    max_chain_depth : Nat64;
     root_bitlength_ : Nat64;
     root_bitlength : Nat16;
     node_size : Nat64;
