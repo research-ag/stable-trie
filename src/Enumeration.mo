@@ -113,8 +113,14 @@ module {
   };
 
   /// Add `(key, value)`. Always writes. Returns the index. Traps on
-  /// pointer-size overflow.
-  public func add(self : Enumeration, key : Blob, value : Blob) : Nat = Trie.unwrap(addChecked(self, key, value));
+  /// pointer-size overflow. Skips `put_`'s upfront capacity check — an
+  /// overflow trap inside `putOrTrap` is rolled back by the surrounding
+  /// IC message.
+  public func add(self : Enumeration, key : Blob, value : Blob) : Nat {
+    let (_, leaf) = Trie.putOrTrap(self, key);
+    Layout.setValue(self, leaf, value);
+    leaf.toNat();
+  };
 
   /// Add `(key, value)`. Always writes. Returns `#LimitExceeded` on
   /// pointer-size overflow; on success returns `(was-new, index)`.
@@ -128,7 +134,11 @@ module {
 
   /// Add `(key, value)`. Always writes. Returns `(was-new, index)`.
   /// Traps on pointer-size overflow.
-  public func insert(self : Enumeration, key : Blob, value : Blob) : (Bool, Nat) = Trie.unwrap(insertChecked(self, key, value));
+  public func insert(self : Enumeration, key : Blob, value : Blob) : (Bool, Nat) {
+    let (added, leaf) = Trie.putOrTrap(self, key);
+    Layout.setValue(self, leaf, value);
+    (added, leaf.toNat());
+  };
 
   /// Add `(key, value)` if `key` is absent. Writes ONLY if the key is new.
   /// Returns `#LimitExceeded` on overflow; on success returns
@@ -150,7 +160,16 @@ module {
 
   /// Add `(key, value)` if `key` is absent. Returns `(?prev_value, index)`.
   /// Traps on pointer-size overflow.
-  public func lookupOrAdd(self : Enumeration, key : Blob, value : Blob) : (?Blob, Nat) = Trie.unwrap(lookupOrAddChecked(self, key, value));
+  public func lookupOrAdd(self : Enumeration, key : Blob, value : Blob) : (?Blob, Nat) {
+    let (added, leaf) = Trie.putOrTrap(self, key);
+    let ret_value = if (added) {
+      Layout.setValue(self, leaf, value);
+      null;
+    } else {
+      ?Layout.getValue(self, leaf);
+    };
+    (ret_value, leaf.toNat());
+  };
 
   // ─── Writing (by index) ───────────────────────────────────────────────────
 

@@ -16,7 +16,6 @@ import Nat16 "mo:core/Nat16"; // bitcountTrailingZero
 import Nat64 "mo:core/Nat64"; // bitcountTrailingZero
 import Option "mo:core/Option";
 import Region "mo:core/Region";
-import Result "mo:core/Result";
 import Runtime "mo:core/Runtime";
 import Prim "mo:prim";
 
@@ -24,12 +23,6 @@ import Layout "./layout";
 import LinkedList "./linked-list";
 
 module {
-  /// Unwrap a pointer-size result or trap on overflow.
-  public func unwrap<T>(r : Result.Result<T, { #LimitExceeded }>) : T {
-    let #ok x = r else Runtime.trap("Pointer size overflow");
-    x;
-  };
-
   // up conversions
   let nat8to16 = Prim.nat8ToNat16;
   let nat16to32 = Prim.nat16ToNat32;
@@ -328,14 +321,14 @@ module {
     // guarantees room for the worst-case chain; `leaf_count <
     // max_address` guarantees room for one fresh leaf.
     if (self.node_count < self.safe_node_bound and self.leaf_count < self.max_address) {
-      return ?putUnchecked(self, key);
+      return ?putOrTrap(self, key);
     };
 
     // Tier 2: account for free-list reuse before giving up the fast path.
     let avail_internals = self.max_address -% self.node_count +% self.empty_nodes_list.count.toNat64();
     let avail_leaves = self.max_address -% self.leaf_count +% self.empty_leaves_list.count.toNat64();
     if (avail_leaves >= 1 and avail_internals >= self.max_chain_depth) {
-      return ?putUnchecked(self, key);
+      return ?putOrTrap(self, key);
     };
 
     // Tier 3: precise pre-walk.
@@ -343,7 +336,7 @@ module {
   };
 
   /// Slow-path capacity check: walk the trie + key bits to determine the
-  /// exact allocation need, then either commit via `putUnchecked` or
+  /// exact allocation need, then either commit via `putOrTrap` or
   /// return `null` with the trie untouched.
   func putPreciseCheck(
     self : StableTrie,
@@ -356,13 +349,13 @@ module {
     if (old_leaf == 0) {
       // Empty slot — only a new leaf is needed.
       if (avail_leaves < 1) return null;
-      return ?putUnchecked(self, key);
+      return ?putOrTrap(self, key);
     };
 
     let old_key = Layout.getKey(self, old_leaf >> 1);
     if (key == old_key) {
       // Pure overwrite — no allocation needed at all.
-      return ?putUnchecked(self, key);
+      return ?putOrTrap(self, key);
     };
 
     // Split needed: count exact chain length by walking shared-bit prefix.
@@ -372,20 +365,31 @@ module {
       let (a, b) = (keyToIndex(self, key, pos), keyToIndex(self, old_key, pos));
       pos +%= self.bitlength;
       if (a != b) {
-        return if (avail_internals >= k and avail_leaves >= 1) ?putUnchecked(self, key) else null;
+        return if (avail_internals >= k and avail_leaves >= 1) ?putOrTrap(self, key) else null;
       };
       k +%= 1;
     };
   };
 
-  /// Fast path: the body of `put_` assuming capacity has already been
-  /// verified. `newInternalNode` and `newLeaf` cannot fail here — the
-  /// `else` branches assert the precondition the caller promised.
-  func putUnchecked(self : StableTrie, key : Blob) : (Bool, Nat64) {
+  /// Put a key into the trie and either return `(was-new, leaf-index)`
+  /// or trap on pointer-size overflow.
+  ///
+  /// Called from two contexts:
+  ///   - From `put_`'s fast path, after the upfront capacity check has
+  ///     promised that no allocation will fail. The traps below are then
+  ///     a defensive precondition assertion — unreachable unless the
+  ///     capacity gate has a bug.
+  ///   - Directly from trapping public APIs (`Map.add`/`insert`/`swap`/
+  ///     `getOrAdd`, `Enumeration.add`/`insert`/`lookupOrAdd`). The trap
+  ///     here IS the intended failure mode on overflow — the surrounding
+  ///     IC message will roll back any partial mutation, so the trie is
+  ///     never observed in a corrupted state.
+  public func putOrTrap(self : StableTrie, key : Blob) : (Bool, Nat64) {
+    assert key.size() == self.key_size;
     let (node_, last_, old_leaf, pos_) = find(self, key);
 
     if (old_leaf == 0) {
-      let ?leaf = newLeaf(self, key) else Runtime.trap("put_: capacity invariant violated");
+      let ?leaf = newLeaf(self, key) else Runtime.trap("StableTrie: pointer size overflow");
       Layout.setChild(self, node_, last_, leaf);
       return (true, leaf >> 1);
     };
@@ -398,7 +402,7 @@ module {
     var node = node_;
     var last = last_;
     label l loop {
-      let ?add = newInternalNode(self) else Runtime.trap("put_: capacity invariant violated");
+      let ?add = newInternalNode(self) else Runtime.trap("StableTrie: pointer size overflow");
       Layout.setChild(self, node, last, add);
       node := add;
 
@@ -408,7 +412,7 @@ module {
         last := a;
       } else {
         Layout.setChild(self, node, b, old_leaf);
-        let ?leaf = newLeaf(self, key) else Runtime.trap("put_: capacity invariant violated");
+        let ?leaf = newLeaf(self, key) else Runtime.trap("StableTrie: pointer size overflow");
         Layout.setChild(self, node, a, leaf);
         return (true, leaf >> 1);
       };

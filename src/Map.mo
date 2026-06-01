@@ -119,8 +119,12 @@ module {
   };
 
   /// Insert or overwrite `(key, value)`. Traps if the pointer-size limit is
-  /// reached.
-  public func add(self : Map, key : Blob, value : Blob) = Trie.unwrap(addChecked(self, key, value));
+  /// reached. Skips `put_`'s upfront capacity check — an overflow trap
+  /// inside `putOrTrap` is rolled back by the surrounding IC message.
+  public func add(self : Map, key : Blob, value : Blob) {
+    let (_, leaf) = Trie.putOrTrap(self, key);
+    Layout.setValue(self, leaf, value);
+  };
 
   /// Insert or overwrite `(key, value)`. Returns `#err(#LimitExceeded)` on
   /// overflow; on success returns `true` if the key was new and `false` if
@@ -135,7 +139,11 @@ module {
 
   /// Insert or overwrite `(key, value)`. Returns `true` if the key was new.
   /// Traps if the pointer-size limit is reached.
-  public func insert(self : Map, key : Blob, value : Blob) : Bool = Trie.unwrap(insertChecked(self, key, value));
+  public func insert(self : Map, key : Blob, value : Blob) : Bool {
+    let (added, leaf) = Trie.putOrTrap(self, key);
+    Layout.setValue(self, leaf, value);
+    added;
+  };
 
   /// Insert or overwrite `(key, value)`. Returns `#err(#LimitExceeded)` on
   /// overflow; on success returns the previous value associated with `key`,
@@ -159,7 +167,17 @@ module {
   /// Insert or overwrite `(key, value)`. Returns the previous value
   /// associated with `key`, or `null` if the key was new. Traps if the
   /// pointer-size limit is reached.
-  public func swap(self : Map, key : Blob, value : Blob) : ?Blob = Trie.unwrap(swapChecked(self, key, value));
+  public func swap(self : Map, key : Blob, value : Blob) : ?Blob {
+    let (added, leaf) = Trie.putOrTrap(self, key);
+    if (added) {
+      Layout.setValue(self, leaf, value);
+      null;
+    } else {
+      let old_value = Layout.getValue(self, leaf);
+      Layout.setValue(self, leaf, value);
+      ?old_value;
+    };
+  };
 
   /// Overwrite the value at `key` ONLY IF the key is already present.
   /// Returns the previous value, or `null` if the key was absent (in which
@@ -198,7 +216,15 @@ module {
   /// Insert `(key, value)` ONLY IF `key` is absent. Returns `null` (newly
   /// inserted) or the existing value (left untouched). Traps if the
   /// pointer-size limit is reached.
-  public func getOrAdd(self : Map, key : Blob, value : Blob) : ?Blob = Trie.unwrap(getOrAddChecked(self, key, value));
+  public func getOrAdd(self : Map, key : Blob, value : Blob) : ?Blob {
+    let (added, leaf) = Trie.putOrTrap(self, key);
+    if (added) {
+      Layout.setValue(self, leaf, value);
+      null;
+    } else {
+      ?Layout.getValue(self, leaf);
+    };
+  };
 
   // ─── Reading ──────────────────────────────────────────────────────────────
 
