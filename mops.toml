@@ -1,6 +1,6 @@
 [package]
 name = "stable-trie"
-version = "0.0.8"
+version = "0.1.0"
 description = "Stable-memory trie-based key-value map"
 repository = "https://github.com/research-ag/stable-trie"
 keywords = [ "set", "enumeration", "lookup", "bijective", "key-value" ]
@@ -11,12 +11,12 @@ core = "2.5.0"
 
 [dev-dependencies]
 bench-helper = "0.0.3"
-prng = "0.0.9"
+prng = "0.2.0"
 
 [requirements]
 moc = "1.0.0"
 
 [toolchain]
-moc = "1.7.0"
+moc = "1.8.2"
 wasmtime = "44.0.1"
 pocket-ic = "9.0.3"
