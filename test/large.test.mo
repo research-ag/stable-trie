@@ -3,7 +3,7 @@
 import Debug "mo:core/Debug";
 import Float "mo:core/Float";
 import Region "mo:core/Region";
-import Prng "mo:prng";
+import Seiran128 "mo:prng/Seiran128";
 
 import StableTrie "../src/Enumeration";
 
@@ -11,8 +11,7 @@ let key_size = 8;
 let pointer_size = 6;
 let k = 4;
 
-let rng = Prng.Seiran128();
-rng.init(0);
+let rng = Seiran128.new(0);
 
 // Region full of random data
 // 8 pages = 512 kB (64k keys)
@@ -34,7 +33,7 @@ do {
   };
 };
 
-let trie = StableTrie.Enumeration({
+let trie = StableTrie.empty({
   pointer_size;
   aridity = k;
   root_aridity = null;

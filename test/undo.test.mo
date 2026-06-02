@@ -7,13 +7,12 @@ import Nat "mo:core/Nat";
 import Nat8 "mo:core/Nat8";
 import Nat64_ "mo:core/Nat64";
 import VarArray "mo:core/VarArray";
-import Prng "mo:prng";
+import Seiran128 "mo:prng/Seiran128";
 
 import StableTrie "../src/Enumeration";
 
 func genKeys(seed : Nat64, n : Nat, size : Nat) : [Blob] {
-  let rng = Prng.Seiran128();
-  rng.init(seed);
+  let rng = Seiran128.new(seed);
   // Generate n distinct keys. We use the structure from main.test.mo: half are
   // random, half are derived from the previous random key with a common prefix,
   // which exercises the branching inside the trie.
@@ -71,7 +70,7 @@ func entriesInOrder(t : StableTrie.Enumeration) : [Blob] {
 };
 
 for ((pointer_size, aridity, root_aridity) in configs.vals()) {
-  let trie = StableTrie.Enumeration({
+  let trie = StableTrie.empty({
     pointer_size;
     aridity;
     root_aridity;
@@ -283,40 +282,11 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
     };
   };
 
-  // ---------- 8. share/unshare round-trips through undo state ----------
-  do {
-    // Pop a few entries, share, unshare into a new instance, verify state.
-    assert (trie.removeLast() != null);
-    assert (trie.removeLast() != null);
-    let data = trie.share();
-    let size_before = trie.size();
-    let stats_before = trie.memoryStats();
-
-    let trie2 = StableTrie.Enumeration({
-      pointer_size;
-      aridity;
-      root_aridity;
-      key_size;
-      value_size;
-    });
-    trie2.unshare(data);
-    assert trie2.size() == size_before;
-    assert trie2.memoryStats() == stats_before;
-
-    // trie2 can undo what's left.
-    var j = size_before;
-    while (j > 0) {
-      j -= 1;
-      assert trie2.removeLast() == ?(keys[j], raw_vals[j]);
-    };
-    assert trie2.size() == 0;
-    assert trie2.removeLast() == null;
-  };
 };
 
 // ---------- 8b. interleaved drain/refill keeps the region from growing ----------
 do {
-  let trie = StableTrie.Enumeration({
+  let trie = StableTrie.empty({
     pointer_size = 4;
     aridity = 4;
     root_aridity = ?16;
@@ -390,7 +360,7 @@ do {
 // of the leaves, Map-style collapse should bubble the surviving leaf all the
 // way back up to the root, freeing every node in the chain.
 do {
-  let trie = StableTrie.Enumeration({
+  let trie = StableTrie.empty({
     pointer_size = 4;
     aridity = 2;
     root_aridity = ?2;
@@ -433,62 +403,10 @@ do {
   assert trie.memoryStats().leaf_count == 0;
 };
 
-// ---------- 8d. legacy StableData (empty_nodes = null) loads cleanly ----------
-//
-// `Base.StableData.empty_nodes` is optional so that data persisted by older
-// versions (which had no such field) still upgrades. Simulate that by
-// building a StableData with empty_nodes = null and feeding it through
-// unshare; the trie should come up with an empty empty-nodes list and
-// otherwise behave normally.
-do {
-  let source = StableTrie.Enumeration({
-    pointer_size = 4;
-    aridity = 4;
-    root_aridity = ?16;
-    key_size = 2;
-    value_size = 1;
-  });
-  assert source.add("\00\01", "A") == 0;
-  assert source.add("\00\02", "B") == 1;
-  assert source.add("\03\04", "C") == 2;
-
-  // Take the share() output and strip empty_nodes back to null, simulating
-  // data persisted before this field existed.
-  let s = source.share();
-  let legacy : StableTrie.StableData = {
-    nodes = s.nodes;
-    leaves = s.leaves;
-    node_count = s.node_count;
-    leaf_count = s.leaf_count;
-    empty_nodes = null;
-  };
-
-  let restored = StableTrie.Enumeration({
-    pointer_size = 4;
-    aridity = 4;
-    root_aridity = ?16;
-    key_size = 2;
-    value_size = 1;
-  });
-  restored.unshare(legacy);
-
-  assert restored.size() == 3;
-  assert restored.lookup("\00\01") == ?("A" : Blob, 0);
-  assert restored.lookup("\00\02") == ?("B" : Blob, 1);
-  assert restored.lookup("\03\04") == ?("C" : Blob, 2);
-
-  // empty-nodes list starts empty, so removeLast still works.
-  assert restored.removeLast() == ?("\03\04" : Blob, "C" : Blob);
-  assert restored.removeLast() == ?("\00\02" : Blob, "B" : Blob);
-  assert restored.removeLast() == ?("\00\01" : Blob, "A" : Blob);
-  assert restored.size() == 0;
-  assert restored.memoryStats().node_count == 1;
-};
-
 // ---------- 9. undo of single leaf attached directly to root ----------
 // Use a 1-byte key with aridity 256 so the root holds the leaf directly.
 do {
-  let trie = StableTrie.Enumeration({
+  let trie = StableTrie.empty({
     pointer_size = 2;
     aridity = 4;
     root_aridity = ?256;
@@ -508,7 +426,7 @@ do {
 
 // ---------- 10. value-size = 0 (set-like) undo ----------
 do {
-  let trie = StableTrie.Enumeration({
+  let trie = StableTrie.empty({
     pointer_size = 4;
     aridity = 2;
     root_aridity = null;

@@ -1,4 +1,4 @@
-import Prng "mo:prng";
+import Seiran128 "mo:prng/Seiran128";
 import Array "mo:core/Array";
 import Blob "mo:core/Blob";
 import _Nat "mo:core/Nat";
@@ -19,12 +19,11 @@ module {
       rows = Array.tabulate<Text>(n, func i = i.toText());
       cols = ["2", "4", "16", "256"];
     };
-    let (nRows, nCols) = (schema.rows.size(), schema.cols.size());
 
     let tries = Array.tabulate<StableTrie.Enumeration>(
-      nCols,
+      schema.cols.size(),
       func(i) {
-        StableTrie.Enumeration({
+        StableTrie.empty({
           pointer_size = 2;
           aridity = 2 ** (2 ** i);
           root_aridity = null;
@@ -34,8 +33,7 @@ module {
       },
     );
 
-    let rng = Prng.Seiran128();
-    rng.init(0);
+    let rng = Seiran128.new(0);
     let keys = Array.tabulate<Blob>(
       2 ** (n - 1),
       func(i) {
@@ -48,31 +46,31 @@ module {
       },
     );
 
-    let routines : [() -> ()] = Array.tabulate<() -> ()>(
-      nRows * nCols,
-      func(i) {
-        let row : Nat = i % nRows;
-        let col : Nat = i / nRows;
-        let trie = tries[col];
-
-        if (row == 0) {
-          func() = ignore trie.add(keys[0], "");
-        } else {
-          let start = Nat32.fromIntWrap(2 ** (row - 1));
-          let end = Nat32.fromIntWrap(2 ** row);
-          func() {
-            var j = start;
-            while (j < end) {
-              ignore trie.add(keys[j.toNat()], "");
-              j +%= 1;
+    let routines : [[() -> ()]] = Array.tabulate<[() -> ()]>(
+      schema.rows.size(),
+      func(row) {
+        Array.tabulate<() -> ()>(
+          schema.cols.size(),
+          func(col) {
+            let trie = tries[col];
+            if (row == 0) {
+              func() = ignore trie.add(keys[0], "");
+            } else {
+              let start = Nat32.fromIntWrap(2 ** (row - 1));
+              let end = Nat32.fromIntWrap(2 ** row);
+              func() {
+                var j = start;
+                while (j < end) {
+                  ignore trie.add(keys[j.toNat()], "");
+                  j +%= 1;
+                };
+              };
             };
-          };
-        };
+          },
+        );
       },
     );
 
-    func run(ri : Nat, ci : Nat) = routines[ci * nRows + ri]();
-
-    Bench.V1(schema, run);
+    Bench.V1(schema, func(ri : Nat, ci : Nat) = routines[ri][ci]());
   };
 };

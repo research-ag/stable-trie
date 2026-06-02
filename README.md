@@ -22,7 +22,11 @@ which reflects the order of its insertion into the map.
 This index is inherent in the data structure and therefore has no additional memory footprint over `StableTrieMap`.
 Value and index can be looked up by key,
 value and key can be looked up by index.
-`StableTrieEnumeration` does not allow deletion.
+`StableTrieEnumeration` supports LIFO removal via `removeLast()`,
+which pops the most-recently-added entry.
+Internal trie nodes that become empty are reclaimed and reused by subsequent `add` calls;
+the leaves region is also reused LIFO.
+Arbitrary-key deletion is not supported in the Enumeration variant.
 
 Both the map and the enumeration variant can be adapted to implement a set simply by setting the value size to 0.
 The map variant gives us a set with deletions.
@@ -171,47 +175,171 @@ mops add stable-trie
 
 In the Motoko source file import the package as:
 
+```motoko
+import Map "mo:stable-trie/Map";
+import Enumeration "mo:stable-trie/Enumeration";
+
 ```
-import StableTrieEnumeration "mo:stable-trie/Enumeration";
-import StableTrieMap "mo:stable-trie/Map";
-```
+
+`Map` and `Enumeration` are records with all-stable fields, so an
+instance can live directly inside a `persistent actor` (a plain `let`
+binding is enough; `stable` is implicit there). There is no
+`share` / `unshare` round-trip.
+
+### API
+
+`Map` and `Enumeration` are two views over the same underlying trie record.
+
+- **`Map`** is a key→value map. Its API mirrors `mo:core/Map`: same verbs, same return types, same conventions.
+- **`Enumeration`** is the same trie with each entry carrying its insertion-order index. By-key access follows the same `mo:core/Map` verbs (augmented with the index in the return); by-index access (`get`, `at`, `range`, `sliceToArray`, `removeLast`, `truncate`) mirrors `mo:core/List`.
+
+Both are configured with fixed-width `Blob` keys and values (set `value_size = 0` to use the trie as a set).
+
+#### `Map` — same vocabulary as `mo:core/Map`
+
+Writes (all by key):
+
+| op               | returns | semantics                                             |
+| ---------------- | ------- | ----------------------------------------------------- |
+| `add(k, v)`      | `()`    | always writes; fire-and-forget                        |
+| `insert(k, v)`   | `Bool`  | always writes; `true` iff the key was new             |
+| `swap(k, v)`     | `?V`    | always writes; returns previous value                 |
+| `replace(k, v)`  | `?V`    | writes ONLY if key already present; previous value    |
+| `getOrAdd(k, v)` | `?V`    | writes ONLY if key absent; previous value (else null) |
+
+Reads:
+
+| op               | returns |
+| ---------------- | ------- |
+| `get(k)`         | `?V`    |
+| `containsKey(k)` | `Bool`  |
+
+Removal:
+
+| op          | returns                             |
+| ----------- | ----------------------------------- |
+| `remove(k)` | `()` — silent                       |
+| `delete(k)` | `Bool` — `true` iff key was present |
+| `take(k)`   | `?V` — previous value               |
+
+Iteration is in ascending key order (`Blob.compare`): `entries`, `reverseEntries`, `keys`, `reverseKeys`, `values`, `reverseValues`.
+
+Every write that can hit the pointer-size cap has a `*Checked` variant (`addChecked`, `insertChecked`, `swapChecked`, `getOrAddChecked`) returning `Result.Result<_, { #LimitExceeded }>`. `replace` cannot overflow — it never allocates a new leaf — so there is no `replaceChecked`.
+
+#### `Enumeration` — `mo:core/Map` by key, `mo:core/List` by index
+
+By-key writes — return value is augmented with the entry's insertion-order index:
+
+| op                  | returns       |
+| ------------------- | ------------- |
+| `add(k, v)`         | `Nat`         |
+| `insert(k, v)`      | `(Bool, Nat)` |
+| `lookupOrAdd(k, v)` | `(?V, Nat)`   |
+
+By-index write:
+
+| op          | returns                                                          |
+| ----------- | ---------------------------------------------------------------- |
+| `put(i, v)` | `()` — O(1) value overwrite at index `i`; traps if `i >= size()` |
+
+Reads:
+
+| op                   | returns                                                           |
+| -------------------- | ----------------------------------------------------------------- |
+| `lookup(k)`          | `?(V, Nat)` — by key                                              |
+| `containsKey(k)`     | `Bool`                                                            |
+| `get(i)`             | `?(K, V)` — by index; `null` if out of range (mirrors `List.get`) |
+| `at(i)`              | `(K, V)` — by index; traps if out of range (mirrors `List.at`)    |
+| `range(l, r)`        | `Iter<(K, V)>` — lazy iterator over `[l, r)` in insertion order   |
+| `sliceToArray(l, r)` | `[(K, V)]` — materialized slice                                   |
+
+Removal:
+
+| op             | returns                                                                    |
+| -------------- | -------------------------------------------------------------------------- |
+| `removeLast()` | `?(K, V)` — pops the most-recently-added entry (mirrors `List.removeLast`) |
+| `truncate(n)`  | `()` — keep only the first `n` entries (mirrors `List.truncate`)           |
+
+`*Checked` variants exist for the by-key writes (`addChecked`, `insertChecked`, `lookupOrAddChecked`).
+
+Iteration by key is the same set as `Map`'s (`entries`, `reverseEntries`, `keys`, `reverseKeys`, `values`, `reverseValues`); iteration in insertion order is via `range` and `sliceToArray`.
+
+#### How this differs from `mo:core/Map` and `mo:core/List`
+
+- **Fixed-width `Blob` keys and values.** `core/Map` and `core/List` are generic over their element type. Here every entry is `Blob → Blob` with the byte widths fixed at construction (`key_size`, `value_size`). Variable-width data can be stored indirectly — see the _Extensions_ section above.
+- **Stable-memory backed.** All data lives in `Region`s; the heap footprint is `O(1)` (region handles, counters, free-list heads). A `Map` or `Enumeration` value lives directly inside a `persistent actor` — no `share` / `unshare`.
+- **Bounded capacity.** The pointer size (`pointer_size = 2, 4, 5, 6, 8` bytes) caps how many entries the trie can hold. Writes can return `#err(#LimitExceeded)` via the `*Checked` variants; the trapping (`add`, `insert`, etc.) variants trap on overflow and rely on the IC's message rollback to undo any in-flight mutation. `core/Map` / `core/List` have no such limit.
+- **No `swap` / `replace` on `Enumeration`.** With `lookup` (key → index) and `put` (index → value) both available, the user composes the two when they want swap/replace semantics — cheaper than re-walking the trie under the hood. So `Enumeration`'s key-write surface is intentionally narrower than `Map`'s.
+- **Iteration always sorted.** `Map.entries` and `Enumeration.entries` always iterate in ascending key order. `Enumeration` additionally exposes insertion-order traversal via `range` / `sliceToArray`.
 
 ### Example
 
 ```motoko
-let m = StableTrie.Map({
+import Iter "mo:core/Iter";
+import Map "mo:stable-trie/Map";
+
+let m = Map.empty({
   pointer_size = 2;
   aridity = 2;
   root_aridity = null;
-  key_size = 2;
+  key_size = 3;
   value_size = 1;
 });
-assert (m.replace("abc", "a") == null);
-assert (m.replace("aaa", "b") == null);
-assert (m.replace("abc", "c") == "a");
+assert (m.swap("abc", "a") == null);
+assert (m.swap("aaa", "b") == null);
+assert (m.swap("abc", "c") == ?"a");
 
-assert Iter.toArray(m.entries()) == [("aaa", "a"), ("abc", "c")];
+assert Iter.toArray(m.entries()) == [("aaa", "b"), ("abc", "c")];
 
-m.delete("abc");
-m.delete("aaa");
+m.remove("abc");
+m.remove("aaa");
 
 ```
 
 ```motoko
-let e = StableTrie.Enumeration({
+import Enumeration "mo:stable-trie/Enumeration";
+
+let e = Enumeration.empty({
   pointer_size = 2;
   aridity = 2;
   root_aridity = null;
-  key_size = 2;
+  key_size = 3;
   value_size = 1;
 });
 assert (e.add("abc", "a") == 0);
 assert (e.add("aaa", "b") == 1);
-assert (e.add("abc", "c") == 0);
+assert (e.add("abc", "c") == 0); // re-adds, overwrites the value at index 0
 
-assert e.slice(0, 2) == [("abc", "a"), ("aaa", "b")];
+assert e.sliceToArray(0, 2) == [("abc", "c"), ("aaa", "b")];
+
+assert e.removeLast() == ?("aaa", "b"); // pop most-recently-added
+assert e.size() == 1;
 
 ```
+
+### Persistent actor
+
+Because `Map` and `Enumeration` are records with all-stable fields, an instance can live directly inside a `persistent actor` — no `share` / `unshare` round-trip is needed. A plain `let` is enough: the record's own internal `var` fields handle the mutation, and `stable` is implicit in a persistent actor.
+
+```motoko
+import Map "mo:stable-trie/Map";
+
+persistent actor {
+  let m : Map.Map = Map.empty({
+    pointer_size = 4;
+    aridity = 4;
+    root_aridity = null;
+    key_size = 8;
+    value_size = 4;
+  });
+
+  public func add(k : Blob, v : Blob) : async () { m.add(k, v) };
+  public query func get(k : Blob) : async ?Blob { m.get(k) };
+};
+
+```
+
+The trie survives canister upgrades automatically; you don't need `preupgrade` / `postupgrade` hooks.
 
 ### Build & test
 
@@ -232,17 +360,26 @@ mops bench
 ```
 
 This is the benchmark to compare different versions of stable-trie.
-For comparison of stbale-trie against other data structures see the section Comparisons above.,
+For comparison of stable-trie against other data structures see the section Comparisons above.
+
+## Formatting
+
+This project uses `prettier` with `prettier-plugin-motoko` for formatting.
+To format the code, run:
+
+```bash
+npx -y prettier --plugin prettier-plugin-motoko --write '**/*.{mo,json,md}'
+```
 
 ## Copyright
 
-MR Research AG, 2023 - 2025
+MR Research AG, 2023 - 2026
 
 ## Authors
 
-Main author: Andrii Stepanov (AStepanov25)
+Main authors: Andrii Stepanov (AStepanov25), Timo Hanke (timohanke)
 
-Contributors: Timo Hanke (timohanke)
+Contributors: Andy Gura (AndyGura)
 
 ## License
 

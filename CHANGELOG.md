@@ -1,5 +1,13 @@
 # Stable-trie changelog
 
+## 0.1.0
+
+- Rewrite of `Map` and `Enumeration` as static records, not classes, that can be declared stable.
+- Re-design `Map` API to align with conventions from core/Map
+- Re-design `Enumeration` API to align with conventions from core/List
+- New functions `removeLast(), truncate()` to delete highest-index elements in `Enumeration`
+- Bugfix in `Enumeration.slice` (left boundary was ignored)
+
 ## 0.0.8
 
 - Bump core dependency to 2.5.0
