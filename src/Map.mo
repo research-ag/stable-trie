@@ -41,8 +41,7 @@
 /// `LinkedList`) are themselves stable types.
 
 import Nat "mo:core/Nat";
-import Nat64_ "mo:core/Nat64"; // enables `Nat64.toNat()` dot notation
-import Option "mo:core/Option";
+import _Nat64 "mo:core/Nat64"; // enables `Nat64.toNat()` dot notation
 import Result "mo:core/Result";
 import Types "mo:core/Types";
 
