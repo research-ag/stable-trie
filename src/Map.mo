@@ -214,6 +214,8 @@ module {
     Trie.lookup(self, key)!.0;
   };
 
+  /// `containsKey(self : Map, key : Blob) : Bool`
+  ///
   /// Check whether `key` is present.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
@@ -302,21 +304,33 @@ module {
   //
   // All iteration is in key-sorted (Blob.compare) order.
 
+  /// `entries(self : Map) : Iter<(Blob, Blob)>`
+  ///
   /// Iterate `(key, value)` pairs in ascending key order.
   public let entries : (self : Map) -> Types.Iter<(Blob, Blob)> = Iter.entries;
 
+  /// `reverseEntries(self : Map) : Iter<(Blob, Blob)>`
+  ///
   /// Iterate `(key, value)` pairs in descending key order.
   public let reverseEntries : (self : Map) -> Types.Iter<(Blob, Blob)> = Iter.reverseEntries;
 
+  /// `values(self : Map) : Iter<Blob>`
+  ///
   /// Iterate values in ascending key order.
   public let values : (self : Map) -> Types.Iter<Blob> = Iter.values;
 
+  /// `reverseValues(self : Map) : Iter<Blob>`
+  ///
   /// Iterate values in descending key order.
   public let reverseValues : (self : Map) -> Types.Iter<Blob> = Iter.reverseValues;
 
+  /// `keys(self : Map) : Iter<Blob>`
+  ///
   /// Iterate keys in ascending order.
   public let keys : (self : Map) -> Types.Iter<Blob> = Iter.keys;
 
+  /// `reverseKeys(self : Map) : Iter<Blob>`
+  ///
   /// Iterate keys in descending order.
   public let reverseKeys : (self : Map) -> Types.Iter<Blob> = Iter.reverseKeys;
 
@@ -326,9 +340,13 @@ module {
   /// `true` iff the map has no entries.
   public func isEmpty(self : Map) : Bool = size(self) == 0;
 
+  /// `memoryStats(self : Map) : MemoryStats`
+  ///
   /// Returns memory-usage statistics. See `MemoryStats` for field meanings.
-  public func memoryStats(self : Map) : MemoryStats = Trie.memoryStats(self);
+  public let memoryStats : (self : Map) -> MemoryStats = Trie.memoryStats;
 
-  /// Returns Promtracker Value for direct integration with a Promtracker Renderer.
+  /// `toValue(self : Map) : Trie.Value`
+  ///
+  /// Returns a Promtracker `Value` for direct integration with a `Promtracker.Renderer`.
   public let toValue : (self : Map) -> Trie.Value = Trie.toValue;
 };

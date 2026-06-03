@@ -187,11 +187,15 @@ module {
 
   // ─── Reading (by key) ─────────────────────────────────────────────────────
 
+  /// `lookup(self : Enumeration, key : Blob) : ?(Blob, Nat)`
+  ///
   /// Look up `key`. Returns `?(value, index)`, or `null` if absent.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public let lookup : (self : Enumeration, key : Blob) -> ?(Blob, Nat) = Trie.lookup;
 
+  /// `containsKey(self : Enumeration, key : Blob) : Bool`
+  ///
   /// Check whether `key` is present.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
@@ -258,6 +262,8 @@ module {
 
   // ─── Removal ──────────────────────────────────────────────────────────────
 
+  /// `removeLast(self : Enumeration) : ?(Blob, Blob)`
+  ///
   /// Remove the most-recently-added entry. Returns `?(key, value)`, or
   /// `null` if the enumeration is empty. Matches `mo:core/List.removeLast`.
   ///
@@ -287,21 +293,33 @@ module {
   // **key-sorted** (Blob.compare) order — *not* insertion order. For
   // index-order iteration, use `range(0, size())` or `sliceToArray`.
 
+  /// `entries(self : Enumeration) : Iter<(Blob, Blob)>`
+  ///
   /// Iterate `(key, value)` pairs in ascending key order.
   public let entries : (self : Enumeration) -> Types.Iter<(Blob, Blob)> = Iter.entries;
 
+  /// `reverseEntries(self : Enumeration) : Iter<(Blob, Blob)>`
+  ///
   /// Iterate `(key, value)` pairs in descending key order.
   public let reverseEntries : (self : Enumeration) -> Types.Iter<(Blob, Blob)> = Iter.reverseEntries;
 
+  /// `values(self : Enumeration) : Iter<Blob>`
+  ///
   /// Iterate values in ascending key order.
   public let values : (self : Enumeration) -> Types.Iter<Blob> = Iter.values;
 
+  /// `reverseValues(self : Enumeration) : Iter<Blob>`
+  ///
   /// Iterate values in descending key order.
   public let reverseValues : (self : Enumeration) -> Types.Iter<Blob> = Iter.reverseValues;
 
+  /// `keys(self : Enumeration) : Iter<Blob>`
+  ///
   /// Iterate keys in ascending key order.
   public let keys : (self : Enumeration) -> Types.Iter<Blob> = Iter.keys;
 
+  /// `reverseKeys(self : Enumeration) : Iter<Blob>`
+  ///
   /// Iterate keys in descending key order.
   public let reverseKeys : (self : Enumeration) -> Types.Iter<Blob> = Iter.reverseKeys;
 
@@ -311,9 +329,13 @@ module {
   /// `true` iff the enumeration has no entries.
   public func isEmpty(self : Enumeration) : Bool = size(self) == 0;
 
+  /// `memoryStats(self : Enumeration) : MemoryStats`
+  ///
   /// Returns memory-usage statistics. See `MemoryStats` for field meanings.
   public let memoryStats : (self : Enumeration) -> MemoryStats = Trie.memoryStats;
 
-  /// Returns Promtracker Value for direct integration with a Promtracker Renderer.
+  /// `toValue(self : Enumeration) : Trie.Value`
+  ///
+  /// Returns a Promtracker `Value` for direct integration with a `Promtracker.Renderer`.
   public let toValue : (self : Enumeration) -> Trie.Value = Trie.toValue;
 };

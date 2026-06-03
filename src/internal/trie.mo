@@ -60,37 +60,19 @@ module {
 
   /// Memory-usage statistics. Shared shape between Map and Enumeration.
   ///
-  /// `used_*` is the live count; `total_*` is the high-water count.
-  /// They can differ when a free list is populated:
+  /// Fields:
+  /// - `byte_size`: total bytes occupied by the trie's stable-memory regions. Computed from the allocated (high-water) counters: it grows on every allocation; for `Map` it never shrinks, and for `Enumeration` it shrinks when `removeLast` retracts a leaf (the Region itself never shrinks).
+  /// - `used_leaf_count`: leaves currently in use (`total_leaf_count` minus those freed by removals and waiting in the empty-leaves free list).
+  /// - `used_node_count`: internal nodes currently in use (`total_node_count` minus those freed by node-collapse and waiting in the empty-nodes free list).
+  /// - `total_leaf_count`: total leaves ever allocated. High-water mark for `Map` (never shrinks); for `Enumeration` this equals `used_leaf_count` because `removeLast` decrements the counter rather than pushing to a free list.
+  /// - `total_node_count`: total internal nodes ever allocated. High-water mark for both `Map` and `Enumeration`; never shrinks even when nodes are pushed onto the empty-nodes list.
   ///
-  ///   - For Map, deletes push freed leaf and node slots onto the
-  ///     empty-leaves / empty-nodes lists, so `used_* < total_*` while
-  ///     freed slots wait for reuse.
-  ///   - For Enumeration, `removeLast` decrements the leaf counter
-  ///     directly (no leaf free list) and pushes any collapsed internal
-  ///     nodes to the empty-nodes list. So `used_leaf_count` always
-  ///     equals `total_leaf_count`, while node counts may diverge.
-  ///
-  /// `byte_size` is computed from the allocated (high-water) counters:
-  /// it grows on every allocation; for `Map` it never shrinks, and for
-  /// `Enumeration` it shrinks when `removeLast` retracts a leaf (the Region itself never shrinks).
+  /// In general, `used_*` is the live count and `total_*` is the high-water count. They diverge when a free list is populated: for `Map`, both leaf and node free lists are populated by `delete`/`take`/`remove`; for `Enumeration`, only the node free list is — `removeLast` drops `used_leaf_count` and `total_leaf_count` in lockstep, so those two are always equal.
   public type MemoryStats = {
-    /// Total bytes occupied by the trie's stable-memory regions.
     byte_size : Nat;
-    /// Leaves currently in use (`total_leaf_count` minus those freed by
-    /// removals and waiting in the empty-leaves free list).
     used_leaf_count : Nat;
-    /// Internal nodes currently in use (`total_node_count` minus those
-    /// freed by node-collapse and waiting in the empty-nodes free list).
     used_node_count : Nat;
-    /// Total leaves ever allocated. High-water mark for Map (never
-    /// shrinks); for Enumeration this equals `used_leaf_count` because
-    /// `removeLast` decrements the counter rather than pushing to a
-    /// free list.
     total_leaf_count : Nat;
-    /// Total internal nodes ever allocated (high-water mark for both
-    /// Map and Enumeration; never shrinks even when nodes are pushed
-    /// onto the empty-nodes list).
     total_node_count : Nat;
   };
 
