@@ -2,7 +2,7 @@
 main = "src/main.mo"
 
 [dependencies]
-stable-trie = "../src/"
+stable-trie = "../"
 promtracker = "1.0.1"
 core = "2.5.0"
 

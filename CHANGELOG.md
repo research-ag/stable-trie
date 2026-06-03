@@ -3,6 +3,7 @@
 ## 0.1.1
 
 - Integrate promtracker
+- Unify `memoryStats` across Enumeration and Map
 
 ## 0.1.0
 

@@ -537,7 +537,7 @@ module {
 
   // Promtracker type Value
   public type Value = {
-	  read : () -> [Metric];
+    read : () -> [Metric];
   };
 
   /// Convert memory stats to a Promtracker `Value` with appropriate labels.
