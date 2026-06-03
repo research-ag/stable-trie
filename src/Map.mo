@@ -210,7 +210,6 @@ module {
   /// Get the value for `key`, or `null` if not present.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
-  //public func get(self : Map, key : Blob) : ?Blob = Option.map<(Blob, Nat), Blob>(Trie.lookup(self, key), func(a) = a.0);
   public func get(self : Map, key : Blob) : ?Blob = do ? {
     Trie.lookup(self, key)!.0;
   };
