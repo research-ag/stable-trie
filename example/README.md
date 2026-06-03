@@ -32,10 +32,10 @@ Plus `PT.allSystemMetrics` (cycles balance, RTS memory, etc.).
 
 ```bash
 mops install
-moc --check src/main.mo
+mops build
 ```
 
-Or wire it up with `dfx`/the playground from here.
+The compiled `example.wasm` lands in `.mops/.build/`. Wire it up with `dfx` or the playground from there.
 
 ## Why a bundled `Value` and not four `newValue` registrations
 
