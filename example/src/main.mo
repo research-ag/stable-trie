@@ -8,9 +8,9 @@
 ///   - query  size()       — number of registered users
 ///   - query  http_request — exposed by the `Http` mixin; serves `/metrics`
 ///
-/// The 4 trie metrics are bundled into a single pull `Value` so the
+/// The five trie metrics are bundled into a single pull `Value` so the
 /// `memoryStats()` call happens once per scrape (rather than four times
-/// if we used four separate `newValue` registrations).
+/// if we used separate `newValue` registrations).
 
 import Array "mo:core/Array";
 import Blob "mo:core/Blob";
