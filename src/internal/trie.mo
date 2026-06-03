@@ -58,17 +58,21 @@ module {
     leaf_size : Nat;
   };
 
-  /// Memory stats.
+  /// Memory-usage statistics. Shared shape between Map and Enumeration.
+  ///
+  /// Fields:
+  /// - `byte_size`: total bytes occupied by the trie's stable-memory regions. Computed from the allocated (high-water) counters: it grows on every allocation; for `Map` it never shrinks, and for `Enumeration` it shrinks when `removeLast` retracts a leaf (the Region itself never shrinks).
+  /// - `used_leaf_count`: leaves currently in use (`total_leaf_count` minus those freed by removals and waiting in the empty-leaves free list).
+  /// - `used_node_count`: internal nodes currently in use (`total_node_count` minus those freed by node-collapse and waiting in the empty-nodes free list).
+  /// - `total_leaf_count`: total leaves ever allocated. High-water mark for `Map` (never shrinks); for `Enumeration` this equals `used_leaf_count` because `removeLast` decrements the counter rather than pushing to a free list.
+  /// - `total_node_count`: total internal nodes ever allocated. High-water mark for both `Map` and `Enumeration`; never shrinks even when nodes are pushed onto the empty-nodes list.
+  ///
+  /// In general, `used_*` is the live count and `total_*` is the high-water count. They diverge when a free list is populated: for `Map`, both leaf and node free lists are populated by `delete`/`take`/`remove`; for `Enumeration`, only the node free list is — `removeLast` drops `used_leaf_count` and `total_leaf_count` in lockstep, so those two are always equal.
   public type MemoryStats = {
-    /// Size of used stable memory in bytes.
     byte_size : Nat;
-    /// Number of allocated leaves (high water — never shrinks).
-    leaf_count : Nat;
-    /// Number of internal trie nodes currently in use (`total_node_count`
-    /// minus nodes returned to the empty-nodes free list).
-    node_count : Nat;
-    /// Number of internal trie nodes ever allocated (high water — never
-    /// shrinks even when nodes are pushed onto the empty-nodes list).
+    used_leaf_count : Nat;
+    used_node_count : Nat;
+    total_leaf_count : Nat;
     total_node_count : Nat;
   };
 
@@ -497,17 +501,44 @@ module {
     Layout.getKey(self, old_leaf >> 1) == key;
   };
 
-  /// Return current memory stats. `node_count` reports nodes currently in
-  /// use (`total_node_count - empty_nodes_list.count`); `byte_size` is
-  /// computed from the high water and so never shrinks.
+  /// Return current memory stats. See `MemoryStats` for field meanings.
   public func memoryStats(self : StableTrie) : MemoryStats {
+    let total_l = nat64toNat(self.leaf_count);
     let total_n = nat64toNat(self.node_count);
     {
       byte_size = nat64toNat(self.root_size + (self.node_count - 1) * self.node_size + self.leaf_count * self.leaf_size);
-      leaf_count = nat64toNat(self.leaf_count);
-      node_count = total_n - self.empty_nodes_list.count;
+      used_leaf_count = total_l - self.empty_leaves_list.count;
+      used_node_count = total_n - self.empty_nodes_list.count;
+      total_leaf_count = total_l;
       total_node_count = total_n;
     };
   };
 
+  // Promtracker type Metric
+  type Metric = (Text, Text, Nat);
+
+  // Promtracker type Value
+  public type Value = {
+    read : () -> [Metric];
+  };
+
+  /// Convert memory stats to a Promtracker `Value` with appropriate labels,
+  /// suitable for `renderer.addValue(...)`.
+  ///
+  /// The shape of the returned `Value` (the `read : () -> [Metric]` record
+  /// and the `Metric = (Text, Text, Nat)` tuple shape) targets the
+  /// `mo:promtracker` API as of **promtracker >= 1.0.1**. Earlier 0.5.x
+  /// releases used a different `Value` shape and will not type-check
+  /// against this function.
+  public func toValue(self : StableTrie) : Value {
+    return {
+      read = func() : [Metric] = self.memoryStats() |> [
+        ("stable_trie_node_count", "kind=\"total\"", _.total_node_count),
+        ("stable_trie_leaf_count", "kind=\"total\"", _.total_leaf_count),
+        ("stable_trie_node_count", "kind=\"used\"", _.used_node_count),
+        ("stable_trie_leaf_count", "kind=\"used\"", _.used_leaf_count),
+        ("stable_trie_byte_size", "", _.byte_size),
+      ];
+    };
+  };
 };

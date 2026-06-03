@@ -41,8 +41,7 @@
 /// `LinkedList`) are themselves stable types.
 
 import Nat "mo:core/Nat";
-import Nat64_ "mo:core/Nat64"; // enables `Nat64.toNat()` dot notation
-import Option "mo:core/Option";
+import _Nat64 "mo:core/Nat64"; // enables `Nat64.toNat()` dot notation
 import Result "mo:core/Result";
 import Types "mo:core/Types";
 
@@ -54,28 +53,8 @@ module {
   /// Arguments to `empty()`. See `empty` for field meanings.
   public type Args = Trie.BaseArgs;
 
-  /// Memory usage statistics.
-  ///
-  /// The `total_*` counts are high-water marks — they never shrink, even
-  /// after deletions. The `used_*` counts subtract entries currently sitting
-  /// in the free lists (slots freed by `take`/`delete`/`remove`, available
-  /// for reuse by subsequent inserts). `byte_size` is also a high-water
-  /// figure: regions only grow.
-  public type MemoryStats = {
-    /// Total bytes occupied by the trie's stable-memory regions
-    /// (high-water mark; never shrinks).
-    byte_size : Nat;
-    /// Leaves currently in use (`total_leaf_count` minus those freed by
-    /// removals and waiting in the empty-leaves free list).
-    used_leaf_count : Nat;
-    /// Internal nodes currently in use (`total_node_count` minus those
-    /// freed by node-collapse and waiting in the empty-nodes free list).
-    used_node_count : Nat;
-    /// Total leaves ever allocated (high-water mark; never shrinks).
-    total_leaf_count : Nat;
-    /// Total internal nodes ever allocated (high-water mark; never shrinks).
-    total_node_count : Nat;
-  };
+  /// Memory-usage statistics. See `Trie.MemoryStats` for field meanings.
+  public type MemoryStats = Trie.MemoryStats;
 
   /// A map from constant-length Blob keys to constant-length Blob values,
   /// implemented as a trie in Regions. Same underlying type as
@@ -231,12 +210,16 @@ module {
   /// Get the value for `key`, or `null` if not present.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
-  public func get(self : Map, key : Blob) : ?Blob = Option.map<(Blob, Nat), Blob>(Trie.lookup(self, key), func(a) = a.0);
+  public func get(self : Map, key : Blob) : ?Blob = do ? {
+    Trie.lookup(self, key)!.0;
+  };
 
+  /// `containsKey(self : Map, key : Blob) : Bool`
+  ///
   /// Check whether `key` is present.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
-  public func containsKey(self : Map, key : Blob) : Bool = Trie.contains(self, key);
+  public let containsKey : (self : Map, key : Blob) -> Bool = Trie.contains;
 
   // ─── Removal ──────────────────────────────────────────────────────────────
 
@@ -321,23 +304,35 @@ module {
   //
   // All iteration is in key-sorted (Blob.compare) order.
 
+  /// `entries(self : Map) : Iter<(Blob, Blob)>`
+  ///
   /// Iterate `(key, value)` pairs in ascending key order.
-  public func entries(self : Map) : Types.Iter<(Blob, Blob)> = Iter.entries(self);
+  public let entries : (self : Map) -> Types.Iter<(Blob, Blob)> = Iter.entries;
 
+  /// `reverseEntries(self : Map) : Iter<(Blob, Blob)>`
+  ///
   /// Iterate `(key, value)` pairs in descending key order.
-  public func reverseEntries(self : Map) : Types.Iter<(Blob, Blob)> = Iter.reverseEntries(self);
+  public let reverseEntries : (self : Map) -> Types.Iter<(Blob, Blob)> = Iter.reverseEntries;
 
+  /// `values(self : Map) : Iter<Blob>`
+  ///
   /// Iterate values in ascending key order.
-  public func values(self : Map) : Types.Iter<Blob> = Iter.values(self);
+  public let values : (self : Map) -> Types.Iter<Blob> = Iter.values;
 
+  /// `reverseValues(self : Map) : Iter<Blob>`
+  ///
   /// Iterate values in descending key order.
-  public func reverseValues(self : Map) : Types.Iter<Blob> = Iter.reverseValues(self);
+  public let reverseValues : (self : Map) -> Types.Iter<Blob> = Iter.reverseValues;
 
+  /// `keys(self : Map) : Iter<Blob>`
+  ///
   /// Iterate keys in ascending order.
-  public func keys(self : Map) : Types.Iter<Blob> = Iter.keys(self);
+  public let keys : (self : Map) -> Types.Iter<Blob> = Iter.keys;
 
+  /// `reverseKeys(self : Map) : Iter<Blob>`
+  ///
   /// Iterate keys in descending order.
-  public func reverseKeys(self : Map) : Types.Iter<Blob> = Iter.reverseKeys(self);
+  public let reverseKeys : (self : Map) -> Types.Iter<Blob> = Iter.reverseKeys;
 
   /// Number of key-value pairs in the map.
   public func size(self : Map) : Nat = self.leaf_count.toNat() - self.empty_leaves_list.count;
@@ -345,15 +340,16 @@ module {
   /// `true` iff the map has no entries.
   public func isEmpty(self : Map) : Bool = size(self) == 0;
 
+  /// `memoryStats(self : Map) : MemoryStats`
+  ///
   /// Returns memory-usage statistics. See `MemoryStats` for field meanings.
-  public func memoryStats(self : Map) : MemoryStats {
-    let { byte_size; leaf_count; node_count; total_node_count } = Trie.memoryStats(self);
-    {
-      byte_size;
-      total_leaf_count = leaf_count;
-      total_node_count;
-      used_leaf_count = leaf_count - self.empty_leaves_list.count;
-      used_node_count = node_count;
-    };
-  };
+  public let memoryStats : (self : Map) -> MemoryStats = Trie.memoryStats;
+
+  /// `toValue(self : Map) : Trie.Value`
+  ///
+  /// Returns a Promtracker `Value` for direct integration with a
+  /// `Promtracker.Renderer`. Compatible with **promtracker >= 1.0.1**
+  /// (the `Value` / `Metric` shapes the result targets are the ones
+  /// introduced in 1.0.x; 0.5.x is not supported).
+  public let toValue : (self : Map) -> Trie.Value = Trie.toValue;
 };

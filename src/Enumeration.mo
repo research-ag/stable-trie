@@ -70,10 +70,12 @@ import Layout "internal/layout";
 import Iter "internal/iter";
 
 module {
-  /// Memory-usage statistics. `node_count` is internal trie nodes
-  /// currently in use; after `truncate(0)` it drops back to `1` (the
-  /// root). `total_node_count` is the high-water mark and never shrinks.
-  /// `byte_size` is also a high-water figure: regions only grow.
+  /// Memory-usage statistics. See `Trie.MemoryStats` for field meanings.
+  /// Note that for Enumeration, `used_leaf_count` always equals
+  /// `total_leaf_count` — `removeLast` decrements the leaf counter
+  /// directly rather than pushing freed slots onto a free list.
+  /// Internal nodes still use a free list, so `used_node_count` and
+  /// `total_node_count` may diverge.
   public type MemoryStats = Trie.MemoryStats;
 
   /// Arguments to `empty()`. See `empty` for field meanings.
@@ -185,15 +187,19 @@ module {
 
   // ─── Reading (by key) ─────────────────────────────────────────────────────
 
+  /// `lookup(self : Enumeration, key : Blob) : ?(Blob, Nat)`
+  ///
   /// Look up `key`. Returns `?(value, index)`, or `null` if absent.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
-  public func lookup(self : Enumeration, key : Blob) : ?(Blob, Nat) = Trie.lookup(self, key);
+  public let lookup : (self : Enumeration, key : Blob) -> ?(Blob, Nat) = Trie.lookup;
 
+  /// `containsKey(self : Enumeration, key : Blob) : Bool`
+  ///
   /// Check whether `key` is present.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
-  public func containsKey(self : Enumeration, key : Blob) : Bool = Trie.contains(self, key);
+  public let containsKey : (self : Enumeration, key : Blob) -> Bool = Trie.contains;
 
   // ─── Reading (by index) ───────────────────────────────────────────────────
 
@@ -256,6 +262,8 @@ module {
 
   // ─── Removal ──────────────────────────────────────────────────────────────
 
+  /// `removeLast(self : Enumeration) : ?(Blob, Blob)`
+  ///
   /// Remove the most-recently-added entry. Returns `?(key, value)`, or
   /// `null` if the enumeration is empty. Matches `mo:core/List.removeLast`.
   ///
@@ -263,7 +271,7 @@ module {
   /// subsequent `add` calls; the leaves region is also reused LIFO.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
-  public func removeLast(self : Enumeration) : ?(Blob, Blob) = Trie.removeLast(self);
+  public let removeLast : (self : Enumeration) -> ?(Blob, Blob) = Trie.removeLast;
 
   /// Truncate to `newSize`. If `newSize >= size()`, no-op. Otherwise drops
   /// entries from index `newSize` onwards; surviving entries are at
@@ -275,7 +283,7 @@ module {
   /// Runtime: O((size() - newSize) * key_size) accesses to stable memory.
   public func truncate(self : Enumeration, newSize : Nat) {
     while (size(self) > newSize) {
-      ignore Trie.removeLast(self);
+      ignore removeLast(self);
     };
   };
 
@@ -285,23 +293,35 @@ module {
   // **key-sorted** (Blob.compare) order — *not* insertion order. For
   // index-order iteration, use `range(0, size())` or `sliceToArray`.
 
+  /// `entries(self : Enumeration) : Iter<(Blob, Blob)>`
+  ///
   /// Iterate `(key, value)` pairs in ascending key order.
-  public func entries(self : Enumeration) : Types.Iter<(Blob, Blob)> = Iter.entries(self);
+  public let entries : (self : Enumeration) -> Types.Iter<(Blob, Blob)> = Iter.entries;
 
+  /// `reverseEntries(self : Enumeration) : Iter<(Blob, Blob)>`
+  ///
   /// Iterate `(key, value)` pairs in descending key order.
-  public func reverseEntries(self : Enumeration) : Types.Iter<(Blob, Blob)> = Iter.reverseEntries(self);
+  public let reverseEntries : (self : Enumeration) -> Types.Iter<(Blob, Blob)> = Iter.reverseEntries;
 
+  /// `values(self : Enumeration) : Iter<Blob>`
+  ///
   /// Iterate values in ascending key order.
-  public func values(self : Enumeration) : Types.Iter<Blob> = Iter.values(self);
+  public let values : (self : Enumeration) -> Types.Iter<Blob> = Iter.values;
 
+  /// `reverseValues(self : Enumeration) : Iter<Blob>`
+  ///
   /// Iterate values in descending key order.
-  public func reverseValues(self : Enumeration) : Types.Iter<Blob> = Iter.reverseValues(self);
+  public let reverseValues : (self : Enumeration) -> Types.Iter<Blob> = Iter.reverseValues;
 
+  /// `keys(self : Enumeration) : Iter<Blob>`
+  ///
   /// Iterate keys in ascending key order.
-  public func keys(self : Enumeration) : Types.Iter<Blob> = Iter.keys(self);
+  public let keys : (self : Enumeration) -> Types.Iter<Blob> = Iter.keys;
 
+  /// `reverseKeys(self : Enumeration) : Iter<Blob>`
+  ///
   /// Iterate keys in descending key order.
-  public func reverseKeys(self : Enumeration) : Types.Iter<Blob> = Iter.reverseKeys(self);
+  public let reverseKeys : (self : Enumeration) -> Types.Iter<Blob> = Iter.reverseKeys;
 
   /// Number of entries in the enumeration.
   public func size(self : Enumeration) : Nat = self.leaf_count.toNat();
@@ -309,6 +329,16 @@ module {
   /// `true` iff the enumeration has no entries.
   public func isEmpty(self : Enumeration) : Bool = size(self) == 0;
 
+  /// `memoryStats(self : Enumeration) : MemoryStats`
+  ///
   /// Returns memory-usage statistics. See `MemoryStats` for field meanings.
-  public func memoryStats(self : Enumeration) : MemoryStats = Trie.memoryStats(self);
+  public let memoryStats : (self : Enumeration) -> MemoryStats = Trie.memoryStats;
+
+  /// `toValue(self : Enumeration) : Trie.Value`
+  ///
+  /// Returns a Promtracker `Value` for direct integration with a
+  /// `Promtracker.Renderer`. Compatible with **promtracker >= 1.0.1**
+  /// (the `Value` / `Metric` shapes the result targets are the ones
+  /// introduced in 1.0.x; 0.5.x is not supported).
+  public let toValue : (self : Enumeration) -> Trie.Value = Trie.toValue;
 };

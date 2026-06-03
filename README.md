@@ -341,6 +341,23 @@ persistent actor {
 
 The trie survives canister upgrades automatically; you don't need `preupgrade` / `postupgrade` hooks.
 
+### Promtracker integration
+
+Both `Map` and `Enumeration` expose a `toValue()` method that returns a [`promtracker`](https://github.com/research-ag/promtracker) `Value` — feed it directly to a `Promtracker.Renderer` to expose the trie's `memoryStats` as Prometheus metrics:
+
+```motoko
+import PT "mo:promtracker";
+import Map "mo:stable-trie/Map";
+
+transient let renderer = PT.Renderer();
+renderer.addValue(m.toValue());
+
+```
+
+Per scrape the `Value` calls `memoryStats()` once and emits five samples in three metric families (`stable_trie_node_count`, `stable_trie_leaf_count`, `stable_trie_byte_size`), with a `kind="used"|"total"` label distinguishing live vs. high-water counts on the first two. See `example/` for a runnable canister.
+
+**Version compatibility:** `toValue()` is designed against the `Value` / `Metric` shapes introduced in **`promtracker >= 1.0.1`** (the `mixins/http`-shaped API). The older 0.5.x releases used different shapes and will not type-check.
+
 ### Build & test
 
 Run:

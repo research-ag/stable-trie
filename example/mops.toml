@@ -1,0 +1,10 @@
+[canisters.example]
+main = "src/main.mo"
+
+[dependencies]
+stable-trie = "../"
+promtracker = "1.0.1"
+core = "2.5.0"
+
+[toolchain]
+moc = "1.8.2"

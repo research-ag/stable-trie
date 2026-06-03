@@ -1,5 +1,11 @@
 # Stable-trie changelog
 
+## 0.1.1
+
+- Add promtracker integration with `toValue` function
+- Unify `memoryStats()` output across Enumeration and Map
+- Add `example/` directory
+
 ## 0.1.0
 
 - Rewrite of `Map` and `Enumeration` as static records, not classes, that can be declared stable.

@@ -87,15 +87,15 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
     let stats_initial = trie.memoryStats();
     // Fresh enumeration: leaf_count = 0, node_count = 0 (regions not allocated
     // until the first add).
-    assert stats_initial.leaf_count == 0;
+    assert stats_initial.used_leaf_count == 0;
 
     assert trie.add(keys[0], raw_vals[0]) == 0;
     assert trie.size() == 1;
     let stats_after_add = trie.memoryStats();
-    assert stats_after_add.leaf_count == 1;
+    assert stats_after_add.used_leaf_count == 1;
     // First add cannot create any internal nodes (the leaf is placed in an
     // empty root slot directly), so node_count == 1 (just the root).
-    assert stats_after_add.node_count == 1;
+    assert stats_after_add.used_node_count == 1;
 
     assert trie.removeLast() == ?(keys[0], raw_vals[0]);
     assert trie.size() == 0;
@@ -104,11 +104,11 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
     assert entriesInOrder(trie) == [];
 
     let stats_after_undo = trie.memoryStats();
-    assert stats_after_undo.leaf_count == 0;
+    assert stats_after_undo.used_leaf_count == 0;
     // byte_size dropped by exactly one leaf relative to after-add.
     assert stats_after_undo.byte_size + (key_size + value_size) == stats_after_add.byte_size;
     // Internal nodes that were freed leave node_count back at 1 (just root).
-    assert stats_after_undo.node_count == 1;
+    assert stats_after_undo.used_node_count == 1;
 
     // ---------- 3. another undo on empty is a no-op ----------
     assert trie.removeLast() == null;
@@ -130,11 +130,11 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
     };
 
     let stats_full = trie.memoryStats();
-    assert stats_full.leaf_count == keys.size();
+    assert stats_full.used_leaf_count == keys.size();
     // When no node has ever been freed, used == high water.
-    assert stats_full.node_count == stats_full.total_node_count;
+    assert stats_full.used_node_count == stats_full.total_node_count;
     stats_full_byte_size := stats_full.byte_size;
-    stats_full_node_count := stats_full.node_count;
+    stats_full_node_count := stats_full.used_node_count;
     stats_full_total_node_count := stats_full.total_node_count;
 
     // Sanity: every key looks up to its index.
@@ -154,11 +154,11 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
       assert trie.lookup(keys[j]) == null;
       assert trie.get(j) == null;
       let s_after = trie.memoryStats();
-      assert s_after.leaf_count + 1 == s_before.leaf_count;
+      assert s_after.used_leaf_count + 1 == s_before.used_leaf_count;
       // node_count can only decrease (or stay the same) per removeLast — never
       // grow — and it never drops below 1 (the root is never freed).
-      assert s_after.node_count <= s_before.node_count;
-      assert s_after.node_count >= 1;
+      assert s_after.used_node_count <= s_before.used_node_count;
+      assert s_after.used_node_count >= 1;
       // byte_size for the leaves portion always drops by one leaf. The nodes
       // portion never changes because the region is not shrunk.
       assert s_after.byte_size + (key_size + value_size) == s_before.byte_size;
@@ -175,7 +175,7 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
     assert trie.removeLast() == null;
     // After undoing everything, used node count is back to just the root, but
     // the high water (total_node_count) remembers how many we allocated.
-    assert trie.memoryStats().node_count == 1;
+    assert trie.memoryStats().used_node_count == 1;
     assert trie.memoryStats().total_node_count == stats_full_total_node_count;
   };
 
@@ -184,8 +184,8 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
     // Trie has 0 leaves and only the root in use; every previously allocated
     // internal node is sitting in the empty-nodes free list.
     let s_drained = trie.memoryStats();
-    assert s_drained.leaf_count == 0;
-    assert s_drained.node_count == 1;
+    assert s_drained.used_leaf_count == 0;
+    assert s_drained.used_node_count == 1;
 
     // Re-add the same keys in the same order. Each should get the same index.
     var i = 0;
@@ -195,10 +195,10 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
     };
 
     let s_refilled = trie.memoryStats();
-    assert s_refilled.leaf_count == keys.size();
+    assert s_refilled.used_leaf_count == keys.size();
     // After refilling, used node count is back to the original "full" value
     // and the high water hasn't grown — every freed node was reused.
-    assert s_refilled.node_count == stats_full_node_count;
+    assert s_refilled.used_node_count == stats_full_node_count;
     assert s_refilled.total_node_count == stats_full_total_node_count;
     // And byte_size is identical to the original "full" state — no new region
     // pages were grown, because every freed node was reused from the linked
@@ -230,8 +230,8 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
       // required a different branching path. byte_size grows in lockstep with
       // node_count (leaf portion is identical).
       let after = trie.memoryStats();
-      assert after.leaf_count == before.leaf_count;
-      assert after.node_count >= before.node_count;
+      assert after.used_leaf_count == before.used_leaf_count;
+      assert after.used_node_count >= before.used_node_count;
       assert after.byte_size >= before.byte_size;
 
       // Undo the new entry to restore state.
@@ -324,8 +324,8 @@ do {
       k += 1;
     };
     let s = trie.memoryStats();
-    assert s.leaf_count == full_stats.leaf_count;
-    assert s.node_count == full_stats.node_count;
+    assert s.used_leaf_count == full_stats.used_leaf_count;
+    assert s.used_node_count == full_stats.used_node_count;
     assert s.byte_size == full_stats.byte_size;
     cycle += 1;
   };
@@ -341,8 +341,8 @@ do {
   while (trie.size() > 0) {
     assert (trie.removeLast() != null);
   };
-  assert trie.memoryStats().node_count == 1;
-  assert trie.memoryStats().leaf_count == 0;
+  assert trie.memoryStats().used_node_count == 1;
+  assert trie.memoryStats().used_leaf_count == 0;
 
   // Refill: should match full_stats byte-for-byte (high water hasn't grown).
   i := 0;
@@ -375,18 +375,18 @@ do {
   assert trie.add(kA, "") == 0;
   let stats_one = trie.memoryStats();
   // First add cannot create any internal nodes.
-  assert stats_one.node_count == 1;
+  assert stats_one.used_node_count == 1;
 
   assert trie.add(kB, "") == 1;
   let stats_two = trie.memoryStats();
   // Second add created a long chain of internal nodes.
-  assert stats_two.node_count > 1;
+  assert stats_two.used_node_count > 1;
 
   assert trie.removeLast() == ?(kB, "" : Blob);
   // After collapse, the chain that was built to split kA and kB is gone:
   // only the root and kA's direct leaf remain.
   let stats_one_again = trie.memoryStats();
-  assert stats_one_again.node_count == 1;
+  assert stats_one_again.used_node_count == 1;
   // The node-region high water hasn't shrunk — byte_size only dropped by one
   // leaf (kB), not by the freed internal nodes.
   assert stats_one_again.byte_size + (4 + 0) == stats_two.byte_size;
@@ -399,8 +399,8 @@ do {
   // Full drain still ends at node_count == 1.
   assert trie.removeLast() == ?(kB, "" : Blob);
   assert trie.removeLast() == ?(kA, "" : Blob);
-  assert trie.memoryStats().node_count == 1;
-  assert trie.memoryStats().leaf_count == 0;
+  assert trie.memoryStats().used_node_count == 1;
+  assert trie.memoryStats().used_leaf_count == 0;
 };
 
 // ---------- 9. undo of single leaf attached directly to root ----------
@@ -421,7 +421,7 @@ do {
   assert trie.removeLast() == ?("\01" : Blob, "" : Blob);
   assert trie.removeLast() == null;
   assert trie.size() == 0;
-  assert trie.memoryStats().leaf_count == 0;
+  assert trie.memoryStats().used_leaf_count == 0;
 };
 
 // ---------- 10. value-size = 0 (set-like) undo ----------

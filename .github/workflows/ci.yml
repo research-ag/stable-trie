@@ -21,6 +21,12 @@ jobs:
           mops install
       - run: mops test
       - run: mops bench
+      - name: Build example canister
+        working-directory: example
+        run: |
+          mops toolchain init
+          mops install
+          mops build
 
   fmt:
     name: Formatting Check
