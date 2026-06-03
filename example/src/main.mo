@@ -75,33 +75,11 @@ persistent actor Main {
     signups.size();
   };
 
-  // ─── Metrics ──────────────────────────────────────────────────────────
+  // ─── Promtracker Metrics ──────────────────────────────────────────────────────────
 
   transient let renderer = PT.Renderer();
 
-  // Custom Value that reads all four `memoryStats` fields in one go.
-  // Same shape as `PT.allSystemMetrics`: an object with a `read()` that
-  // returns `[(name, labels, value)]`. Calling memoryStats() once per
-  // scrape (instead of once per metric) is a one-line micro-optimisation
-  // but it also keeps the four numbers strictly consistent — they're
-  // sampled from the same snapshot.
-  transient let trieMetrics : {
-    read : () -> [(Text, Text, Nat)];
-  } = {
-    read = func() {
-      let s = signups.memoryStats();
-      [
-        ("stable_trie_used_node_count", "", s.used_node_count),
-        ("stable_trie_used_leaf_count", "", s.used_leaf_count),
-        ("stable_trie_byte_size", "", s.byte_size),
-        ("stable_trie_total_node_count", "", s.total_node_count),
-        ("stable_trie_total_leaf_count", "", s.total_leaf_count),
-      ];
-    };
-  };
-
-  renderer.addValue(trieMetrics);
-  renderer.addValue(PT.allSystemMetrics);
+  renderer.addValue(signups.toValue());
   renderer.addCanisterLabel(Main);
 
   // Serves Prometheus exposition on GET /metrics.

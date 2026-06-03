@@ -330,4 +330,7 @@ module {
 
   /// Returns memory-usage statistics. See `MemoryStats` for field meanings.
   public func memoryStats(self : Map) : MemoryStats = Trie.memoryStats(self);
+
+  /// Returns Promtracker Value for direct integration with a Promtracker Renderer.
+  public let toValue : (self : Map) -> Trie.Value = Trie.toValue;
 };

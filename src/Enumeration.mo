@@ -313,4 +313,7 @@ module {
 
   /// Returns memory-usage statistics. See `MemoryStats` for field meanings.
   public let memoryStats : (self : Enumeration) -> MemoryStats = Trie.memoryStats;
+
+  /// Returns Promtracker Value for direct integration with a Promtracker Renderer.
+  public let toValue : (self : Enumeration) -> Trie.Value = Trie.toValue;
 };
