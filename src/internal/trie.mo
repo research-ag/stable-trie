@@ -71,9 +71,9 @@ module {
   ///     nodes to the empty-nodes list. So `used_leaf_count` always
   ///     equals `total_leaf_count`, while node counts may diverge.
   ///
-  /// `byte_size` is computed from the live counters; it grows on every
-  /// allocation and shrinks when Enumeration's `removeLast` retracts a
-  /// leaf (the underlying region itself never shrinks).
+  /// `byte_size` is computed from the allocated (high-water) counters:
+  /// it grows on every allocation; for `Map` it never shrinks, and for
+  /// `Enumeration` it shrinks when `removeLast` retracts a leaf (the Region itself never shrinks).
   public type MemoryStats = {
     /// Total bytes occupied by the trie's stable-memory regions.
     byte_size : Nat;
