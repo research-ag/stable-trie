@@ -231,12 +231,13 @@ module {
   /// Get the value for `key`, or `null` if not present.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
-  public func get(self : Map, key : Blob) : ?Blob = Option.map<(Blob, Nat), Blob>(Trie.lookup(self, key), func(a) = a.0);
+  //public func get(self : Map, key : Blob) : ?Blob = Option.map<(Blob, Nat), Blob>(Trie.lookup(self, key), func(a) = a.0);
+  public func get(self : Map, key : Blob) : ?Blob = do ? { Trie.lookup(self, key)!.0 };
 
   /// Check whether `key` is present.
   ///
   /// Runtime: O(key_size) accesses to stable memory.
-  public func containsKey(self : Map, key : Blob) : Bool = Trie.contains(self, key);
+  public let containsKey : (self : Map, key : Blob) -> Bool = Trie.contains;
 
   // ─── Removal ──────────────────────────────────────────────────────────────
 
@@ -322,22 +323,22 @@ module {
   // All iteration is in key-sorted (Blob.compare) order.
 
   /// Iterate `(key, value)` pairs in ascending key order.
-  public func entries(self : Map) : Types.Iter<(Blob, Blob)> = Iter.entries(self);
+  public let entries : (self : Map) -> Types.Iter<(Blob, Blob)> = Iter.entries;
 
   /// Iterate `(key, value)` pairs in descending key order.
-  public func reverseEntries(self : Map) : Types.Iter<(Blob, Blob)> = Iter.reverseEntries(self);
+  public let reverseEntries : (self : Map) -> Types.Iter<(Blob, Blob)> = Iter.reverseEntries;
 
   /// Iterate values in ascending key order.
-  public func values(self : Map) : Types.Iter<Blob> = Iter.values(self);
+  public let values : (self : Map) -> Types.Iter<Blob> = Iter.values;
 
   /// Iterate values in descending key order.
-  public func reverseValues(self : Map) : Types.Iter<Blob> = Iter.reverseValues(self);
+  public let reverseValues : (self : Map) -> Types.Iter<Blob> = Iter.reverseValues;
 
   /// Iterate keys in ascending order.
-  public func keys(self : Map) : Types.Iter<Blob> = Iter.keys(self);
+  public let keys : (self : Map) -> Types.Iter<Blob> = Iter.keys;
 
   /// Iterate keys in descending order.
-  public func reverseKeys(self : Map) : Types.Iter<Blob> = Iter.reverseKeys(self);
+  public let reverseKeys : (self : Map) -> Types.Iter<Blob> = Iter.reverseKeys;
 
   /// Number of key-value pairs in the map.
   public func size(self : Map) : Nat = self.leaf_count.toNat() - self.empty_leaves_list.count;
