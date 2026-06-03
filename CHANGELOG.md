@@ -1,5 +1,9 @@
 # Stable-trie changelog
 
+## 0.1.1
+
+- Integrate promtracker
+
 ## 0.1.0
 
 - Rewrite of `Map` and `Enumeration` as static records, not classes, that can be declared stable.
