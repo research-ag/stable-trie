@@ -80,6 +80,8 @@ persistent actor Main {
   transient let renderer = PT.Renderer();
 
   renderer.addValue(signups.toValue());
+  // Use this line if you want to add labels:
+  //   renderer.addValue(PT.bundle([signups.toValue()], [("id","signups")]));
   renderer.addCanisterLabel(Main);
 
   // Serves Prometheus exposition on GET /metrics.

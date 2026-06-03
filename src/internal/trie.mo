@@ -543,14 +543,13 @@ module {
   /// Convert memory stats to a Promtracker `Value` with appropriate labels.
   /// For direct integration with Promtracker.Renderer
   public func toValue(self : StableTrie) : Value {
-    let s = self.memoryStats();
     return {
-      read = func() : [Metric] = [
-        ("stable_trie_node_count", "kind=total", s.total_node_count),
-        ("stable_trie_leaf_count", "kind=total", s.total_leaf_count),
-        ("stable_trie_node_count", "kind=used", s.used_node_count),
-        ("stable_trie_leaf_count", "kind=used", s.used_leaf_count),
-        ("stable_trie_byte_size", "", s.byte_size),
+      read = func() : [Metric] = self.memoryStats() |> [
+        ("stable_trie_node_count", "kind=total", _.total_node_count),
+        ("stable_trie_leaf_count", "kind=total", _.total_leaf_count),
+        ("stable_trie_node_count", "kind=used", _.used_node_count),
+        ("stable_trie_leaf_count", "kind=used", _.used_leaf_count),
+        ("stable_trie_byte_size", "", _.byte_size),
       ];
     };
   };
