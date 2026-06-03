@@ -2,8 +2,9 @@
 
 ## 0.1.1
 
-- Integrate promtracker
-- Unify `memoryStats` across Enumeration and Map
+- Add promtracker integration with `toValue` function
+- Unify `memoryStats()` output across Enumeration and Map
+- Add `example/` directory
 
 ## 0.1.0
 

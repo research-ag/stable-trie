@@ -12,6 +12,6 @@ package.json
 package-lock.json
 skills-lock.json
 mops.lock
-dfx.json
-icp.yaml
+/dfx.json
+/icp.yaml
 build/

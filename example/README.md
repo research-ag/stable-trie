@@ -6,19 +6,21 @@ A minimal canister that signs users up by `caller` Principal and exposes the und
 
 - Using `Enumeration` as a **set** of `Principal`s (`value_size = 0`) — `add` is idempotent and returns the entry's insertion-order index.
 - Encoding variable-length `Principal` blobs into a fixed-width 30-byte trie key (`[length_byte] [principal_bytes…] [zero_pad]`).
-- Wrapping `Enumeration.memoryStats()` as a single bundled [`promtracker`](https://github.com/research-ag/promtracker) pull `Value` so one scrape calls `memoryStats()` once and emits five consistent metrics.
+- Exposing the trie's `memoryStats()` via [`promtracker`](https://github.com/research-ag/promtracker) — `Enumeration.toValue()` returns a pull `Value` that calls `memoryStats()` once per scrape and emits five samples in three named metric families (`stable_trie_node_count`, `stable_trie_leaf_count`, `stable_trie_byte_size`), with a `kind="used"|"total"` label distinguishing the live vs. high-water counts.
 
 ## Exposed metrics
 
 Served as Prometheus exposition on `GET /metrics`:
 
-| metric                         | source                           |
-| ------------------------------ | -------------------------------- |
-| `stable_trie_used_node_count`  | `memoryStats().used_node_count`  |
-| `stable_trie_used_leaf_count`  | `memoryStats().used_leaf_count`  |
-| `stable_trie_byte_size`        | `memoryStats().byte_size`        |
-| `stable_trie_total_node_count` | `memoryStats().total_node_count` |
-| `stable_trie_total_leaf_count` | `memoryStats().total_leaf_count` |
+| metric                                 | source                           |
+| -------------------------------------- | -------------------------------- |
+| `stable_trie_node_count{kind="used"}`  | `memoryStats().used_node_count`  |
+| `stable_trie_node_count{kind="total"}` | `memoryStats().total_node_count` |
+| `stable_trie_leaf_count{kind="used"}`  | `memoryStats().used_leaf_count`  |
+| `stable_trie_leaf_count{kind="total"}` | `memoryStats().total_leaf_count` |
+| `stable_trie_byte_size`                | `memoryStats().byte_size`        |
+
+The used/total split is exposed via a `kind` label on `stable_trie_node_count` and `stable_trie_leaf_count`, so Prometheus queries can `sum by (kind)` or filter with `{kind="used"}` directly. `byte_size` is unlabelled.
 
 Plus `PT.allSystemMetrics` (cycles balance, RTS memory, etc.).
 
@@ -37,7 +39,3 @@ mops build
 ```
 
 The compiled `example.wasm` lands in `.mops/.build/`. Wire it up with `dfx` or the playground from there.
-
-## Why a bundled `Value` and not four `newValue` registrations
-
-The four metrics come from a single record returned by `memoryStats()`. If we registered them as four separate `newValue` pull metrics, each scrape would call `memoryStats()` four times (and the four numbers could in principle drift if the trie mutates between calls — not a concern under IC's single-threaded execution, but it's a smell). Bundling them into one `Value` whose `read()` issues one `memoryStats()` call keeps the snapshot atomic and saves three calls per scrape.
