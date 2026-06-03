@@ -522,8 +522,14 @@ module {
     read : () -> [Metric];
   };
 
-  /// Convert memory stats to a Promtracker `Value` with appropriate labels.
-  /// For direct integration with Promtracker.Renderer
+  /// Convert memory stats to a Promtracker `Value` with appropriate labels,
+  /// suitable for `renderer.addValue(...)`.
+  ///
+  /// The shape of the returned `Value` (the `read : () -> [Metric]` record
+  /// and the `Metric = (Text, Text, Nat)` tuple shape) targets the
+  /// `mo:promtracker` API as of **promtracker >= 1.0.1**. Earlier 0.5.x
+  /// releases used a different `Value` shape and will not type-check
+  /// against this function.
   public func toValue(self : StableTrie) : Value {
     return {
       read = func() : [Metric] = self.memoryStats() |> [

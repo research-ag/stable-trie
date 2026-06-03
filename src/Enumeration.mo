@@ -336,6 +336,9 @@ module {
 
   /// `toValue(self : Enumeration) : Trie.Value`
   ///
-  /// Returns a Promtracker `Value` for direct integration with a `Promtracker.Renderer`.
+  /// Returns a Promtracker `Value` for direct integration with a
+  /// `Promtracker.Renderer`. Compatible with **promtracker >= 1.0.1**
+  /// (the `Value` / `Metric` shapes the result targets are the ones
+  /// introduced in 1.0.x; 0.5.x is not supported).
   public let toValue : (self : Enumeration) -> Trie.Value = Trie.toValue;
 };
