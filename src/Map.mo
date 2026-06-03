@@ -54,28 +54,8 @@ module {
   /// Arguments to `empty()`. See `empty` for field meanings.
   public type Args = Trie.BaseArgs;
 
-  /// Memory usage statistics.
-  ///
-  /// The `total_*` counts are high-water marks — they never shrink, even
-  /// after deletions. The `used_*` counts subtract entries currently sitting
-  /// in the free lists (slots freed by `take`/`delete`/`remove`, available
-  /// for reuse by subsequent inserts). `byte_size` is also a high-water
-  /// figure: regions only grow.
-  public type MemoryStats = {
-    /// Total bytes occupied by the trie's stable-memory regions
-    /// (high-water mark; never shrinks).
-    byte_size : Nat;
-    /// Leaves currently in use (`total_leaf_count` minus those freed by
-    /// removals and waiting in the empty-leaves free list).
-    used_leaf_count : Nat;
-    /// Internal nodes currently in use (`total_node_count` minus those
-    /// freed by node-collapse and waiting in the empty-nodes free list).
-    used_node_count : Nat;
-    /// Total leaves ever allocated (high-water mark; never shrinks).
-    total_leaf_count : Nat;
-    /// Total internal nodes ever allocated (high-water mark; never shrinks).
-    total_node_count : Nat;
-  };
+  /// Memory-usage statistics. See `Trie.MemoryStats` for field meanings.
+  public type MemoryStats = Trie.MemoryStats;
 
   /// A map from constant-length Blob keys to constant-length Blob values,
   /// implemented as a trie in Regions. Same underlying type as
@@ -232,7 +212,9 @@ module {
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   //public func get(self : Map, key : Blob) : ?Blob = Option.map<(Blob, Nat), Blob>(Trie.lookup(self, key), func(a) = a.0);
-  public func get(self : Map, key : Blob) : ?Blob = do ? { Trie.lookup(self, key)!.0 };
+  public func get(self : Map, key : Blob) : ?Blob = do ? {
+    Trie.lookup(self, key)!.0;
+  };
 
   /// Check whether `key` is present.
   ///
@@ -347,14 +329,5 @@ module {
   public func isEmpty(self : Map) : Bool = size(self) == 0;
 
   /// Returns memory-usage statistics. See `MemoryStats` for field meanings.
-  public func memoryStats(self : Map) : MemoryStats {
-    let { byte_size; leaf_count; node_count; total_node_count } = Trie.memoryStats(self);
-    {
-      byte_size;
-      total_leaf_count = leaf_count;
-      total_node_count;
-      used_leaf_count = leaf_count - self.empty_leaves_list.count;
-      used_node_count = node_count;
-    };
-  };
+  public func memoryStats(self : Map) : MemoryStats = Trie.memoryStats(self);
 };

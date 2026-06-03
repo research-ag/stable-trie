@@ -14,10 +14,11 @@ Served as Prometheus exposition on `GET /metrics`:
 
 | metric                         | source                           |
 | ------------------------------ | -------------------------------- |
-| `stable_trie_node_count`       | `memoryStats().node_count`       |
-| `stable_trie_leaf_count`       | `memoryStats().leaf_count`       |
+| `stable_trie_used_node_count`  | `memoryStats().used_node_count`  |
+| `stable_trie_used_leaf_count`  | `memoryStats().used_leaf_count`  |
 | `stable_trie_byte_size`        | `memoryStats().byte_size`        |
 | `stable_trie_total_node_count` | `memoryStats().total_node_count` |
+| `stable_trie_total_leaf_count` | `memoryStats().total_leaf_count` |
 
 Plus `PT.allSystemMetrics` (cycles balance, RTS memory, etc.).
 

@@ -58,17 +58,39 @@ module {
     leaf_size : Nat;
   };
 
-  /// Memory stats.
+  /// Memory-usage statistics. Shared shape between Map and Enumeration.
+  ///
+  /// `used_*` is the live count; `total_*` is the high-water count.
+  /// They can differ when a free list is populated:
+  ///
+  ///   - For Map, deletes push freed leaf and node slots onto the
+  ///     empty-leaves / empty-nodes lists, so `used_* < total_*` while
+  ///     freed slots wait for reuse.
+  ///   - For Enumeration, `removeLast` decrements the leaf counter
+  ///     directly (no leaf free list) and pushes any collapsed internal
+  ///     nodes to the empty-nodes list. So `used_leaf_count` always
+  ///     equals `total_leaf_count`, while node counts may diverge.
+  ///
+  /// `byte_size` is computed from the live counters; it grows on every
+  /// allocation and shrinks when Enumeration's `removeLast` retracts a
+  /// leaf (the underlying region itself never shrinks).
   public type MemoryStats = {
-    /// Size of used stable memory in bytes.
+    /// Total bytes occupied by the trie's stable-memory regions.
     byte_size : Nat;
-    /// Number of allocated leaves (high water — never shrinks).
-    leaf_count : Nat;
-    /// Number of internal trie nodes currently in use (`total_node_count`
-    /// minus nodes returned to the empty-nodes free list).
-    node_count : Nat;
-    /// Number of internal trie nodes ever allocated (high water — never
-    /// shrinks even when nodes are pushed onto the empty-nodes list).
+    /// Leaves currently in use (`total_leaf_count` minus those freed by
+    /// removals and waiting in the empty-leaves free list).
+    used_leaf_count : Nat;
+    /// Internal nodes currently in use (`total_node_count` minus those
+    /// freed by node-collapse and waiting in the empty-nodes free list).
+    used_node_count : Nat;
+    /// Total leaves ever allocated. High-water mark for Map (never
+    /// shrinks); for Enumeration this equals `used_leaf_count` because
+    /// `removeLast` decrements the counter rather than pushing to a
+    /// free list.
+    total_leaf_count : Nat;
+    /// Total internal nodes ever allocated (high-water mark for both
+    /// Map and Enumeration; never shrinks even when nodes are pushed
+    /// onto the empty-nodes list).
     total_node_count : Nat;
   };
 
@@ -497,15 +519,15 @@ module {
     Layout.getKey(self, old_leaf >> 1) == key;
   };
 
-  /// Return current memory stats. `node_count` reports nodes currently in
-  /// use (`total_node_count - empty_nodes_list.count`); `byte_size` is
-  /// computed from the high water and so never shrinks.
+  /// Return current memory stats. See `MemoryStats` for field meanings.
   public func memoryStats(self : StableTrie) : MemoryStats {
+    let total_l = nat64toNat(self.leaf_count);
     let total_n = nat64toNat(self.node_count);
     {
       byte_size = nat64toNat(self.root_size + (self.node_count - 1) * self.node_size + self.leaf_count * self.leaf_size);
-      leaf_count = nat64toNat(self.leaf_count);
-      node_count = total_n - self.empty_nodes_list.count;
+      used_leaf_count = total_l - self.empty_leaves_list.count;
+      used_node_count = total_n - self.empty_nodes_list.count;
+      total_leaf_count = total_l;
       total_node_count = total_n;
     };
   };

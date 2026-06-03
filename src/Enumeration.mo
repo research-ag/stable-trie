@@ -70,10 +70,12 @@ import Layout "internal/layout";
 import Iter "internal/iter";
 
 module {
-  /// Memory-usage statistics. `node_count` is internal trie nodes
-  /// currently in use; after `truncate(0)` it drops back to `1` (the
-  /// root). `total_node_count` is the high-water mark and never shrinks.
-  /// `byte_size` is also a high-water figure: regions only grow.
+  /// Memory-usage statistics. See `Trie.MemoryStats` for field meanings.
+  /// Note that for Enumeration, `used_leaf_count` always equals
+  /// `total_leaf_count` — `removeLast` decrements the leaf counter
+  /// directly rather than pushing freed slots onto a free list.
+  /// Internal nodes still use a free list, so `used_node_count` and
+  /// `total_node_count` may diverge.
   public type MemoryStats = Trie.MemoryStats;
 
   /// Arguments to `empty()`. See `empty` for field meanings.
@@ -310,5 +312,5 @@ module {
   public func isEmpty(self : Enumeration) : Bool = size(self) == 0;
 
   /// Returns memory-usage statistics. See `MemoryStats` for field meanings.
-  public let memoryStats: (self : Enumeration) -> MemoryStats = Trie.memoryStats;
+  public let memoryStats : (self : Enumeration) -> MemoryStats = Trie.memoryStats;
 };

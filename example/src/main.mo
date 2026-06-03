@@ -91,10 +91,11 @@ persistent actor Main {
     read = func() {
       let s = signups.memoryStats();
       [
-        ("stable_trie_node_count", "", s.node_count),
-        ("stable_trie_leaf_count", "", s.leaf_count),
+        ("stable_trie_used_node_count", "", s.used_node_count),
+        ("stable_trie_used_leaf_count", "", s.used_leaf_count),
         ("stable_trie_byte_size", "", s.byte_size),
         ("stable_trie_total_node_count", "", s.total_node_count),
+        ("stable_trie_total_leaf_count", "", s.total_leaf_count),
       ];
     };
   };

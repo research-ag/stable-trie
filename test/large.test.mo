@@ -67,7 +67,7 @@ Debug.print("pointer size: " # debug_show pointer_size);
 Debug.print("keys: " # debug_show (max * max));
 Debug.print("byte size: " # debug_show s.byte_size);
 Debug.print("bytes per key: " # debug_show (s.byte_size / (max * max)));
-let (leaves, nodes) = (s.leaf_count, s.node_count);
+let (leaves, nodes) = (s.used_leaf_count, s.used_node_count);
 Debug.print("leaves (=keys): " # debug_show leaves);
 Debug.print("nodes: " # debug_show nodes);
 Debug.print("nodes per leaf: " # debug_show (Float.fromInt(nodes) / Float.fromInt(leaves)));
