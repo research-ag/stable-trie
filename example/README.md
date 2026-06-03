@@ -6,7 +6,7 @@ A minimal canister that signs users up by `caller` Principal and exposes the und
 
 - Using `Enumeration` as a **set** of `Principal`s (`value_size = 0`) — `add` is idempotent and returns the entry's insertion-order index.
 - Encoding variable-length `Principal` blobs into a fixed-width 30-byte trie key (`[length_byte] [principal_bytes…] [zero_pad]`).
-- Wrapping `Enumeration.memoryStats()` as a single bundled [`promtracker`](https://github.com/research-ag/promtracker) pull `Value` so one scrape calls `memoryStats()` once and emits four consistent metrics.
+- Wrapping `Enumeration.memoryStats()` as a single bundled [`promtracker`](https://github.com/research-ag/promtracker) pull `Value` so one scrape calls `memoryStats()` once and emits five consistent metrics.
 
 ## Exposed metrics
 
