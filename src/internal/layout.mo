@@ -67,6 +67,13 @@ module {
     offset_base : Nat64;
     padding : Nat64;
     empty_values : Bool;
+    /// A precomputed `leaf_size`-byte all-zero blob. `Map.removeRec` writes
+    /// this over a leaf before pushing it onto `empty_leaves_list`, so
+    /// that every freed leaf is fully zero in the region (only the chain
+    /// link, if any, is then written by `LinkedList.push`). Symmetric with
+    /// the per-slot `setChild(..., 0)` that `Map.removeRec` already does
+    /// for collapsed internal nodes before `pushEmptyNode`.
+    zero_leaf : Blob;
     empty_nodes_list : LinkedList.LinkedList;
     empty_leaves_list : LinkedList.LinkedList;
     var leaf_count : Nat64;

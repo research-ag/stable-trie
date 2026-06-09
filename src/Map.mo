@@ -42,6 +42,7 @@
 
 import Nat "mo:core/Nat";
 import _Nat64 "mo:core/Nat64"; // enables `Nat64.toNat()` dot notation
+import _Region "mo:core/Region"; // enables `region.storeBlob(...)` dot notation
 import Result "mo:core/Result";
 import Types "mo:core/Types";
 
@@ -271,6 +272,11 @@ module {
       let leaf = node >> 1;
       if (Layout.getKey(self, leaf) == key) {
         let v = if (ret) ?Layout.getValue(self, leaf) else null;
+        // Zero the leaf so that the only non-zero bytes after the push are
+        // the chain link (or none, when the list was empty — see
+        // LinkedList.push). Symmetric with the per-slot `setChild(..., 0)`
+        // for collapsed internal nodes in the `#onlyLeaf` branch below.
+        self.leaves_region.storeBlob(Layout.getLeafOffset(self, leaf), self.zero_leaf);
         Trie.pushEmptyLeaf(self, leaf);
         return (v, true, 0 : Nat64);
       } else {

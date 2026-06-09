@@ -11,6 +11,8 @@
 /// (`trie.put_(...)`, `trie.lookup(...)`, etc.) which Motoko resolves to the
 /// corresponding module-level function.
 
+import Array "mo:core/Array";
+import Blob "mo:core/Blob";
 import Nat_ "mo:core/Nat";
 import Nat16 "mo:core/Nat16"; // bitcountTrailingZero
 import Nat64 "mo:core/Nat64"; // bitcountTrailingZero
@@ -169,6 +171,7 @@ module {
       offset_base;
       padding;
       empty_values = args.value_size == 0;
+      zero_leaf = Blob.fromArray(Array.tabulate<Nat8>(args.leaf_size, func(_) = 0));
       empty_nodes_list = LinkedList.empty(offset_base, node_size, pointer_size_);
       empty_leaves_list = LinkedList.empty(0, leaf_size, pointer_size_);
       var leaf_count = 0 : Nat64;
@@ -619,9 +622,14 @@ module {
     root_bitlength : Nat16;
     leaf_size : Nat64;
     empty_values : Bool;
-    // Free-list state (preserved verbatim — empty_nodes_list links are
-    // re-encoded by the per-node rewrite, since they live at the start
-    // of each freed node).
+    zero_leaf : Blob;
+    // Free-list state, captured verbatim. For the nodes list, the per-node
+    // rewrite re-encodes the chain links (they live at the start of each
+    // freed node, which the sweep visits). For the leaves list, no
+    // re-encoding is needed: the LinkedList never writes a pointer-size-
+    // dependent sentinel into the region (count==0 is the empty signal),
+    // so the in-region bytes are agnostic to the new pointer width as
+    // long as the head index itself fits in it (which we checked above).
     empty_nodes_count : Nat;
     empty_nodes_last : Nat64;
     empty_leaves_count : Nat;
@@ -642,13 +650,20 @@ module {
   /// - the new pointer space is too small to address the current
   ///   `node_count` or `leaf_count`;
   /// - the new pointer size would change `leaf_size` (Map padding case,
-  ///   i.e. `new_pointer_size > leaf_size`);
-  /// - growing while the empty-leaves free list is non-empty (the
-  ///   chain links inside leaves would need re-encoding; not currently
-  ///   handled).
+  ///   i.e. `new_pointer_size > leaf_size`).
   ///
   /// On success, the region is grown if needed (for the growing case)
   /// and a `ResizeState` is returned. No nodes have been migrated yet.
+  ///
+  /// The leaves region is NOT touched by the resize. Freed leaves in
+  /// `empty_leaves_list` survive the migration unchanged because (a)
+  /// they are all-zero except for their chain-link slot (the caller
+  /// zeros them before push), and (b) `LinkedList` does not depend on
+  /// any pointer-size-encoded sentinel inside the region — `count` is
+  /// the empty signal, and the chain link of the bottom item is just
+  /// zero. So a free-list entry encoded under the old layout decodes
+  /// correctly under the new layout as long as the index value itself
+  /// fits in the new pointer width.
   public func beginResize(self : StableTrie, new_pointer_size : Nat) : ?ResizeState {
     let valid = switch (new_pointer_size) {
       case (1 or 2 or 4 or 5 or 6 or 8) true;
@@ -667,10 +682,6 @@ module {
     if (new_pointer_size_ > self.leaf_size) return null;
 
     let shrinking = new_pointer_size < self.pointer_size;
-
-    // Growing with a non-empty leaves free list would require rewriting
-    // the chain links inside freed leaves; not handled here.
-    if (not shrinking and self.empty_leaves_list.count > 0) return null;
 
     let new_node_size = self.aridity_ *% new_pointer_size_;
     let new_root_size = self.root_aridity_ *% new_pointer_size_;
@@ -724,17 +735,14 @@ module {
       root_bitlength = self.root_bitlength;
       leaf_size = self.leaf_size;
       empty_values = self.empty_values;
+      zero_leaf = self.zero_leaf;
       empty_nodes_count = self.empty_nodes_list.count;
-      // The free-list "empty" sentinel is `last_empty_item == loadMask`, and
-      // loadMask depends on pointer_size. A list that's empty under the old
-      // layout has its head set to the OLD loadMask. After the resize the
-      // new list will compare against the NEW loadMask, so we translate the
-      // sentinel here. Real (in-range) indices are preserved verbatim — they
-      // already fit in the new pointer width (we checked node_count and
-      // leaf_count above).
-      empty_nodes_last = if (self.empty_nodes_list.last_empty_item == self.loadMask) new_loadMask else self.empty_nodes_list.last_empty_item;
+      // No sentinel translation needed: `last_empty_item` is either a real
+      // index (preserved verbatim) when count > 0, or the placeholder 0
+      // when count == 0 — neither depends on pointer_size.
+      empty_nodes_last = self.empty_nodes_list.last_empty_item;
       empty_leaves_count = self.empty_leaves_list.count;
-      empty_leaves_last = if (self.empty_leaves_list.last_empty_item == self.loadMask) new_loadMask else self.empty_leaves_list.last_empty_item;
+      empty_leaves_last = self.empty_leaves_list.last_empty_item;
       leaves_freeSpace = self.leaves_freeSpace;
       shrinking;
       var processed = 0 : Nat64;
@@ -833,6 +841,7 @@ module {
       offset_base = state.new_offset_base;
       padding = state.new_padding;
       empty_values = state.empty_values;
+      zero_leaf = state.zero_leaf;
       empty_nodes_list = {
         offset_base = state.new_offset_base;
         item_size = state.new_node_size;

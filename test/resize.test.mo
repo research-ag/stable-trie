@@ -90,6 +90,49 @@ do {
   assert entries.size() == N + 2;
 };
 
+// ─── Grow with a non-empty empty_leaves_list ──────────────────────────────
+//
+// Delete some keys without re-adding so that the leaves free list carries
+// real entries across the next resize. Then shrink to 2, then grow back
+// to 4. After both migrations, the freed slots should still be on the
+// list and get reused by subsequent adds.
+
+assert m.delete(keyOf(5));
+assert m.delete(keyOf(7));
+assert m.delete(keyOf(9));
+let after_deletes_size = m.size();
+
+// Shrink with non-empty leaves list.
+m := resize(m, 2, 13);
+assert m.size() == after_deletes_size;
+assert m.get(keyOf(5)) == null;
+assert m.get(keyOf(7)) == null;
+assert m.get(keyOf(9)) == null;
+// Still readable for everything else.
+assert m.get(keyOf(0)) == ?valueOf(0);
+assert m.get(keyOf(N + 1)) == ?valueOf(N + 1);
+
+// Grow back to 4 with the leaves free list still non-empty.
+m := resize(m, 4, 5);
+assert m.size() == after_deletes_size;
+assert m.get(keyOf(5)) == null;
+assert m.get(keyOf(7)) == null;
+assert m.get(keyOf(9)) == null;
+assert m.get(keyOf(0)) == ?valueOf(0);
+assert m.get(keyOf(N + 1)) == ?valueOf(N + 1);
+
+// Adding three new keys should reuse the three freed slots via the
+// surviving leaves free list (no new high-water leaf allocations needed).
+let leaf_count_before = m.leaf_count;
+m.add(keyOf(N + 2), valueOf(N + 2));
+m.add(keyOf(N + 3), valueOf(N + 3));
+m.add(keyOf(N + 4), valueOf(N + 4));
+assert m.leaf_count == leaf_count_before; // free-list reuse, no new allocation
+assert m.size() == after_deletes_size + 3;
+assert m.get(keyOf(N + 2)) == ?valueOf(N + 2);
+assert m.get(keyOf(N + 3)) == ?valueOf(N + 3);
+assert m.get(keyOf(N + 4)) == ?valueOf(N + 4);
+
 // ─── Refusal cases ─────────────────────────────────────────────────────────
 
 // Helper — `?Map.ResizeState` isn't `==`-comparable (record has a `var`).
