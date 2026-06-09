@@ -42,6 +42,7 @@
 
 import Nat "mo:core/Nat";
 import _Nat64 "mo:core/Nat64"; // enables `Nat64.toNat()` dot notation
+import _Region "mo:core/Region"; // enables `region.storeBlob(...)` dot notation
 import Result "mo:core/Result";
 import Types "mo:core/Types";
 
@@ -271,6 +272,11 @@ module {
       let leaf = node >> 1;
       if (Layout.getKey(self, leaf) == key) {
         let v = if (ret) ?Layout.getValue(self, leaf) else null;
+        // Zero the leaf so that the only non-zero bytes after the push are
+        // the chain link (or none, when the list was empty — see
+        // LinkedList.push). Symmetric with the per-slot `setChild(..., 0)`
+        // for collapsed internal nodes in the `#onlyLeaf` branch below.
+        self.leaves_region.storeBlob(Layout.getLeafOffset(self, leaf), self.zero_leaf);
         Trie.pushEmptyLeaf(self, leaf);
         return (v, true, 0 : Nat64);
       } else {
@@ -352,4 +358,43 @@ module {
   /// (the `Value` / `Metric` shapes the result targets are the ones
   /// introduced in 1.0.x; 0.5.x is not supported).
   public let toValue : (self : Map) -> Trie.Value = Trie.toValue;
+
+  // ─── Pointer-size resize (incremental) ────────────────────────────────────
+  //
+  // Migrate an existing Map to a different pointer_size. The work spans
+  // multiple messages: `beginResize` validates and prepares; `stepResize`
+  // does a batch and is called repeatedly until it returns `true`;
+  // `completeResize` returns the new Map. During the migration the caller
+  // must NOT read or write through the original Map reference — both the
+  // old and new layouts share the same region bytes, which are partially
+  // re-encoded between calls.
+
+  /// State carried across calls of an incremental pointer-size resize.
+  /// See `Trie.ResizeState`.
+  public type ResizeState = Trie.ResizeState;
+
+  /// `beginResize(self : Map, new_pointer_size : Nat) : ?ResizeState`
+  ///
+  /// Start an incremental pointer-size migration. Returns `null` if the
+  /// resize cannot proceed (invalid pointer size; current node/leaf count
+  /// wouldn't fit; the change would alter `leaf_size`; or growing while
+  /// the empty-leaves free list is non-empty). On success, no nodes have
+  /// been migrated yet — call `stepResize` to do the work.
+  public let beginResize : (self : Map, new_pointer_size : Nat) -> ?ResizeState = Trie.beginResize;
+
+  /// `stepResize(state : ResizeState, batch_size : Nat) : Bool`
+  ///
+  /// Migrate up to `batch_size` nodes. Returns `true` when every node has
+  /// been migrated; further calls then become no-ops that still return
+  /// `true`. Once `true` has been returned, call `completeResize` to
+  /// obtain the new Map.
+  public let stepResize : (state : ResizeState, batch_size : Nat) -> Bool = Trie.stepResize;
+
+  /// `completeResize(state : ResizeState) : Map`
+  ///
+  /// Assemble the new Map from a completed resize. Traps if `stepResize`
+  /// has not yet returned `true`. The returned Map shares the now-rewritten
+  /// regions with the original; the caller must stop using the original
+  /// reference (typically by holding the Map in a `var` and reassigning).
+  public let completeResize : (state : ResizeState) -> Map = Trie.completeResize;
 };

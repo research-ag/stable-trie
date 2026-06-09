@@ -7,8 +7,18 @@
 ///
 /// The chain lives inside the freed items themselves: each freed item's slot
 /// (its first `pointer_size` bytes, at byte offset `offset_base + i*item_size`)
-/// holds the index of the next freed item, or the all-ones sentinel for the
-/// tail of the chain.
+/// holds the index of the next freed item below it on the stack. The bottom
+/// item carries no chain link — its slot stays all-zero. The signal for
+/// "list is empty" is `count == 0`, not a stored sentinel; no
+/// pointer-size-dependent value is ever written into the region by this
+/// module, which makes the structure trivially survive a `pointer_size`
+/// migration of the surrounding trie.
+///
+/// Items pushed onto the list MUST be all-zero before the push (apart from
+/// the chain-link slot, which `push` overwrites). The caller is responsible
+/// for clearing the item: `Map.removeRec` does this via
+/// `Layout.setChild(node, slot, 0)` before `pushEmptyNode`, and via
+/// `storeBlob(..., zero_leaf)` before `pushEmptyLeaf`.
 ///
 /// Implemented as a plain mutable record plus module-level functions that take
 /// the record as their first argument `self`, so callers use dot-notation:
@@ -27,11 +37,12 @@ module {
   ///
   /// - `offset_base`, `item_size`, `pointer_size` are fixed at construction.
   /// - `loadMask` is precomputed from `pointer_size` (mask of `pointer_size*8`
-  ///   bits). It doubles as the empty-list sentinel: every valid index is
-  ///   `< 2 ** (pointer_size*8 - 1) < loadMask`, so the sentinel can never
-  ///   collide with a real item index.
-  /// - `count` is the list length; `last_empty_item` is the head index (or the
-  ///   sentinel when the list is empty).
+  ///   bits). Used by `pop` to mask the loaded `Nat64` down to the actual
+  ///   chain-link width. NOT used as an empty-list sentinel — that role is
+  ///   played by `count == 0`.
+  /// - `count` is the list length; `last_empty_item` is the head index when
+  ///   `count > 0`. When `count == 0`, `last_empty_item` is just a
+  ///   placeholder (set to `0` by `empty` and by `pop` when the list drains).
   public type LinkedList = {
     offset_base : Nat64;
     item_size : Nat64;
@@ -55,7 +66,7 @@ module {
       pointer_size = nat64toNat(pointer_size);
       loadMask;
       var count = 0;
-      var last_empty_item = loadMask; // empty: head == sentinel
+      var last_empty_item = 0; // placeholder while count == 0
     };
   };
 
@@ -90,24 +101,42 @@ module {
     };
   };
 
-  /// Add a deleted item (by index) to the list. Requires that the item slot
-  /// be large enough to hold a chain link, i.e. the `item_size` chosen at
-  /// construction is at least `pointer_size`; otherwise the link spills into
-  /// the next item's slot.
+  /// Add a deleted item (by index) to the list. Caller MUST hand in an
+  /// all-zero item slot; this function writes only the chain link (and only
+  /// when the list was already non-empty — the bottom item has no chain
+  /// link, its slot stays all-zero).
+  ///
+  /// Requires `item_size >= pointer_size`; otherwise the link would spill
+  /// into the next item's slot.
   public func push(self : LinkedList, region : Region.Region, item : Nat64) {
-    storePointer(region, self.pointer_size, slotOffset(self, item), self.last_empty_item);
+    if (self.count > 0) {
+      // Non-empty list: link the new top down to what used to be on top.
+      storePointer(region, self.pointer_size, slotOffset(self, item), self.last_empty_item);
+    };
+    // Empty list: skip the write — the item is already all-zero by
+    // precondition, and the all-zero state is the bottom-of-list marker.
     self.last_empty_item := item;
     self.count += 1;
   };
 
   /// Pop the most-recently-freed item (by index), or `null` if empty.
+  /// The popped item's chain-link slot is cleared on the way out so that
+  /// the item is fully reusable as an all-zero block.
   public func pop(self : LinkedList, region : Region.Region) : ?Nat64 {
-    if (self.last_empty_item == self.loadMask) return null;
+    if (self.count == 0) return null;
 
     let ret = self.last_empty_item;
-    self.last_empty_item := loadPointer(region, slotOffset(self, self.last_empty_item), self.loadMask);
-    storePointer(region, self.pointer_size, slotOffset(self, ret), 0);
     self.count -= 1;
+    if (self.count > 0) {
+      // Read the chain link to find the next-to-pop.
+      self.last_empty_item := loadPointer(region, slotOffset(self, ret), self.loadMask);
+    } else {
+      // Just popped the bottom; restore the placeholder.
+      self.last_empty_item := 0;
+    };
+    // Clear the popped item's chain-link slot (idempotent zero-write when
+    // ret was the bottom — its slot is already 0).
+    storePointer(region, self.pointer_size, slotOffset(self, ret), 0);
     ?ret;
   };
 };

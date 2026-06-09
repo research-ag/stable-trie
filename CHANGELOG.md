@@ -1,5 +1,10 @@
 # Stable-trie changelog
 
+## 0.1.2
+
+- In-place ability to change the pointer-size (see README)
+- **Breaking**: Internal representation is not compatible with 0.1.1
+
 ## 0.1.1
 
 - Add promtracker integration with `toValue` function

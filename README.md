@@ -358,6 +358,70 @@ Per scrape the `Value` calls `memoryStats()` once and emits five samples in thre
 
 **Version compatibility:** `toValue()` is designed against the `Value` / `Metric` shapes introduced in **`promtracker >= 1.0.1`** (the `mixins/http`-shaped API). The older 0.5.x releases used different shapes and will not type-check.
 
+### Pointer-size resize
+
+The `pointer_size` chosen at construction caps how many entries a trie can hold (`max_address = 2 ** (pointer_size * 8 - 1)`). An existing trie can be migrated in place to a different pointer size — typically to shrink the address space once a working set is known, or to grow it before hitting `LimitExceeded`. Pointer values encode node/leaf _indices_ (not byte offsets), so every pointer's numeric value is preserved across the migration; only the byte width of each slot changes.
+
+The work is **incremental** and meant to span multiple IC messages — `stepResize` does one batch of nodes per call:
+
+```motoko
+import Map "mo:stable-trie/Map";
+
+persistent actor {
+  var m : Map.Map = Map.empty({
+    pointer_size = 4;
+    aridity = 4;
+    root_aridity = null;
+    key_size = 8;
+    value_size = 4;
+  });
+  var resizing : ?Map.ResizeState = null;
+
+  // 1. Start the migration.
+  public func startResize(new_pointer_size : Nat) : async Bool {
+    switch (m.beginResize(new_pointer_size)) {
+      case (?s) { resizing := ?s; true };
+      case null false; // refused — see below
+    };
+  };
+
+  // 2. Drive the migration over as many messages as needed. The caller
+  //    invokes this repeatedly (e.g. via a heartbeat or a timer) until
+  //    it returns `true`.
+  public func continueResize(batch : Nat) : async Bool {
+    switch (resizing) {
+      case null true; // nothing in progress
+      case (?state) {
+        if (Map.stepResize(state, batch)) {
+          // 3. Done — swap in the new trie.
+          m := Map.completeResize(state);
+          resizing := null;
+          true;
+        } else { false };
+      };
+    };
+  };
+};
+
+```
+
+**Caller responsibilities** while a migration is in progress:
+
+- Hold the trie in a `var` (so you can reassign it to the value `completeResize` returns).
+- Keep the `ResizeState` reachable across messages (typically a `var resizing : ?ResizeState`). The state is stable and survives canister upgrades.
+- Between `beginResize` and `completeResize`, do **NOT** read or write through the original trie reference. The regions are partially re-encoded between calls; the old layout's offsets no longer describe what's at those bytes.
+
+`beginResize` returns `null` (refuses to start) when:
+
+- `new_pointer_size` isn't one of `1, 2, 4, 5, 6, 8`;
+- `new_pointer_size == self.pointer_size` (no migration to do);
+- the current `node_count` or `leaf_count` wouldn't fit in the new pointer space;
+- the migration would force `leaf_size` to change (Map padding case where `new_pointer_size > leaf_size`).
+
+The leaves region is not touched by the migration — the only re-encoding happens in the nodes region. Internal-node free-list links and freed leaves both survive the migration unchanged.
+
+Choosing `batch`: each batch processes that many nodes, with cost roughly `aridity × pointer_size` stable-memory operations per node. Batches in the low thousands are typically safe within an IC update message budget; tune for your specific aridity and how much other work the message does.
+
 ### Build & test
 
 Run:
