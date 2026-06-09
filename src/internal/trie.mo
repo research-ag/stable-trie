@@ -32,6 +32,9 @@ module {
 
   // down conversions
   let nat16to8 = Prim.nat16ToNat8;
+  let nat32to16 = Prim.nat32ToNat16;
+  let nat64to32 = Prim.nat64ToNat32;
+  let natWrap8 = Prim.intToNat8Wrap;
 
   /// Constructor arguments shared by `Enumeration` and `Map`. The public
   /// `empty()` in those modules documents the fields in user-facing terms.
@@ -539,6 +542,342 @@ module {
         ("stable_trie_leaf_count", "kind=\"used\"", _.used_leaf_count),
         ("stable_trie_byte_size", "", _.byte_size),
       ];
+    };
+  };
+
+  // ─── Incremental pointer-size resize ───────────────────────────────────────
+  //
+  // The pointer width of a trie can be migrated to a different value (e.g.
+  // 4 → 2 to shrink the address space once it's known the trie won't grow
+  // further, or 2 → 4 to make room for more entries). Pointer values
+  // encode node/leaf *indices*, not byte offsets, so the numeric value of
+  // every pointer is preserved across the resize — only the byte width
+  // changes.
+  //
+  // The rewrite happens in place on the existing nodes region:
+  //
+  // - Shrinking (new_ps < old_ps): each node is read at its old position
+  //   with the old width and written at its new (leftward) position with
+  //   the new width. Nodes are processed left-to-right.
+  //
+  // - Growing (new_ps > old_ps): the region is grown first if needed,
+  //   then nodes are processed right-to-left, each read at its old
+  //   position and written at its new (rightward) position.
+  //
+  // The work is incremental: `beginResize` produces a stable `ResizeState`,
+  // `stepResize` does up to `batch_size` nodes per call and returns `true`
+  // when the last node has been processed, and `completeResize` returns
+  // the new `StableTrie` sharing the now-rewritten regions. The caller
+  // is responsible for:
+  //
+  // - storing the original trie reference in a `var`, so it can be
+  //   reassigned to the new trie after `completeResize`;
+  // - keeping the `ResizeState` reachable across messages (typically a
+  //   `var resizing : ?ResizeState`);
+  // - NOT performing any read or write through the original trie
+  //   reference between `beginResize` and `completeResize` — both the
+  //   old and new layouts use the same region bytes, and the bytes are
+  //   neither old-shape nor new-shape during the migration.
+
+  /// State carried across calls of an incremental pointer-size resize.
+  ///
+  /// All fields are stable types so the state survives canister upgrades.
+  public type ResizeState = {
+    nodes_region : Region.Region;
+    leaves_region : Region.Region;
+    node_count : Nat64;
+    leaf_count : Nat64;
+    // Old layout snapshot — used to decode the still-untouched part of
+    // the nodes region.
+    old_pointer_size : Nat;
+    old_pointer_size_ : Nat64;
+    old_node_size : Nat64;
+    old_offset_base : Nat64;
+    old_loadMask : Nat64;
+    // New layout snapshot — used to write the migrated part, and to
+    // construct the new StableTrie in `completeResize`.
+    new_pointer_size : Nat;
+    new_pointer_size_ : Nat64;
+    new_node_size : Nat64;
+    new_root_size : Nat64;
+    new_offset_base : Nat64;
+    new_loadMask : Nat64;
+    new_max_address : Nat64;
+    new_safe_node_bound : Nat64;
+    new_padding : Nat64;
+    new_nodes_freeSpace : Nat64;
+    // Unchanged layout values (carried verbatim into the new StableTrie).
+    key_size : Nat;
+    value_size : Nat;
+    aridity_ : Nat64;
+    key_size_ : Nat64;
+    root_aridity_ : Nat64;
+    bitlength : Nat16;
+    bitshift : Nat8;
+    max_chain_depth : Nat64;
+    root_bitlength_ : Nat64;
+    root_bitlength : Nat16;
+    leaf_size : Nat64;
+    empty_values : Bool;
+    // Free-list state (preserved verbatim — empty_nodes_list links are
+    // re-encoded by the per-node rewrite, since they live at the start
+    // of each freed node).
+    empty_nodes_count : Nat;
+    empty_nodes_last : Nat64;
+    empty_leaves_count : Nat;
+    empty_leaves_last : Nat64;
+    leaves_freeSpace : Nat64;
+    // Direction of the migration.
+    shrinking : Bool;
+    // Number of nodes already migrated (0 .. node_count). When equal to
+    // node_count, the resize is done and `completeResize` may be called.
+    var processed : Nat64;
+  };
+
+  /// Begin an incremental pointer-size migration. Returns `null` if the
+  /// resize cannot proceed:
+  ///
+  /// - `new_pointer_size` is not one of `1, 2, 4, 5, 6, 8`;
+  /// - `new_pointer_size == self.pointer_size` (no work to do);
+  /// - the new pointer space is too small to address the current
+  ///   `node_count` or `leaf_count`;
+  /// - the new pointer size would change `leaf_size` (Map padding case,
+  ///   i.e. `new_pointer_size > leaf_size`);
+  /// - growing while the empty-leaves free list is non-empty (the
+  ///   chain links inside leaves would need re-encoding; not currently
+  ///   handled).
+  ///
+  /// On success, the region is grown if needed (for the growing case)
+  /// and a `ResizeState` is returned. No nodes have been migrated yet.
+  public func beginResize(self : StableTrie, new_pointer_size : Nat) : ?ResizeState {
+    let valid = switch (new_pointer_size) {
+      case (1 or 2 or 4 or 5 or 6 or 8) true;
+      case _ false;
+    };
+    if (not valid) return null;
+    if (new_pointer_size == self.pointer_size) return null;
+
+    let new_pointer_size_ = Prim.intToNat64Wrap(new_pointer_size);
+    let new_max_address : Nat64 = 2 ** (new_pointer_size_ * 8 - 1);
+
+    if (self.node_count > new_max_address) return null;
+    if (self.leaf_count > new_max_address) return null;
+
+    // Refuse if leaf_size would change (Map padding case).
+    if (new_pointer_size_ > self.leaf_size) return null;
+
+    let shrinking = new_pointer_size < self.pointer_size;
+
+    // Growing with a non-empty leaves free list would require rewriting
+    // the chain links inside freed leaves; not handled here.
+    if (not shrinking and self.empty_leaves_list.count > 0) return null;
+
+    let new_node_size = self.aridity_ *% new_pointer_size_;
+    let new_root_size = self.root_aridity_ *% new_pointer_size_;
+    let new_offset_base = new_root_size -% new_node_size;
+    let new_padding = 8 -% new_pointer_size_;
+    let new_loadMask : Nat64 = if (new_pointer_size == 8) 0xffff_ffff_ffff_ffff else (1 << (new_pointer_size_ << 3)) -% 1;
+    let new_safe_node_bound : Nat64 = if (self.max_chain_depth >= new_max_address) 0 else new_max_address -% self.max_chain_depth;
+
+    let region = self.nodes_region;
+
+    // Grow region if needed (only relevant for the growing direction).
+    let new_used = new_root_size +% (self.node_count -% 1) *% new_node_size +% new_padding;
+    let region_bytes = region.size() *% 65536;
+    if (region_bytes < new_used) {
+      let extra_needed = new_used -% region_bytes;
+      let extra_pages = (extra_needed +% 65535) / 65536;
+      assert region.grow(extra_pages) != 0xffff_ffff_ffff_ffff;
+    };
+    let final_region_bytes = region.size() *% 65536;
+    let new_nodes_freeSpace = final_region_bytes -% new_used;
+
+    ?{
+      nodes_region = self.nodes_region;
+      leaves_region = self.leaves_region;
+      node_count = self.node_count;
+      leaf_count = self.leaf_count;
+      old_pointer_size = self.pointer_size;
+      old_pointer_size_ = self.pointer_size_;
+      old_node_size = self.node_size;
+      old_offset_base = self.offset_base;
+      old_loadMask = self.loadMask;
+      new_pointer_size;
+      new_pointer_size_;
+      new_node_size;
+      new_root_size;
+      new_offset_base;
+      new_loadMask;
+      new_max_address;
+      new_safe_node_bound;
+      new_padding;
+      new_nodes_freeSpace;
+      key_size = self.key_size;
+      value_size = self.value_size;
+      aridity_ = self.aridity_;
+      key_size_ = self.key_size_;
+      root_aridity_ = self.root_aridity_;
+      bitlength = self.bitlength;
+      bitshift = self.bitshift;
+      max_chain_depth = self.max_chain_depth;
+      root_bitlength_ = self.root_bitlength_;
+      root_bitlength = self.root_bitlength;
+      leaf_size = self.leaf_size;
+      empty_values = self.empty_values;
+      empty_nodes_count = self.empty_nodes_list.count;
+      // The free-list "empty" sentinel is `last_empty_item == loadMask`, and
+      // loadMask depends on pointer_size. A list that's empty under the old
+      // layout has its head set to the OLD loadMask. After the resize the
+      // new list will compare against the NEW loadMask, so we translate the
+      // sentinel here. Real (in-range) indices are preserved verbatim — they
+      // already fit in the new pointer width (we checked node_count and
+      // leaf_count above).
+      empty_nodes_last = if (self.empty_nodes_list.last_empty_item == self.loadMask) new_loadMask else self.empty_nodes_list.last_empty_item;
+      empty_leaves_count = self.empty_leaves_list.count;
+      empty_leaves_last = if (self.empty_leaves_list.last_empty_item == self.loadMask) new_loadMask else self.empty_leaves_list.last_empty_item;
+      leaves_freeSpace = self.leaves_freeSpace;
+      shrinking;
+      var processed = 0 : Nat64;
+    };
+  };
+
+  /// Migrate up to `batch_size` nodes. Returns `true` when every node has
+  /// been migrated (after which `completeResize` should be called).
+  /// Calling again after returning `true` is a no-op that still returns
+  /// `true`.
+  public func stepResize(state : ResizeState, batch_size : Nat) : Bool {
+    let region = state.nodes_region;
+    let aridity_ = state.aridity_;
+    let root_aridity_ = state.root_aridity_;
+    let node_count = state.node_count;
+    let batch64 = Prim.intToNat64Wrap(batch_size);
+
+    var processed = state.processed;
+    let remaining = node_count -% processed;
+    var to_process = if (remaining < batch64) remaining else batch64;
+
+    if (state.shrinking) {
+      while (to_process > 0) {
+        let node_idx = processed;
+        let n_slots = if (node_idx == 0) root_aridity_ else aridity_;
+        let old_pos = if (node_idx == 0) 0 : Nat64 else state.old_offset_base +% node_idx *% state.old_node_size;
+        let new_pos = if (node_idx == 0) 0 : Nat64 else state.new_offset_base +% node_idx *% state.new_node_size;
+
+        var slot : Nat64 = 0;
+        while (slot < n_slots) {
+          let old_slot_offset = old_pos +% slot *% state.old_pointer_size_;
+          let value = Prim.regionLoadNat64(region, old_slot_offset) & state.old_loadMask;
+          let new_slot_offset = new_pos +% slot *% state.new_pointer_size_;
+          writePointerN(region, state.new_pointer_size, new_slot_offset, value);
+          slot +%= 1;
+        };
+
+        processed +%= 1;
+        to_process -%= 1;
+      };
+    } else {
+      while (to_process > 0) {
+        let node_idx = node_count -% 1 -% processed;
+        let n_slots = if (node_idx == 0) root_aridity_ else aridity_;
+        let old_pos = if (node_idx == 0) 0 : Nat64 else state.old_offset_base +% node_idx *% state.old_node_size;
+        let new_pos = if (node_idx == 0) 0 : Nat64 else state.new_offset_base +% node_idx *% state.new_node_size;
+
+        // Slots walked right-to-left so that writes at higher slots
+        // don't clobber the actual byte range of lower slots before we
+        // read them.
+        var slot : Nat64 = n_slots;
+        while (slot > 0) {
+          slot -%= 1;
+          let old_slot_offset = old_pos +% slot *% state.old_pointer_size_;
+          let value = Prim.regionLoadNat64(region, old_slot_offset) & state.old_loadMask;
+          let new_slot_offset = new_pos +% slot *% state.new_pointer_size_;
+          writePointerN(region, state.new_pointer_size, new_slot_offset, value);
+        };
+
+        processed +%= 1;
+        to_process -%= 1;
+      };
+    };
+
+    state.processed := processed;
+    processed == node_count;
+  };
+
+  /// Assemble the new `StableTrie` from a completed resize. Traps if
+  /// `stepResize` has not yet returned `true`. The returned trie shares
+  /// the (now-rewritten) regions with the original; the caller must
+  /// stop using the original reference.
+  public func completeResize(state : ResizeState) : StableTrie {
+    assert state.processed == state.node_count;
+
+    {
+      pointer_size = state.new_pointer_size;
+      key_size = state.key_size;
+      value_size = state.value_size;
+      aridity_ = state.aridity_;
+      key_size_ = state.key_size_;
+      pointer_size_ = state.new_pointer_size_;
+      root_aridity_ = state.root_aridity_;
+      loadMask = state.new_loadMask;
+      bitlength = state.bitlength;
+      bitshift = state.bitshift;
+      max_address = state.new_max_address;
+      max_chain_depth = state.max_chain_depth;
+      safe_node_bound = state.new_safe_node_bound;
+      root_bitlength_ = state.root_bitlength_;
+      root_bitlength = state.root_bitlength;
+      node_size = state.new_node_size;
+      node_size_ = nat64toNat(state.new_node_size);
+      leaf_size = state.leaf_size;
+      root_size = state.new_root_size;
+      offset_base = state.new_offset_base;
+      padding = state.new_padding;
+      empty_values = state.empty_values;
+      empty_nodes_list = {
+        offset_base = state.new_offset_base;
+        item_size = state.new_node_size;
+        pointer_size = state.new_pointer_size;
+        loadMask = state.new_loadMask;
+        var count = state.empty_nodes_count;
+        var last_empty_item = state.empty_nodes_last;
+      };
+      empty_leaves_list = {
+        offset_base = 0 : Nat64;
+        item_size = state.leaf_size;
+        pointer_size = state.new_pointer_size;
+        loadMask = state.new_loadMask;
+        var count = state.empty_leaves_count;
+        var last_empty_item = state.empty_leaves_last;
+      };
+      var leaf_count = state.leaf_count;
+      var node_count = state.node_count;
+      var nodes_region = state.nodes_region;
+      var nodes_freeSpace = state.new_nodes_freeSpace;
+      var leaves_region = state.leaves_region;
+      var leaves_freeSpace = state.leaves_freeSpace;
+    };
+  };
+
+  /// Write `value` at `offset` using exactly `ps` bytes (low-endian).
+  /// Mirrors `Layout.setChild`'s dispatch table but parameterised by an
+  /// arbitrary pointer width, so it can write the *new* width into a
+  /// region still otherwise indexed by the old width.
+  func writePointerN(region : Region.Region, ps : Nat, offset : Nat64, value : Nat64) {
+    if (ps == 2) {
+      region.storeNat16(offset, nat32to16(nat64to32(value)));
+    } else if (ps == 4) {
+      region.storeNat32(offset, nat64to32(value));
+    } else if (ps == 5) {
+      region.storeNat32(offset, nat64to32(value & 0xffff_ffff));
+      region.storeNat8(offset +% 4, natWrap8(nat64toNat(value >> 32)));
+    } else if (ps == 6) {
+      region.storeNat32(offset, nat64to32(value & 0xffff_ffff));
+      region.storeNat16(offset +% 4, nat32to16(nat64to32(value >> 32)));
+    } else if (ps == 8) {
+      region.storeNat64(offset, value);
+    } else {
+      // ps == 1
+      region.storeNat8(offset, natWrap8(nat64toNat(value)));
     };
   };
 };

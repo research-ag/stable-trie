@@ -341,4 +341,39 @@ module {
   /// (the `Value` / `Metric` shapes the result targets are the ones
   /// introduced in 1.0.x; 0.5.x is not supported).
   public let toValue : (self : Enumeration) -> Trie.Value = Trie.toValue;
+
+  // ─── Pointer-size resize (incremental) ────────────────────────────────────
+  //
+  // Migrate an existing Enumeration to a different pointer_size. The work
+  // spans multiple messages: `beginResize` validates and prepares;
+  // `stepResize` does a batch and is called repeatedly until it returns
+  // `true`; `completeResize` returns the new Enumeration. During the
+  // migration the caller must NOT read or write through the original
+  // Enumeration reference.
+
+  /// State carried across calls of an incremental pointer-size resize.
+  /// See `Trie.ResizeState`.
+  public type ResizeState = Trie.ResizeState;
+
+  /// `beginResize(self : Enumeration, new_pointer_size : Nat) : ?ResizeState`
+  ///
+  /// Start an incremental pointer-size migration. Returns `null` if the
+  /// resize cannot proceed (invalid pointer size; current node/leaf count
+  /// wouldn't fit; the change would alter `leaf_size`).
+  public let beginResize : (self : Enumeration, new_pointer_size : Nat) -> ?ResizeState = Trie.beginResize;
+
+  /// `stepResize(state : ResizeState, batch_size : Nat) : Bool`
+  ///
+  /// Migrate up to `batch_size` nodes. Returns `true` when every node has
+  /// been migrated. Once `true` has been returned, call `completeResize`
+  /// to obtain the new Enumeration.
+  public let stepResize : (state : ResizeState, batch_size : Nat) -> Bool = Trie.stepResize;
+
+  /// `completeResize(state : ResizeState) : Enumeration`
+  ///
+  /// Assemble the new Enumeration from a completed resize. Traps if
+  /// `stepResize` has not yet returned `true`. The returned Enumeration
+  /// shares the now-rewritten regions with the original; the caller must
+  /// stop using the original reference.
+  public let completeResize : (state : ResizeState) -> Enumeration = Trie.completeResize;
 };
