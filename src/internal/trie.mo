@@ -538,7 +538,7 @@ module {
   /// against this function.
   public func toValue(self : StableTrie) : Value {
     return {
-      read = func() : [Metric] = self.memoryStats() |> [
+      read = func() : [Metric] = memoryStats(self) |> [
         ("stable_trie_node_count", "kind=\"total\"", _.total_node_count),
         ("stable_trie_leaf_count", "kind=\"total\"", _.total_leaf_count),
         ("stable_trie_node_count", "kind=\"used\"", _.used_node_count),
