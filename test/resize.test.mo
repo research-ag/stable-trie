@@ -6,9 +6,15 @@
 import Blob "mo:core/Blob";
 import Iter "mo:core/Iter";
 import Nat8 "mo:core/Nat8";
+import Nat64 "mo:core/Nat64";
 import Nat_ "mo:core/Nat";
+import _Region "mo:core/Region"; // dot-notation on `nodes_region`/`leaves_region`
 
 import Map "../src/Map";
+// Enumeration is intentionally NOT imported in this file — it would make
+// every dot-notation call on a Map value ambiguous (Map and Enumeration
+// share signatures for `size`, `add`, `get`, etc.). Enumeration's resize
+// is exercised in resize_enum.test.mo.
 
 func keyOf(i : Nat) : Blob = Blob.fromArray([
   Nat8.fromNat(i % 256),
@@ -145,3 +151,181 @@ assert refused(m.beginResize(4)); // no-op (same pointer_size)
 assert refused(m.beginResize(3)); // invalid
 assert refused(m.beginResize(7)); // invalid
 assert refused(m.beginResize(0)); // invalid
+
+// ─── Edge size: empty trie ────────────────────────────────────────────────
+
+do {
+  let em = Map.empty({
+    pointer_size = 1;
+    aridity = 4;
+    root_aridity = null;
+    key_size = 1;
+    value_size = 1;
+  });
+  assert em.size() == 0;
+
+  // Round-trip an empty trie. node_count is just 1 (the root), so the
+  // resize processes a single node.
+  var em_now : Map.Map = em;
+  em_now := resize(em_now, 2, 100);
+  assert em_now.size() == 0;
+  em_now := resize(em_now, 1, 100);
+  assert em_now.size() == 0;
+
+  // Functional afterwards.
+  em_now.add("\01", "x");
+  assert em_now.get("\01") == ?("x" : Blob);
+};
+
+// ─── Edge size: single entry ──────────────────────────────────────────────
+
+do {
+  let sm = Map.empty({
+    pointer_size = 1;
+    aridity = 4;
+    root_aridity = null;
+    key_size = 1;
+    value_size = 1;
+  });
+  sm.add("\05", "y");
+  assert sm.size() == 1;
+
+  var sm_now : Map.Map = sm;
+  sm_now := resize(sm_now, 2, 100);
+  assert sm_now.size() == 1;
+  assert sm_now.get("\05") == ?("y" : Blob);
+};
+
+// ─── batch_size = 1 (forces one node per call) ────────────────────────────
+
+do {
+  let bm = Map.empty({
+    pointer_size = 1;
+    aridity = 4;
+    root_aridity = null;
+    key_size = 1;
+    value_size = 1;
+  });
+  for (i in Nat_.range(0, 30)) {
+    bm.add(Blob.fromArray([Nat8.fromNat(i)]), Blob.fromArray([Nat8.fromNat(i)]));
+  };
+
+  var bm_now : Map.Map = bm;
+  bm_now := resize(bm_now, 2, 1); // one node per stepResize call
+  assert bm_now.size() == 30;
+  for (i in Nat_.range(0, 30)) {
+    assert bm_now.get(Blob.fromArray([Nat8.fromNat(i)])) == ?Blob.fromArray([Nat8.fromNat(i)]);
+  };
+};
+
+// ─── batch_size >> node_count (one call finishes) ─────────────────────────
+
+do {
+  let lm = Map.empty({
+    pointer_size = 1;
+    aridity = 4;
+    root_aridity = null;
+    key_size = 1;
+    value_size = 1;
+  });
+  for (i in Nat_.range(0, 10)) {
+    lm.add(Blob.fromArray([Nat8.fromNat(i)]), Blob.fromArray([Nat8.fromNat(i)]));
+  };
+
+  // Single stepResize call with batch huge → done in one call.
+  var lm_now : Map.Map = lm;
+  let state = switch (lm_now.beginResize(2)) {
+    case (?s) s;
+    case null { assert false; loop {} };
+  };
+  let done = Map.stepResize(state, 10_000);
+  assert done;
+  lm_now := Map.completeResize(state);
+  assert lm_now.size() == 10;
+};
+
+// ─── leaf_size refusal ────────────────────────────────────────────────────
+//
+// Map with key_size + value_size = 1, pointer_size = 1. leaf_size = 1.
+// Growing to a pointer_size larger than leaf_size would make future
+// `pushEmptyLeaf` writes overflow the leaf — refused.
+
+do {
+  let lm = Map.empty({
+    pointer_size = 1;
+    aridity = 4;
+    root_aridity = null;
+    key_size = 1;
+    value_size = 0;
+  });
+  lm.add("\01", "");
+  // leaf_size is max(1, 1) = 1; growing to any larger ps would refuse.
+  assert refused(lm.beginResize(2));
+  assert refused(lm.beginResize(4));
+  assert refused(lm.beginResize(8));
+};
+
+// ─── Capacity exceeded refusal ────────────────────────────────────────────
+
+do {
+  let cm = Map.empty({
+    pointer_size = 2;
+    aridity = 4;
+    root_aridity = null;
+    key_size = 2;
+    value_size = 0;
+  });
+  for (i in Nat_.range(0, 200)) {
+    cm.add(Blob.fromArray([Nat8.fromNat(i % 256), Nat8.fromNat(i / 256)]), "");
+  };
+  // ps=1 caps leaf_count at 128. 200 > 128 → refuse.
+  assert refused(cm.beginResize(1));
+};
+
+// ─── Round-trip byte-identity ─────────────────────────────────────────────
+//
+// After `n → m → n` (with deletes in the mix to populate both free lists)
+// and no intervening writes, the used portion of both regions should be
+// byte-identical to the pre-resize snapshot. Strong correctness invariant —
+// any subtle off-by-one in offset arithmetic during the rewrite would
+// surface here.
+
+do {
+  let rm = Map.empty({
+    pointer_size = 2;
+    aridity = 4;
+    root_aridity = null;
+    key_size = 4;
+    value_size = 4;
+  });
+  for (i in Nat_.range(0, 30)) {
+    rm.add(keyOf(i), valueOf(i));
+  };
+  // Delete a few entries to populate both free lists (chain-link node + freed leaf).
+  assert rm.delete(keyOf(5));
+  assert rm.delete(keyOf(15));
+  assert rm.delete(keyOf(25));
+
+  // Snapshot the used portion of both regions.
+  let nodes_used : Nat = Nat64.toNat(rm.root_size +% (rm.node_count -% 1) *% rm.node_size);
+  let leaves_used : Nat = Nat64.toNat(rm.leaf_count *% rm.leaf_size);
+  let nodes_before = rm.nodes_region.loadBlob(0, nodes_used);
+  let leaves_before = rm.leaves_region.loadBlob(0, leaves_used);
+
+  // Round-trip 2 → 4 → 2.
+  var rm_now : Map.Map = rm;
+  rm_now := resize(rm_now, 4, 100);
+  rm_now := resize(rm_now, 2, 100);
+
+  // Used portion sizes match.
+  let nodes_used_after : Nat = Nat64.toNat(rm_now.root_size +% (rm_now.node_count -% 1) *% rm_now.node_size);
+  let leaves_used_after : Nat = Nat64.toNat(rm_now.leaf_count *% rm_now.leaf_size);
+  assert nodes_used == nodes_used_after;
+  assert leaves_used == leaves_used_after;
+
+  // Byte-identical.
+  let nodes_after = rm_now.nodes_region.loadBlob(0, nodes_used);
+  let leaves_after = rm_now.leaves_region.loadBlob(0, leaves_used);
+  assert nodes_before == nodes_after;
+  assert leaves_before == leaves_after;
+};
