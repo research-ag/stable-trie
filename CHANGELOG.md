@@ -1,5 +1,9 @@
 # Stable-trie changelog
 
+## 0.1.2
+
+- Add incremental pointer-size resize for `Map` and `Enumeration`. The new `beginResize` / `stepResize` / `completeResize` API migrates an existing trie to a different `pointer_size` over multiple message executions, sharing the underlying `Region`s with the original.
+
 ## 0.1.1
 
 - Add promtracker integration with `toValue` function
