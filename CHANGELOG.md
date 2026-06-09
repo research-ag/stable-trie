@@ -2,7 +2,8 @@
 
 ## 0.1.2
 
-- Add incremental pointer-size resize for `Map` and `Enumeration`. The new `beginResize` / `stepResize` / `completeResize` API migrates an existing trie to a different `pointer_size` over multiple message executions, sharing the underlying `Region`s with the original.
+- In-place ability to change the pointer-size (see README)
+- **Breaking**: Internal representation is not compatible with 0.1.1
 
 ## 0.1.1
 
