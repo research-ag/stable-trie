@@ -376,4 +376,21 @@ module {
   /// shares the now-rewritten regions with the original; the caller must
   /// stop using the original reference.
   public let completeResize : (state : ResizeState) -> Enumeration = Trie.completeResize;
+
+  // ─── Migration: 0.1.1 → 0.1.2 ─────────────────────────────────────────────
+
+  /// Stable-type shape of `Enumeration` as it appeared in stable-trie 0.1.1.
+  /// Use as the input type for `migrate_0_1_1`.
+  public type Enumeration_0_1_1 = Trie.StableTrie_0_1_1;
+
+  /// `migrate_0_1_1(old : Enumeration_0_1_1) : Enumeration`
+  ///
+  /// One-shot migration of an Enumeration persisted under stable-trie 0.1.1
+  /// to the 0.1.2 shape. Adds the new `zero_leaf` field. The empty-leaves
+  /// free list is always empty for Enumeration (removeLast decrements the
+  /// counter directly), so the migration walk is a no-op for Enumeration —
+  /// only the field attachment matters. The returned Enumeration shares
+  /// the original's regions; the original reference must not be used after
+  /// this call.
+  public let migrate_0_1_1 : (old : Enumeration_0_1_1) -> Enumeration = Trie.migrate_0_1_1;
 };
