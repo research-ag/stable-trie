@@ -1,5 +1,9 @@
 # Stable-trie changelog
 
+## Next
+
+- Add `aridity` and `root_aridity` metrics to `toValue`
+
 ## 0.1.3
 
 - Add support for `pointer_size = 3`

@@ -136,13 +136,15 @@ do {
   let stats = m.memoryStats();
   let metrics = m.toValue().read();
 
-  // 10 metrics: 3 config + 4 counts + byte_size + 2 region pages.
-  assert metrics.size() == 10;
+  // 12 metrics: 5 config + 4 counts + byte_size + 2 region pages.
+  assert metrics.size() == 12;
 
   let expected : [(Text, Text, Nat)] = [
     ("stable_trie_pointer_size", "", 4),
     ("stable_trie_value_size", "", 4),
     ("stable_trie_key_size", "", 4), // catches the pointer_size copy-paste bug
+    ("stable_trie_aridity", "", 4),
+    ("stable_trie_root_aridity", "", 4), // null in empty() → defaults to aridity
     ("stable_trie_node_count", "kind=\"total\"", stats.total_node_count),
     ("stable_trie_leaf_count", "kind=\"total\"", stats.total_leaf_count),
     ("stable_trie_node_count", "kind=\"used\"", stats.used_node_count),
@@ -153,7 +155,7 @@ do {
   ];
 
   var i = 0;
-  while (i < 10) {
+  while (i < 12) {
     assert metrics[i] == expected[i];
     i += 1;
   };
@@ -168,19 +170,21 @@ do {
 do {
   let m = Map.empty({
     pointer_size = 2;
-    aridity = 4;
-    root_aridity = null;
+    aridity = 16;
+    root_aridity = ?256;
     key_size = 8;
     value_size = 0;
   });
   m.add("\01\00\00\00\00\00\00\00", "");
 
   let metrics = m.toValue().read();
-  // First three metrics carry the config values; verify they match the
-  // empty() args we passed.
+  // First five metrics carry the config values; verify they match the
+  // empty() args we passed (root_aridity explicit here, not defaulted).
   assert metrics[0] == ("stable_trie_pointer_size", "", 2);
   assert metrics[1] == ("stable_trie_value_size", "", 0);
   assert metrics[2] == ("stable_trie_key_size", "", 8);
+  assert metrics[3] == ("stable_trie_aridity", "", 16);
+  assert metrics[4] == ("stable_trie_root_aridity", "", 256);
 };
 
 // ─── pointer_size = 3: layout sanity + metric tracking ────────────────────

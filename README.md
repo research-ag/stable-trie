@@ -354,7 +354,14 @@ renderer.addValue(m.toValue());
 
 ```
 
-Per scrape the `Value` calls `memoryStats()` once and emits five samples in three metric families (`stable_trie_node_count`, `stable_trie_leaf_count`, `stable_trie_byte_size`), with a `kind="used"|"total"` label distinguishing live vs. high-water counts on the first two. See `example/` for a runnable canister.
+Per scrape the `Value` calls `memoryStats()` once and emits twelve samples in nine metric families:
+
+- the five configuration values `stable_trie_pointer_size`, `stable_trie_key_size`, `stable_trie_value_size`, `stable_trie_aridity`, `stable_trie_root_aridity` (constant per trie; `root_aridity` reports the resolved value, i.e. `aridity` if `null` was passed to the constructor);
+- `stable_trie_node_count` and `stable_trie_leaf_count`, each with a `kind="used"|"total"` label distinguishing live vs. high-water counts;
+- `stable_trie_byte_size`;
+- `stable_trie_region_pages` with a `type="nodes"|"leaves"` label, the 64KB pages allocated to each region.
+
+See `example/` for a runnable canister.
 
 **Version compatibility:** `toValue()` is designed against the `Value` / `Metric` shapes introduced in **`promtracker >= 1.0.1`** (the `mixins/http`-shaped API). The older 0.5.x releases used different shapes and will not type-check.
 

@@ -551,6 +551,8 @@ module {
         ("stable_trie_pointer_size", "", self.pointer_size),
         ("stable_trie_value_size", "", self.value_size),
         ("stable_trie_key_size", "", self.key_size),
+        ("stable_trie_aridity", "", nat64toNat(self.aridity_)),
+        ("stable_trie_root_aridity", "", nat64toNat(self.root_aridity_)),
         ("stable_trie_node_count", "kind=\"total\"", _.total_node_count),
         ("stable_trie_leaf_count", "kind=\"total\"", _.total_leaf_count),
         ("stable_trie_node_count", "kind=\"used\"", _.used_node_count),
