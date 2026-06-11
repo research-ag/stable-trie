@@ -79,6 +79,8 @@ module {
     used_node_count : Nat;
     total_leaf_count : Nat;
     total_node_count : Nat;
+    nodes_region_pages : Nat;
+    leaves_region_pages : Nat;
   };
 
   /// Result of inspecting a non-root internal node's child slots after a
@@ -517,6 +519,8 @@ module {
       used_node_count = total_n - self.empty_nodes_list.count;
       total_leaf_count = total_l;
       total_node_count = total_n;
+      nodes_region_pages = nat64toNat(self.nodes_region.size());
+      leaves_region_pages = nat64toNat(self.leaves_region.size());
     };
   };
 
@@ -539,11 +543,16 @@ module {
   public func toValue(self : StableTrie) : Value {
     return {
       read = func() : [Metric] = memoryStats(self) |> [
+        ("stable_trie_pointer_size", "", self.pointer_size),
+        ("stable_trie_value_size", "", self.value_size),
+        ("stable_trie_key_size", "", self.key_size),
         ("stable_trie_node_count", "kind=\"total\"", _.total_node_count),
         ("stable_trie_leaf_count", "kind=\"total\"", _.total_leaf_count),
         ("stable_trie_node_count", "kind=\"used\"", _.used_node_count),
         ("stable_trie_leaf_count", "kind=\"used\"", _.used_leaf_count),
         ("stable_trie_byte_size", "", _.byte_size),
+        ("stable_trie_region_pages", "type=\"nodes\"", _.nodes_region_pages),
+        ("stable_trie_region_pages", "type=\"leaves\"", _.leaves_region_pages),
       ];
     };
   };
