@@ -413,7 +413,7 @@ persistent actor {
 
 `beginResize` returns `null` (refuses to start) when:
 
-- `new_pointer_size` isn't one of `1, 2, 4, 5, 6, 8`;
+- `new_pointer_size` isn't one of `1, 2, 3, 4, 5, 6, 8`;
 - `new_pointer_size == self.pointer_size` (no migration to do);
 - the current `node_count` or `leaf_count` wouldn't fit in the new pointer space;
 - the migration would force `leaf_size` to change (Map padding case where `new_pointer_size > leaf_size`).
