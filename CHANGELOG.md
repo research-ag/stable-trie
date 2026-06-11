@@ -2,7 +2,7 @@
 
 ## 0.1.4
 
-- Add `aridity` and `root_aridity` metrics to `toValue`
+- Expose the trie config constants (`pointer_size`, `key_size`, `value_size`, `aridity`, `root_aridity`) in `toValue` as a single `stable_trie_constant` metric with a `constant` label; replaces the separate `stable_trie_pointer_size` / `stable_trie_value_size` / `stable_trie_key_size` metrics introduced in 0.1.3
 - Bug fix: when `leaf_size < 8`, growing the leaves region now reserves slack for the free-list chain-link reads; previously a delete + re-add involving the last leaf of an exactly-full page could trap with "region access out of bounds"
 
 ## 0.1.3

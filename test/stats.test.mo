@@ -140,11 +140,11 @@ do {
   assert metrics.size() == 12;
 
   let expected : [(Text, Text, Nat)] = [
-    ("stable_trie_pointer_size", "", 4),
-    ("stable_trie_value_size", "", 4),
-    ("stable_trie_key_size", "", 4), // catches the pointer_size copy-paste bug
-    ("stable_trie_aridity", "", 4),
-    ("stable_trie_root_aridity", "", 4), // null in empty() → defaults to aridity
+    ("stable_trie_constant", "constant=\"pointer_size\"", 4),
+    ("stable_trie_constant", "constant=\"value_size\"", 4),
+    ("stable_trie_constant", "constant=\"key_size\"", 4), // catches the pointer_size copy-paste bug
+    ("stable_trie_constant", "constant=\"aridity\"", 4),
+    ("stable_trie_constant", "constant=\"root_aridity\"", 4), // null in empty() → defaults to aridity
     ("stable_trie_node_count", "kind=\"total\"", stats.total_node_count),
     ("stable_trie_leaf_count", "kind=\"total\"", stats.total_leaf_count),
     ("stable_trie_node_count", "kind=\"used\"", stats.used_node_count),
@@ -180,11 +180,11 @@ do {
   let metrics = m.toValue().read();
   // First five metrics carry the config values; verify they match the
   // empty() args we passed (root_aridity explicit here, not defaulted).
-  assert metrics[0] == ("stable_trie_pointer_size", "", 2);
-  assert metrics[1] == ("stable_trie_value_size", "", 0);
-  assert metrics[2] == ("stable_trie_key_size", "", 8);
-  assert metrics[3] == ("stable_trie_aridity", "", 16);
-  assert metrics[4] == ("stable_trie_root_aridity", "", 256);
+  assert metrics[0] == ("stable_trie_constant", "constant=\"pointer_size\"", 2);
+  assert metrics[1] == ("stable_trie_constant", "constant=\"value_size\"", 0);
+  assert metrics[2] == ("stable_trie_constant", "constant=\"key_size\"", 8);
+  assert metrics[3] == ("stable_trie_constant", "constant=\"aridity\"", 16);
+  assert metrics[4] == ("stable_trie_constant", "constant=\"root_aridity\"", 256);
 };
 
 // ─── pointer_size = 3: layout sanity + metric tracking ────────────────────
@@ -217,7 +217,7 @@ do {
   assert m.get(k4(50)) == ?k4(50);
 
   let metrics = m.toValue().read();
-  assert metrics[0] == ("stable_trie_pointer_size", "", 3);
-  assert metrics[1] == ("stable_trie_value_size", "", 4);
-  assert metrics[2] == ("stable_trie_key_size", "", 4);
+  assert metrics[0] == ("stable_trie_constant", "constant=\"pointer_size\"", 3);
+  assert metrics[1] == ("stable_trie_constant", "constant=\"value_size\"", 4);
+  assert metrics[2] == ("stable_trie_constant", "constant=\"key_size\"", 4);
 };
