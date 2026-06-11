@@ -41,7 +41,7 @@ module {
   /// Constructor arguments shared by `Enumeration` and `Map`. The public
   /// `empty()` in those modules documents the fields in user-facing terms.
   ///
-  /// - `pointer_size : Nat` — pointer byte width; one of `2, 4, 5, 6, 8`.
+  /// - `pointer_size : Nat` — pointer byte width; one of `2, 3, 4, 5, 6, 8`.
   /// - `aridity : Nat` — children per non-root internal node; one of
   ///   `2, 4, 16, 256`.
   /// - `root_aridity : ?Nat` — children of the root node (must be a power
@@ -110,7 +110,7 @@ module {
       // 1 is intended for tests: it shrinks max_address to 2**7 = 128,
       // making it cheap to construct scenarios that hit the node/leaf
       // pointer cap. It is not meant to be used in production tries.
-      case (2 or 4 or 5 or 6 or 8 or 1) true;
+      case (2 or 3 or 4 or 5 or 6 or 8 or 1) true;
       case (_) false;
     };
     assert switch (args.aridity) {
@@ -529,7 +529,10 @@ module {
   // Promtracker type Metric
   type Metric = (Text, Text, Nat);
 
-  // Promtracker type Value
+  /// Pull-style metrics source as expected by `mo:promtracker` (>= 1.0.1):
+  /// a record whose `read` function returns the current metrics as
+  /// `(name, labels, value)` tuples. Returned by `toValue` and meant to be
+  /// passed to promtracker's `renderer.addValue(...)`.
   public type Value = {
     read : () -> [Metric];
   };
@@ -656,7 +659,7 @@ module {
   /// Begin an incremental pointer-size migration. Returns `null` if the
   /// resize cannot proceed:
   ///
-  /// - `new_pointer_size` is not one of `1, 2, 4, 5, 6, 8`;
+  /// - `new_pointer_size` is not one of `1, 2, 3, 4, 5, 6, 8`;
   /// - `new_pointer_size == self.pointer_size` (no work to do);
   /// - the new pointer space is too small to address the current
   ///   `node_count` or `leaf_count`;
@@ -677,7 +680,7 @@ module {
   /// fits in the new pointer width.
   public func beginResize(self : StableTrie, new_pointer_size : Nat) : ?ResizeState {
     let valid = switch (new_pointer_size) {
-      case (1 or 2 or 4 or 5 or 6 or 8) true;
+      case (1 or 2 or 3 or 4 or 5 or 6 or 8) true;
       case _ false;
     };
     if (not valid) return null;
@@ -887,6 +890,9 @@ module {
       region.storeNat16(offset, nat32to16(nat64to32(value)));
     } else if (ps == 4) {
       region.storeNat32(offset, nat64to32(value));
+    } else if (ps == 3) {
+      region.storeNat16(offset, nat32to16(nat64to32(value & 0xffff)));
+      region.storeNat8(offset +% 2, natWrap8(nat64toNat(value >> 16)));
     } else if (ps == 5) {
       region.storeNat32(offset, nat64to32(value & 0xffff_ffff));
       region.storeNat8(offset +% 4, natWrap8(nat64toNat(value >> 32)));

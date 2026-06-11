@@ -1,7 +1,8 @@
 # Stable-trie changelog
 
-## Next
+## 0.1.3
 
+- Add support for `pointer_size = 3`
 - Add `nodes_region_pages` and `leaves_region_pages` fields to `MemoryStats`
 - Expose those plus `pointer_size` / `key_size` / `value_size` as Prometheus metrics in `toValue`
 

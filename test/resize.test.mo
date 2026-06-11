@@ -148,8 +148,8 @@ func refused(s : ?Map.ResizeState) : Bool = switch s {
 };
 
 assert refused(m.beginResize(4)); // no-op (same pointer_size)
-assert refused(m.beginResize(3)); // invalid
 assert refused(m.beginResize(7)); // invalid
+assert refused(m.beginResize(9)); // invalid
 assert refused(m.beginResize(0)); // invalid
 
 // ─── Edge size: empty trie ────────────────────────────────────────────────
@@ -328,4 +328,88 @@ do {
   let leaves_after = rm_now.leaves_region.loadBlob(0, leaves_used);
   assert nodes_before == nodes_after;
   assert leaves_before == leaves_after;
+};
+
+// ─── ps=3: round-trip 4 → 3 → 2 → 3 → 4 ────────────────────────────────────
+//
+// Walks an entry through every shrink/grow combination involving ps=3:
+//   4→3 (shrink), 3→2 (shrink), 2→3 (grow), 3→4 (grow).
+// Verifies the 3-byte (Nat16 + Nat8) pointer encoding round-trips through
+// the wider sizes and works on the receiving side.
+
+do {
+  let pm = Map.empty({
+    pointer_size = 4;
+    aridity = 4;
+    root_aridity = null;
+    key_size = 4;
+    value_size = 4;
+  });
+
+  let N3 = 150;
+  for (i in Nat_.range(0, N3)) {
+    pm.add(keyOf(i), valueOf(i));
+  };
+  // Mix in some deletes so the leaves free list is non-empty across migrations.
+  assert pm.delete(keyOf(10));
+  assert pm.delete(keyOf(20));
+  let live = N3 - 2;
+
+  var p_now : Map.Map = pm;
+
+  // 4 → 3 (shrink, batches of 7).
+  p_now := resize(p_now, 3, 7);
+  assert p_now.size() == live;
+  assert p_now.pointer_size == 3;
+  for (i in Nat_.range(0, N3)) {
+    if (i == 10 or i == 20) {
+      assert p_now.get(keyOf(i)) == null;
+    } else {
+      assert p_now.get(keyOf(i)) == ?valueOf(i);
+    };
+  };
+  // New write at ps=3 reuses a slot from the leaves free list.
+  let leaf_count_3 = p_now.leaf_count;
+  p_now.add(keyOf(10), valueOf(10));
+  assert p_now.leaf_count == leaf_count_3; // reuse, not new allocation
+  assert p_now.get(keyOf(10)) == ?valueOf(10);
+
+  // 3 → 2 (shrink further, batches of 11).
+  p_now := resize(p_now, 2, 11);
+  assert p_now.size() == live + 1;
+  assert p_now.pointer_size == 2;
+  for (i in Nat_.range(0, N3)) {
+    if (i == 20) {
+      assert p_now.get(keyOf(i)) == null;
+    } else {
+      assert p_now.get(keyOf(i)) == ?valueOf(i);
+    };
+  };
+
+  // 2 → 3 (grow, batches of 5).
+  p_now := resize(p_now, 3, 5);
+  assert p_now.size() == live + 1;
+  assert p_now.pointer_size == 3;
+  for (i in Nat_.range(0, N3)) {
+    if (i == 20) {
+      assert p_now.get(keyOf(i)) == null;
+    } else {
+      assert p_now.get(keyOf(i)) == ?valueOf(i);
+    };
+  };
+  // New write at ps=3 after grow uses the free list again.
+  p_now.add(keyOf(20), valueOf(20));
+  assert p_now.size() == N3;
+
+  // 3 → 4 (grow back to the original size, batches of 13).
+  p_now := resize(p_now, 4, 13);
+  assert p_now.size() == N3;
+  assert p_now.pointer_size == 4;
+  for (i in Nat_.range(0, N3)) {
+    assert p_now.get(keyOf(i)) == ?valueOf(i);
+  };
+  // New writes after returning to ps=4 still work and don't collide.
+  p_now.add(keyOf(N3), valueOf(N3));
+  assert p_now.size() == N3 + 1;
+  assert p_now.get(keyOf(N3)) == ?valueOf(N3);
 };

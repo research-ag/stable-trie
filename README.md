@@ -88,7 +88,7 @@ The other parameters are considered optimization parameters.
 
 - Pointer size. This is the byte size of the internal pointers stored in each node.  
   It can be set lower to save memory but that sets a limit on how large the trie can grow.
-  Allowed values are 2,4,5,6,8.
+  Allowed values are 2,3,4,5,6,8.
 
 ## Extensions
 
@@ -268,7 +268,7 @@ Iteration by key is the same set as `Map`'s (`entries`, `reverseEntries`, `keys`
 
 - **Fixed-width `Blob` keys and values.** `core/Map` and `core/List` are generic over their element type. Here every entry is `Blob → Blob` with the byte widths fixed at construction (`key_size`, `value_size`). Variable-width data can be stored indirectly — see the _Extensions_ section above.
 - **Stable-memory backed.** All data lives in `Region`s; the heap footprint is `O(1)` (region handles, counters, free-list heads). A `Map` or `Enumeration` value lives directly inside a `persistent actor` — no `share` / `unshare`.
-- **Bounded capacity.** The pointer size (`pointer_size = 2, 4, 5, 6, 8` bytes) caps how many entries the trie can hold. Writes can return `#err(#LimitExceeded)` via the `*Checked` variants; the trapping (`add`, `insert`, etc.) variants trap on overflow and rely on the IC's message rollback to undo any in-flight mutation. `core/Map` / `core/List` have no such limit.
+- **Bounded capacity.** The pointer size (`pointer_size = 2, 3, 4, 5, 6, 8` bytes) caps how many entries the trie can hold. Writes can return `#err(#LimitExceeded)` via the `*Checked` variants; the trapping (`add`, `insert`, etc.) variants trap on overflow and rely on the IC's message rollback to undo any in-flight mutation. `core/Map` / `core/List` have no such limit.
 - **No `swap` / `replace` on `Enumeration`.** With `lookup` (key → index) and `put` (index → value) both available, the user composes the two when they want swap/replace semantics — cheaper than re-walking the trie under the hood. So `Enumeration`'s key-write surface is intentionally narrower than `Map`'s.
 - **Iteration always sorted.** `Map.entries` and `Enumeration.entries` always iterate in ascending key order. `Enumeration` additionally exposes insertion-order traversal via `range` / `sliceToArray`.
 
@@ -413,7 +413,7 @@ persistent actor {
 
 `beginResize` returns `null` (refuses to start) when:
 
-- `new_pointer_size` isn't one of `1, 2, 4, 5, 6, 8`;
+- `new_pointer_size` isn't one of `1, 2, 3, 4, 5, 6, 8`;
 - `new_pointer_size == self.pointer_size` (no migration to do);
 - the current `node_count` or `leaf_count` wouldn't fit in the new pointer space;
 - the migration would force `leaf_size` to change (Map padding case where `new_pointer_size > leaf_size`).
