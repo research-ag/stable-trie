@@ -2,9 +2,8 @@
 
 ## 0.1.4
 
-- Expose the trie config constants (`pointer_size`, `key_size`, `value_size`, `aridity`, `root_aridity`) in `toValue` as a single `stable_trie_constant` metric with a `constant` label; replaces the separate `stable_trie_pointer_size` / `stable_trie_value_size` / `stable_trie_key_size` metrics introduced in 0.1.3
-- **Breaking**: rename the `stable_trie_byte_size` metric to `stable_trie_total_bytes` and the `MemoryStats.byte_size` field to `total_bytes`
-- Bug fix: when `leaf_size < 8`, growing the leaves region now reserves slack for the free-list chain-link reads; previously a delete + re-add involving the last leaf of an exactly-full page could trap with "region access out of bounds"
+- Add new metrics to `toValue()`, rename existing ones.
+- Bug fix: prevent out-of-bound Region access in a rare edge case.
 
 ## 0.1.3
 
