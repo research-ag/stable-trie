@@ -1,5 +1,10 @@
 # Stable-trie changelog
 
+## Next
+
+- Add `nodes_region_pages` and `leaves_region_pages` fields to `MemoryStats`
+- Expose those plus `pointer_size` / `key_size` / `value_size` as Prometheus metrics in `toValue`
+
 ## 0.1.2
 
 - In-place ability to change the pointer-size (see README)

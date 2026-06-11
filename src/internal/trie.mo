@@ -71,6 +71,8 @@ module {
   /// - `used_node_count`: internal nodes currently in use (`total_node_count` minus those freed by node-collapse and waiting in the empty-nodes free list).
   /// - `total_leaf_count`: total leaves ever allocated. High-water mark for `Map` (never shrinks); for `Enumeration` this equals `used_leaf_count` because `removeLast` decrements the counter rather than pushing to a free list.
   /// - `total_node_count`: total internal nodes ever allocated. High-water mark for both `Map` and `Enumeration`; never shrinks even when nodes are pushed onto the empty-nodes list.
+  /// - `nodes_region_pages`: number of 64KB stable-memory pages currently allocated to the nodes region. Monotonic allocation counter — grows when the region is extended to fit more internal nodes (or for the initial root + padding) and never shrinks.
+  /// - `leaves_region_pages`: number of 64KB stable-memory pages currently allocated to the leaves region. Monotonic allocation counter — grows when the region is extended to fit more leaves and never shrinks (the leaves region is grown lazily, so this is `0` until the first leaf is added).
   ///
   /// In general, `used_*` is the live count and `total_*` is the high-water count. They diverge when a free list is populated: for `Map`, both leaf and node free lists are populated by `delete`/`take`/`remove`; for `Enumeration`, only the node free list is — `removeLast` drops `used_leaf_count` and `total_leaf_count` in lockstep, so those two are always equal.
   public type MemoryStats = {
@@ -79,6 +81,8 @@ module {
     used_node_count : Nat;
     total_leaf_count : Nat;
     total_node_count : Nat;
+    nodes_region_pages : Nat;
+    leaves_region_pages : Nat;
   };
 
   /// Result of inspecting a non-root internal node's child slots after a
@@ -517,6 +521,8 @@ module {
       used_node_count = total_n - self.empty_nodes_list.count;
       total_leaf_count = total_l;
       total_node_count = total_n;
+      nodes_region_pages = nat64toNat(self.nodes_region.size());
+      leaves_region_pages = nat64toNat(self.leaves_region.size());
     };
   };
 
@@ -539,11 +545,16 @@ module {
   public func toValue(self : StableTrie) : Value {
     return {
       read = func() : [Metric] = memoryStats(self) |> [
+        ("stable_trie_pointer_size", "", self.pointer_size),
+        ("stable_trie_value_size", "", self.value_size),
+        ("stable_trie_key_size", "", self.key_size),
         ("stable_trie_node_count", "kind=\"total\"", _.total_node_count),
         ("stable_trie_leaf_count", "kind=\"total\"", _.total_leaf_count),
         ("stable_trie_node_count", "kind=\"used\"", _.used_node_count),
         ("stable_trie_leaf_count", "kind=\"used\"", _.used_leaf_count),
         ("stable_trie_byte_size", "", _.byte_size),
+        ("stable_trie_region_pages", "type=\"nodes\"", _.nodes_region_pages),
+        ("stable_trie_region_pages", "type=\"leaves\"", _.leaves_region_pages),
       ];
     };
   };
