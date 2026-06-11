@@ -529,7 +529,10 @@ module {
   // Promtracker type Metric
   type Metric = (Text, Text, Nat);
 
-  // Promtracker type Value
+  /// Pull-style metrics source as expected by `mo:promtracker` (>= 1.0.1):
+  /// a record whose `read` function returns the current metrics as
+  /// `(name, labels, value)` tuples. Returned by `toValue` and meant to be
+  /// passed to promtracker's `renderer.addValue(...)`.
   public type Value = {
     read : () -> [Metric];
   };
