@@ -1,5 +1,10 @@
 # Stable-trie changelog
 
+## 0.1.4
+
+- Add new metrics to `toValue()`, rename existing ones.
+- Bug fix: prevent out-of-bound Region access in a rare edge case.
+
 ## 0.1.3
 
 - Add support for `pointer_size = 3`

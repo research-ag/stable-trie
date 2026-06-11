@@ -66,17 +66,17 @@ module {
   /// Memory-usage statistics. Shared shape between Map and Enumeration.
   ///
   /// Fields:
-  /// - `byte_size`: total bytes occupied by the trie's stable-memory regions. Computed from the allocated (high-water) counters: it grows on every allocation; for `Map` it never shrinks, and for `Enumeration` it shrinks when `removeLast` retracts a leaf (the Region itself never shrinks).
+  /// - `total_bytes`: total bytes occupied by the trie's stable-memory regions. Computed from the allocated (high-water) counters: it grows on every allocation; for `Map` it never shrinks, and for `Enumeration` it shrinks when `removeLast` retracts a leaf (the Region itself never shrinks).
   /// - `used_leaf_count`: leaves currently in use (`total_leaf_count` minus those freed by removals and waiting in the empty-leaves free list).
   /// - `used_node_count`: internal nodes currently in use (`total_node_count` minus those freed by node-collapse and waiting in the empty-nodes free list).
   /// - `total_leaf_count`: total leaves ever allocated. High-water mark for `Map` (never shrinks); for `Enumeration` this equals `used_leaf_count` because `removeLast` decrements the counter rather than pushing to a free list.
   /// - `total_node_count`: total internal nodes ever allocated. High-water mark for both `Map` and `Enumeration`; never shrinks even when nodes are pushed onto the empty-nodes list.
   /// - `nodes_region_pages`: number of 64KB stable-memory pages currently allocated to the nodes region. Monotonic allocation counter — grows when the region is extended to fit more internal nodes (or for the initial root + padding) and never shrinks.
-  /// - `leaves_region_pages`: number of 64KB stable-memory pages currently allocated to the leaves region. Monotonic allocation counter — grows when the region is extended to fit more leaves and never shrinks (the leaves region is grown lazily, so this is `0` until the first leaf is added).
+  /// - `leaves_region_pages`: number of 64KB stable-memory pages currently allocated to the leaves region. Monotonic allocation counter — grows when the region is extended to fit more leaves and never shrinks (the leaves region is grown lazily, so this is `0` until the first leaf is added). When `leaf_size < 8`, each page reserves `8 - leaf_size` bytes of slack so that free-list chain-link loads stay in bounds.
   ///
   /// In general, `used_*` is the live count and `total_*` is the high-water count. They diverge when a free list is populated: for `Map`, both leaf and node free lists are populated by `delete`/`take`/`remove`; for `Enumeration`, only the node free list is — `removeLast` drops `used_leaf_count` and `total_leaf_count` in lockstep, so those two are always equal.
   public type MemoryStats = {
-    byte_size : Nat;
+    total_bytes : Nat;
     used_leaf_count : Nat;
     used_node_count : Nat;
     total_leaf_count : Nat;
@@ -217,6 +217,14 @@ module {
           if (self.leaves_freeSpace < self.leaf_size) {
             assert self.leaves_region.grow(1) != 0xffff_ffff_ffff_ffff;
             self.leaves_freeSpace +%= 65536;
+            // Mirror of the nodes region's `padding`: `LinkedList.pop`
+            // reads a freed leaf's chain link with an 8-byte masked load,
+            // so when leaf_size < 8 the region must extend at least
+            // 8 - leaf_size bytes past the last allocated leaf. Reserving
+            // the slack out of every new page (≤ 7 bytes per 64KB) keeps
+            // the non-growing path branch-free, and survives resize since
+            // leaves_freeSpace is carried over verbatim.
+            if (self.leaf_size < 8) self.leaves_freeSpace -%= 8 -% self.leaf_size;
           };
           self.leaves_freeSpace -%= self.leaf_size;
           let lc = self.leaf_count;
@@ -516,7 +524,7 @@ module {
     let total_l = nat64toNat(self.leaf_count);
     let total_n = nat64toNat(self.node_count);
     {
-      byte_size = nat64toNat(self.root_size + (self.node_count - 1) * self.node_size + self.leaf_count * self.leaf_size);
+      total_bytes = nat64toNat(self.root_size + (self.node_count - 1) * self.node_size + self.leaf_count * self.leaf_size);
       used_leaf_count = total_l - self.empty_leaves_list.count;
       used_node_count = total_n - self.empty_nodes_list.count;
       total_leaf_count = total_l;
@@ -548,14 +556,16 @@ module {
   public func toValue(self : StableTrie) : Value {
     return {
       read = func() : [Metric] = memoryStats(self) |> [
-        ("stable_trie_pointer_size", "", self.pointer_size),
-        ("stable_trie_value_size", "", self.value_size),
-        ("stable_trie_key_size", "", self.key_size),
+        ("stable_trie_constant", "constant=\"pointer_size\"", self.pointer_size),
+        ("stable_trie_constant", "constant=\"value_size\"", self.value_size),
+        ("stable_trie_constant", "constant=\"key_size\"", self.key_size),
+        ("stable_trie_constant", "constant=\"aridity\"", nat64toNat(self.aridity_)),
+        ("stable_trie_constant", "constant=\"root_aridity\"", nat64toNat(self.root_aridity_)),
         ("stable_trie_node_count", "kind=\"total\"", _.total_node_count),
         ("stable_trie_leaf_count", "kind=\"total\"", _.total_leaf_count),
         ("stable_trie_node_count", "kind=\"used\"", _.used_node_count),
         ("stable_trie_leaf_count", "kind=\"used\"", _.used_leaf_count),
-        ("stable_trie_byte_size", "", _.byte_size),
+        ("stable_trie_total_bytes", "", _.total_bytes),
         ("stable_trie_region_pages", "type=\"nodes\"", _.nodes_region_pages),
         ("stable_trie_region_pages", "type=\"leaves\"", _.leaves_region_pages),
       ];

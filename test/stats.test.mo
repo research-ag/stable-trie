@@ -90,10 +90,10 @@ do {
   assert s4.nodes_region_pages >= s2.nodes_region_pages;
 };
 
-// ─── memoryStats: byte_size derived from counters, not region pages ──────
+// ─── memoryStats: total_bytes derived from counters, not region pages ──────
 //
-// byte_size = root_size + (node_count - 1) * node_size + leaf_count * leaf_size.
-// Page allocation is independent of (in general, larger than) byte_size:
+// total_bytes = root_size + (node_count - 1) * node_size + leaf_count * leaf_size.
+// Page allocation is independent of (in general, larger than) total_bytes:
 // regions are grown in 64KB chunks regardless of how many bytes the
 // trie actually addresses inside the chunk.
 
@@ -108,7 +108,7 @@ do {
   m.add(k4(0), k4(0));
   let s = m.memoryStats();
   // 16 (root) + 0 (no non-root nodes for a single-entry trie) + 8 (one leaf) = 24.
-  assert s.byte_size == 24;
+  assert s.total_bytes == 24;
   // But the leaves region is one full 64KB page (lazy first allocation).
   assert s.leaves_region_pages == 1;
 };
@@ -136,24 +136,26 @@ do {
   let stats = m.memoryStats();
   let metrics = m.toValue().read();
 
-  // 10 metrics: 3 config + 4 counts + byte_size + 2 region pages.
-  assert metrics.size() == 10;
+  // 12 metrics: 5 config + 4 counts + total_bytes + 2 region pages.
+  assert metrics.size() == 12;
 
   let expected : [(Text, Text, Nat)] = [
-    ("stable_trie_pointer_size", "", 4),
-    ("stable_trie_value_size", "", 4),
-    ("stable_trie_key_size", "", 4), // catches the pointer_size copy-paste bug
+    ("stable_trie_constant", "constant=\"pointer_size\"", 4),
+    ("stable_trie_constant", "constant=\"value_size\"", 4),
+    ("stable_trie_constant", "constant=\"key_size\"", 4), // catches the pointer_size copy-paste bug
+    ("stable_trie_constant", "constant=\"aridity\"", 4),
+    ("stable_trie_constant", "constant=\"root_aridity\"", 4), // null in empty() → defaults to aridity
     ("stable_trie_node_count", "kind=\"total\"", stats.total_node_count),
     ("stable_trie_leaf_count", "kind=\"total\"", stats.total_leaf_count),
     ("stable_trie_node_count", "kind=\"used\"", stats.used_node_count),
     ("stable_trie_leaf_count", "kind=\"used\"", stats.used_leaf_count),
-    ("stable_trie_byte_size", "", stats.byte_size),
+    ("stable_trie_total_bytes", "", stats.total_bytes),
     ("stable_trie_region_pages", "type=\"nodes\"", stats.nodes_region_pages),
     ("stable_trie_region_pages", "type=\"leaves\"", stats.leaves_region_pages),
   ];
 
   var i = 0;
-  while (i < 10) {
+  while (i < 12) {
     assert metrics[i] == expected[i];
     i += 1;
   };
@@ -168,19 +170,21 @@ do {
 do {
   let m = Map.empty({
     pointer_size = 2;
-    aridity = 4;
-    root_aridity = null;
+    aridity = 16;
+    root_aridity = ?256;
     key_size = 8;
     value_size = 0;
   });
   m.add("\01\00\00\00\00\00\00\00", "");
 
   let metrics = m.toValue().read();
-  // First three metrics carry the config values; verify they match the
-  // empty() args we passed.
-  assert metrics[0] == ("stable_trie_pointer_size", "", 2);
-  assert metrics[1] == ("stable_trie_value_size", "", 0);
-  assert metrics[2] == ("stable_trie_key_size", "", 8);
+  // First five metrics carry the config values; verify they match the
+  // empty() args we passed (root_aridity explicit here, not defaulted).
+  assert metrics[0] == ("stable_trie_constant", "constant=\"pointer_size\"", 2);
+  assert metrics[1] == ("stable_trie_constant", "constant=\"value_size\"", 0);
+  assert metrics[2] == ("stable_trie_constant", "constant=\"key_size\"", 8);
+  assert metrics[3] == ("stable_trie_constant", "constant=\"aridity\"", 16);
+  assert metrics[4] == ("stable_trie_constant", "constant=\"root_aridity\"", 256);
 };
 
 // ─── pointer_size = 3: layout sanity + metric tracking ────────────────────
@@ -213,7 +217,7 @@ do {
   assert m.get(k4(50)) == ?k4(50);
 
   let metrics = m.toValue().read();
-  assert metrics[0] == ("stable_trie_pointer_size", "", 3);
-  assert metrics[1] == ("stable_trie_value_size", "", 4);
-  assert metrics[2] == ("stable_trie_key_size", "", 4);
+  assert metrics[0] == ("stable_trie_constant", "constant=\"pointer_size\"", 3);
+  assert metrics[1] == ("stable_trie_constant", "constant=\"value_size\"", 4);
+  assert metrics[2] == ("stable_trie_constant", "constant=\"key_size\"", 4);
 };
