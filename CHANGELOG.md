@@ -1,6 +1,6 @@
 # Stable-trie changelog
 
-## Next
+## 0.1.4
 
 - Add `aridity` and `root_aridity` metrics to `toValue`
 - Bug fix: when `leaf_size < 8`, growing the leaves region now reserves slack for the free-list chain-link reads; previously a delete + re-add involving the last leaf of an exactly-full page could trap with "region access out of bounds"
