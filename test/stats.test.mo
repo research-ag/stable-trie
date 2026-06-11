@@ -90,10 +90,10 @@ do {
   assert s4.nodes_region_pages >= s2.nodes_region_pages;
 };
 
-// ─── memoryStats: byte_size derived from counters, not region pages ──────
+// ─── memoryStats: total_bytes derived from counters, not region pages ──────
 //
-// byte_size = root_size + (node_count - 1) * node_size + leaf_count * leaf_size.
-// Page allocation is independent of (in general, larger than) byte_size:
+// total_bytes = root_size + (node_count - 1) * node_size + leaf_count * leaf_size.
+// Page allocation is independent of (in general, larger than) total_bytes:
 // regions are grown in 64KB chunks regardless of how many bytes the
 // trie actually addresses inside the chunk.
 
@@ -108,7 +108,7 @@ do {
   m.add(k4(0), k4(0));
   let s = m.memoryStats();
   // 16 (root) + 0 (no non-root nodes for a single-entry trie) + 8 (one leaf) = 24.
-  assert s.byte_size == 24;
+  assert s.total_bytes == 24;
   // But the leaves region is one full 64KB page (lazy first allocation).
   assert s.leaves_region_pages == 1;
 };
@@ -136,7 +136,7 @@ do {
   let stats = m.memoryStats();
   let metrics = m.toValue().read();
 
-  // 12 metrics: 5 config + 4 counts + byte_size + 2 region pages.
+  // 12 metrics: 5 config + 4 counts + total_bytes + 2 region pages.
   assert metrics.size() == 12;
 
   let expected : [(Text, Text, Nat)] = [
@@ -149,7 +149,7 @@ do {
     ("stable_trie_leaf_count", "kind=\"total\"", stats.total_leaf_count),
     ("stable_trie_node_count", "kind=\"used\"", stats.used_node_count),
     ("stable_trie_leaf_count", "kind=\"used\"", stats.used_leaf_count),
-    ("stable_trie_total_bytes", "", stats.byte_size),
+    ("stable_trie_total_bytes", "", stats.total_bytes),
     ("stable_trie_region_pages", "type=\"nodes\"", stats.nodes_region_pages),
     ("stable_trie_region_pages", "type=\"leaves\"", stats.leaves_region_pages),
   ];

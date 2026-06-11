@@ -23,7 +23,7 @@ Served as Prometheus exposition on `GET /metrics`:
 | `stable_trie_leaf_count{kind="total"}`          | `memoryStats().total_leaf_count`     |
 | `stable_trie_node_count{kind="used"}`           | `memoryStats().used_node_count`      |
 | `stable_trie_leaf_count{kind="used"}`           | `memoryStats().used_leaf_count`      |
-| `stable_trie_total_bytes`                       | `memoryStats().byte_size`            |
+| `stable_trie_total_bytes`                       | `memoryStats().total_bytes`          |
 | `stable_trie_region_pages{type="nodes"}`        | `memoryStats().nodes_region_pages`   |
 | `stable_trie_region_pages{type="leaves"}`       | `memoryStats().leaves_region_pages`  |
 

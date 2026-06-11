@@ -66,7 +66,7 @@ module {
   /// Memory-usage statistics. Shared shape between Map and Enumeration.
   ///
   /// Fields:
-  /// - `byte_size`: total bytes occupied by the trie's stable-memory regions. Computed from the allocated (high-water) counters: it grows on every allocation; for `Map` it never shrinks, and for `Enumeration` it shrinks when `removeLast` retracts a leaf (the Region itself never shrinks).
+  /// - `total_bytes`: total bytes occupied by the trie's stable-memory regions. Computed from the allocated (high-water) counters: it grows on every allocation; for `Map` it never shrinks, and for `Enumeration` it shrinks when `removeLast` retracts a leaf (the Region itself never shrinks).
   /// - `used_leaf_count`: leaves currently in use (`total_leaf_count` minus those freed by removals and waiting in the empty-leaves free list).
   /// - `used_node_count`: internal nodes currently in use (`total_node_count` minus those freed by node-collapse and waiting in the empty-nodes free list).
   /// - `total_leaf_count`: total leaves ever allocated. High-water mark for `Map` (never shrinks); for `Enumeration` this equals `used_leaf_count` because `removeLast` decrements the counter rather than pushing to a free list.
@@ -76,7 +76,7 @@ module {
   ///
   /// In general, `used_*` is the live count and `total_*` is the high-water count. They diverge when a free list is populated: for `Map`, both leaf and node free lists are populated by `delete`/`take`/`remove`; for `Enumeration`, only the node free list is — `removeLast` drops `used_leaf_count` and `total_leaf_count` in lockstep, so those two are always equal.
   public type MemoryStats = {
-    byte_size : Nat;
+    total_bytes : Nat;
     used_leaf_count : Nat;
     used_node_count : Nat;
     total_leaf_count : Nat;
@@ -524,7 +524,7 @@ module {
     let total_l = nat64toNat(self.leaf_count);
     let total_n = nat64toNat(self.node_count);
     {
-      byte_size = nat64toNat(self.root_size + (self.node_count - 1) * self.node_size + self.leaf_count * self.leaf_size);
+      total_bytes = nat64toNat(self.root_size + (self.node_count - 1) * self.node_size + self.leaf_count * self.leaf_size);
       used_leaf_count = total_l - self.empty_leaves_list.count;
       used_node_count = total_n - self.empty_nodes_list.count;
       total_leaf_count = total_l;
@@ -565,7 +565,7 @@ module {
         ("stable_trie_leaf_count", "kind=\"total\"", _.total_leaf_count),
         ("stable_trie_node_count", "kind=\"used\"", _.used_node_count),
         ("stable_trie_leaf_count", "kind=\"used\"", _.used_leaf_count),
-        ("stable_trie_total_bytes", "", _.byte_size),
+        ("stable_trie_total_bytes", "", _.total_bytes),
         ("stable_trie_region_pages", "type=\"nodes\"", _.nodes_region_pages),
         ("stable_trie_region_pages", "type=\"leaves\"", _.leaves_region_pages),
       ];
