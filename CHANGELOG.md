@@ -4,7 +4,6 @@
 
 - Add `nodes_region_pages` and `leaves_region_pages` fields to `MemoryStats`
 - Expose those plus `pointer_size` / `key_size` / `value_size` as Prometheus metrics in `toValue`
-- Bug fix in `toValue`: the `stable_trie_key_size` metric was incorrectly emitting the pointer size
 
 ## 0.1.2
 
