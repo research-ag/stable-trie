@@ -66,7 +66,7 @@ module {
   ///
   /// Arguments:
   /// - `pointer_size : Nat` — bytes used for each internal pointer. One of
-  ///   `2, 4, 5, 6, 8`. Bounds the trie's capacity: at most `N/2` leaves
+  ///   `2, 3, 4, 5, 6, 8`. Bounds the trie's capacity: at most `N/2` leaves
   ///   and `N/2` internal nodes where `N = 256 ** pointer_size`.
   /// - `aridity : Nat` — number of children per non-root internal node.
   ///   One of `2, 4, 16, 256`. `4` is recommended for uniformly distributed

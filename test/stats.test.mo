@@ -182,3 +182,38 @@ do {
   assert metrics[1] == ("stable_trie_value_size", "", 0);
   assert metrics[2] == ("stable_trie_key_size", "", 8);
 };
+
+// ─── pointer_size = 3: layout sanity + metric tracking ────────────────────
+//
+// ps=3 uses a 2-byte + 1-byte split internally. Exercise that the trie is
+// constructible, that adds/lookups/deletes work, and that the toValue
+// pointer_size metric reflects the chosen width.
+
+do {
+  let m = Map.empty({
+    pointer_size = 3;
+    aridity = 4;
+    root_aridity = null;
+    key_size = 4;
+    value_size = 4;
+  });
+
+  for (i in Nat_.range(0, 200)) {
+    m.add(k4(i), k4(i));
+  };
+  assert m.size() == 200;
+  for (i in Nat_.range(0, 200)) {
+    assert m.get(k4(i)) == ?k4(i);
+  };
+  // Delete + re-add to exercise the leaves free list under ps=3
+  // (leaf_size = max(8, 3) = 8 → 3-byte chain links fit).
+  assert m.delete(k4(50));
+  assert m.get(k4(50)) == null;
+  m.add(k4(50), k4(50));
+  assert m.get(k4(50)) == ?k4(50);
+
+  let metrics = m.toValue().read();
+  assert metrics[0] == ("stable_trie_pointer_size", "", 3);
+  assert metrics[1] == ("stable_trie_value_size", "", 4);
+  assert metrics[2] == ("stable_trie_key_size", "", 4);
+};

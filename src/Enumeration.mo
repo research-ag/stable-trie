@@ -92,7 +92,7 @@ module {
   /// Construct an empty `Enumeration`.
   ///
   /// Arguments:
-  /// + `pointer_size` — bytes for internal pointers (2, 4, 5, 6, 8).
+  /// + `pointer_size` — bytes for internal pointers (2, 3, 4, 5, 6, 8).
   /// + `aridity` — children per non-root internal node (2, 4, 16, 256).
   /// + `root_aridity` — children for the root node, or `null` to default
   ///   to `aridity`.

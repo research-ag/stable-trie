@@ -6,7 +6,7 @@
 /// things live, and how to encode/decode them" — the algorithm itself
 /// (find/put/remove/lookup/iter) lives in `trie.mo`. `setChild`
 /// dispatches via an if-else cascade on `pointer_size` ordered
-/// `2 → 4 → 5 → 6 → 8` (most common first).
+/// `2 → 4 → 3 → 5 → 6 → 8` (most common first).
 ///
 /// The type definition lives here (rather than in `trie.mo`) to break the
 /// otherwise-circular dependency: `trie.mo`'s algorithm calls layout
@@ -118,7 +118,7 @@ module {
 
   /// Set node's `node` child number `index`.
   /// General version: nested if-else on `pointer_size`, checking sizes in
-  /// order 2, 4, 5, 6, 8, 1 (most common first; `ps = 1` is a test-only
+  /// order 2, 4, 3, 5, 6, 8, 1 (most common first; `ps = 1` is a test-only
   /// configuration and lives at the bottom of the cascade). Use this from
   /// sites where setChild is called only once. From hot sites that call it
   /// repeatedly (e.g. `put_`), hoist the dispatch by picking the matching
@@ -133,6 +133,9 @@ module {
       region.storeNat16(offset, nat32to16(nat64to32(child)));
     } else if (ps == 4) {
       region.storeNat32(offset, nat64to32(child));
+    } else if (ps == 3) {
+      region.storeNat16(offset, nat32to16(nat64to32(child & 0xffff)));
+      region.storeNat8(offset +% 2, natWrap8(nat64toNat(child >> 16)));
     } else if (ps == 5) {
       region.storeNat32(offset, nat64to32(child & 0xffff_ffff));
       region.storeNat8(offset +% 4, natWrap8(nat64toNat(child >> 32)));
