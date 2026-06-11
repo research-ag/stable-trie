@@ -71,6 +71,8 @@ module {
   /// - `used_node_count`: internal nodes currently in use (`total_node_count` minus those freed by node-collapse and waiting in the empty-nodes free list).
   /// - `total_leaf_count`: total leaves ever allocated. High-water mark for `Map` (never shrinks); for `Enumeration` this equals `used_leaf_count` because `removeLast` decrements the counter rather than pushing to a free list.
   /// - `total_node_count`: total internal nodes ever allocated. High-water mark for both `Map` and `Enumeration`; never shrinks even when nodes are pushed onto the empty-nodes list.
+  /// - `nodes_region_pages`: number of 64KB stable-memory pages currently allocated to the nodes region. Monotonic allocation counter — grows when the region is extended to fit more internal nodes (or for the initial root + padding) and never shrinks.
+  /// - `leaves_region_pages`: number of 64KB stable-memory pages currently allocated to the leaves region. Monotonic allocation counter — grows when the region is extended to fit more leaves and never shrinks (the leaves region is grown lazily, so this is `0` until the first leaf is added).
   ///
   /// In general, `used_*` is the live count and `total_*` is the high-water count. They diverge when a free list is populated: for `Map`, both leaf and node free lists are populated by `delete`/`take`/`remove`; for `Enumeration`, only the node free list is — `removeLast` drops `used_leaf_count` and `total_leaf_count` in lockstep, so those two are always equal.
   public type MemoryStats = {
