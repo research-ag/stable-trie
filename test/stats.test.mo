@@ -149,7 +149,7 @@ do {
     ("stable_trie_leaf_count", "kind=\"total\"", stats.total_leaf_count),
     ("stable_trie_node_count", "kind=\"used\"", stats.used_node_count),
     ("stable_trie_leaf_count", "kind=\"used\"", stats.used_leaf_count),
-    ("stable_trie_byte_size", "", stats.byte_size),
+    ("stable_trie_total_bytes", "", stats.byte_size),
     ("stable_trie_region_pages", "type=\"nodes\"", stats.nodes_region_pages),
     ("stable_trie_region_pages", "type=\"leaves\"", stats.leaves_region_pages),
   ];

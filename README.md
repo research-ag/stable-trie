@@ -358,7 +358,7 @@ Per scrape the `Value` calls `memoryStats()` once and emits twelve samples in fi
 
 - `stable_trie_constant` with a `constant="pointer_size"|"key_size"|"value_size"|"aridity"|"root_aridity"` label — the five configuration values, constant per trie (`root_aridity` reports the resolved value, i.e. `aridity` if `null` was passed to the constructor);
 - `stable_trie_node_count` and `stable_trie_leaf_count`, each with a `kind="used"|"total"` label distinguishing live vs. high-water counts;
-- `stable_trie_byte_size`;
+- `stable_trie_total_bytes`;
 - `stable_trie_region_pages` with a `type="nodes"|"leaves"` label, the 64KB pages allocated to each region.
 
 See `example/` for a runnable canister.
