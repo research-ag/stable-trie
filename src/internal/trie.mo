@@ -916,4 +916,138 @@ module {
       region.storeNat8(offset, natWrap8(nat64toNat(value)));
     };
   };
+
+  // ─── Migration: 0.1.1 → 0.1.2 ──────────────────────────────────────────────
+  //
+  // 0.1.2 added one field to the `StableTrie` record (`zero_leaf : Blob`) and
+  // changed the LinkedList invariant: every item currently in the
+  // `empty_leaves_list` is expected to be all-zero past its chain link, with
+  // the bottom item all-zero (no in-region sentinel). A persistent actor that
+  // upgrades from 0.1.1 to 0.1.2 has to (a) attach the new field and (b)
+  // bring any existing freed leaves into the new invariant. This function
+  // does both in one pass.
+
+  /// Stable-type shape of `StableTrie` as it appeared in stable-trie 0.1.1.
+  /// Identical to `StableTrie` except for the missing `zero_leaf : Blob`
+  /// field. Use this as the "old" type for the 0.1.1 → 0.1.2 migration.
+  public type StableTrie_0_1_1 = {
+    pointer_size : Nat;
+    key_size : Nat;
+    value_size : Nat;
+    aridity_ : Nat64;
+    key_size_ : Nat64;
+    pointer_size_ : Nat64;
+    root_aridity_ : Nat64;
+    loadMask : Nat64;
+    bitlength : Nat16;
+    bitshift : Nat8;
+    max_address : Nat64;
+    max_chain_depth : Nat64;
+    safe_node_bound : Nat64;
+    root_bitlength_ : Nat64;
+    root_bitlength : Nat16;
+    node_size : Nat64;
+    node_size_ : Nat;
+    leaf_size : Nat64;
+    root_size : Nat64;
+    offset_base : Nat64;
+    padding : Nat64;
+    empty_values : Bool;
+    empty_nodes_list : LinkedList.LinkedList;
+    empty_leaves_list : LinkedList.LinkedList;
+    var leaf_count : Nat64;
+    var node_count : Nat64;
+    var nodes_region : Region.Region;
+    var nodes_freeSpace : Nat64;
+    var leaves_region : Region.Region;
+    var leaves_freeSpace : Nat64;
+  };
+
+  /// One-shot migration from a 0.1.1-shaped `StableTrie` to the 0.1.2 shape.
+  /// Two things happen:
+  ///
+  /// 1. The new `zero_leaf : Blob` field is computed and attached.
+  /// 2. If the empty-leaves free list is non-empty, it is walked once and
+  ///    each freed leaf is brought into the new invariant — every byte past
+  ///    the chain link is zeroed, and the bottom item's chain-link slot
+  ///    (which 0.1.1 set to the in-region `loadMask` sentinel) is also
+  ///    zeroed since 0.1.2's `pop` never reads it and the new invariant
+  ///    expects an all-zero bottom.
+  ///
+  /// The returned trie shares the original's regions and LinkedList
+  /// instances. After this call, the original reference must NOT be used.
+  ///
+  /// Empty-nodes free list: not touched. 0.1.1 already cleared every slot
+  /// of a node before pushing it (via `Map.removeRec`'s
+  /// `setChild(node, slot, 0)`), so freed nodes already satisfy the
+  /// 0.1.2 invariant.
+  public func migrate_0_1_1(old : StableTrie_0_1_1) : StableTrie {
+    let zero_leaf = Blob.fromArray(Array.tabulate<Nat8>(nat64toNat(old.leaf_size), func(_) = 0));
+
+    // Bring the empty_leaves_list contents into the new "items are all-zero
+    // past the chain link" invariant. Only matters for Map (Enumeration
+    // never pushes to this list).
+    if (old.empty_leaves_list.count > 0) {
+      let leaves_region = old.leaves_region;
+      let ps_ = old.pointer_size_;
+      let leaf_size = old.leaf_size;
+      let mask = old.loadMask;
+      let tail_len_nat = nat64toNat(leaf_size -% ps_);
+      let zero_tail = Blob.fromArray(Array.tabulate<Nat8>(tail_len_nat, func(_) = 0));
+
+      var current = old.empty_leaves_list.last_empty_item;
+      var remaining = old.empty_leaves_list.count;
+      while (remaining > 0) {
+        let slot_offset = current *% leaf_size;
+        if (remaining == 1) {
+          // Bottom — overwrite the whole slot with zeros (chain link
+          // included; was loadMask under 0.1.1).
+          leaves_region.storeBlob(slot_offset, zero_leaf);
+        } else {
+          // Non-bottom — read the chain link to find the next item below,
+          // then zero only the tail bytes.
+          let next = leaves_region.loadNat64(slot_offset) & mask;
+          if (tail_len_nat > 0) {
+            leaves_region.storeBlob(slot_offset +% ps_, zero_tail);
+          };
+          current := next;
+        };
+        remaining -= 1;
+      };
+    };
+
+    {
+      pointer_size = old.pointer_size;
+      key_size = old.key_size;
+      value_size = old.value_size;
+      aridity_ = old.aridity_;
+      key_size_ = old.key_size_;
+      pointer_size_ = old.pointer_size_;
+      root_aridity_ = old.root_aridity_;
+      loadMask = old.loadMask;
+      bitlength = old.bitlength;
+      bitshift = old.bitshift;
+      max_address = old.max_address;
+      max_chain_depth = old.max_chain_depth;
+      safe_node_bound = old.safe_node_bound;
+      root_bitlength_ = old.root_bitlength_;
+      root_bitlength = old.root_bitlength;
+      node_size = old.node_size;
+      node_size_ = old.node_size_;
+      leaf_size = old.leaf_size;
+      root_size = old.root_size;
+      offset_base = old.offset_base;
+      padding = old.padding;
+      empty_values = old.empty_values;
+      zero_leaf;
+      empty_nodes_list = old.empty_nodes_list;
+      empty_leaves_list = old.empty_leaves_list;
+      var leaf_count = old.leaf_count;
+      var node_count = old.node_count;
+      var nodes_region = old.nodes_region;
+      var nodes_freeSpace = old.nodes_freeSpace;
+      var leaves_region = old.leaves_region;
+      var leaves_freeSpace = old.leaves_freeSpace;
+    };
+  };
 };

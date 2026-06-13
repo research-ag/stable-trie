@@ -397,4 +397,20 @@ module {
   /// regions with the original; the caller must stop using the original
   /// reference (typically by holding the Map in a `var` and reassigning).
   public let completeResize : (state : ResizeState) -> Map = Trie.completeResize;
+
+  // ─── Migration: 0.1.1 → 0.1.2 ─────────────────────────────────────────────
+
+  /// Stable-type shape of `Map` as it appeared in stable-trie 0.1.1. Use as
+  /// the input type for `migrate_0_1_1`.
+  public type Map_0_1_1 = Trie.StableTrie_0_1_1;
+
+  /// `migrate_0_1_1(old : Map_0_1_1) : Map`
+  ///
+  /// One-shot migration of a Map persisted under stable-trie 0.1.1 to the
+  /// 0.1.2 shape. Adds the new `zero_leaf` field and, if the empty-leaves
+  /// free list is non-empty, brings each freed leaf into the 0.1.2
+  /// invariant (zeroed past the chain link). The returned Map shares the
+  /// original's regions and LinkedList instances; the original reference
+  /// must not be used after this call.
+  public let migrate_0_1_1 : (old : Map_0_1_1) -> Map = Trie.migrate_0_1_1;
 };
