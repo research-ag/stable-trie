@@ -4,6 +4,7 @@
 
 - Add new metrics to `toValue()`, rename existing ones.
 - Bug fix: prevent out-of-bound Region access in a rare edge case.
+- Updated documentation.
 
 ## 0.1.3
 
