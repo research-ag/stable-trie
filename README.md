@@ -230,11 +230,11 @@ Every write that can hit the pointer-size cap has a `*Checked` variant (`addChec
 
 By-key writes — return value is augmented with the entry's insertion-order index:
 
-| op                  | returns       |
-| ------------------- | ------------- |
-| `add(k, v)`         | `Nat`         |
-| `insert(k, v)`      | `(Bool, Nat)` |
-| `lookupOrAdd(k, v)` | `(?V, Nat)`   |
+| op                  | returns       | semantics                                                    |
+| ------------------- | ------------- | ------------------------------------------------------------ |
+| `add(k, v)`         | `Nat`         | always writes; returns the index                             |
+| `insert(k, v)`      | `(Bool, Nat)` | always writes; `(true iff key was new, index)`               |
+| `lookupOrAdd(k, v)` | `(?V, Nat)`   | writes ONLY if key absent; `(previous value or null, index)` |
 
 By-index write:
 

@@ -22,7 +22,8 @@
 /// Writing (by key):
 /// - `add(k, v) : Nat`               — always writes; returns index
 /// - `insert(k, v) : (Bool, Nat)`    — always writes; (was-new, index)
-/// - `lookupOrAdd(k, v) : (?V, Nat)` — writes ONLY if key absent
+/// - `lookupOrAdd(k, v) : (?V, Nat)` — writes ONLY if key absent;
+///   (prev-value-or-null, index)
 ///
 /// Writing (by index):
 /// - `put(i, v) : ()`                — overwrite value at `i`; traps on OOB
@@ -160,8 +161,11 @@ module {
     #ok(ret_value, leaf.toNat());
   };
 
-  /// Add `(key, value)` if `key` is absent. Returns `(?prev_value, index)`.
-  /// Traps on pointer-size overflow.
+  /// Add `(key, value)` if `key` is absent. Writes ONLY if the key is new.
+  /// Returns `(previous-value-or-null, index)`: if the key was already
+  /// present the value is left untouched and `(?old_value, index)` is
+  /// returned; if it was new the value is stored and `(null, index)` is
+  /// returned. Traps on pointer-size overflow.
   public func lookupOrAdd(self : Enumeration, key : Blob, value : Blob) : (?Blob, Nat) {
     let (added, leaf) = Trie.putOrTrap(self, key);
     let ret_value = if (added) {
