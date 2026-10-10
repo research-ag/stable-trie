@@ -93,8 +93,8 @@ module {
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func addChecked(self : Map, key : Blob, value : Blob) : Result.Result<(), { #LimitExceeded }> {
-    let ?(_, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
-    Layout.setValue(self, leaf, value);
+    let ?(_, leaf) = self.put_(key) else return #err(#LimitExceeded);
+    self.setValue(leaf, value);
     #ok();
   };
 
@@ -102,8 +102,8 @@ module {
   /// reached. Skips `put_`'s upfront capacity check — an overflow trap
   /// inside `putOrTrap` is rolled back by the surrounding IC message.
   public func add(self : Map, key : Blob, value : Blob) {
-    let (_, leaf) = Trie.putOrTrap(self, key);
-    Layout.setValue(self, leaf, value);
+    let (_, leaf) = self.putOrTrap(key);
+    self.setValue(leaf, value);
   };
 
   /// Insert or overwrite `(key, value)`. Returns `#err(#LimitExceeded)` on
@@ -112,16 +112,16 @@ module {
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func insertChecked(self : Map, key : Blob, value : Blob) : Result.Result<Bool, { #LimitExceeded }> {
-    let ?(added, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
-    Layout.setValue(self, leaf, value);
+    let ?(added, leaf) = self.put_(key) else return #err(#LimitExceeded);
+    self.setValue(leaf, value);
     #ok(added);
   };
 
   /// Insert or overwrite `(key, value)`. Returns `true` if the key was new.
   /// Traps if the pointer-size limit is reached.
   public func insert(self : Map, key : Blob, value : Blob) : Bool {
-    let (added, leaf) = Trie.putOrTrap(self, key);
-    Layout.setValue(self, leaf, value);
+    let (added, leaf) = self.putOrTrap(key);
+    self.setValue(leaf, value);
     added;
   };
 
@@ -131,14 +131,14 @@ module {
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func swapChecked(self : Map, key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
-    let ?(added, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
+    let ?(added, leaf) = self.put_(key) else return #err(#LimitExceeded);
     #ok(
       if (added) {
-        Layout.setValue(self, leaf, value);
+        self.setValue(leaf, value);
         null;
       } else {
-        let old_value = Layout.getValue(self, leaf);
-        Layout.setValue(self, leaf, value);
+        let old_value = self.getValue(leaf);
+        self.setValue(leaf, value);
         ?old_value;
       }
     );
@@ -148,13 +148,13 @@ module {
   /// associated with `key`, or `null` if the key was new. Traps if the
   /// pointer-size limit is reached.
   public func swap(self : Map, key : Blob, value : Blob) : ?Blob {
-    let (added, leaf) = Trie.putOrTrap(self, key);
+    let (added, leaf) = self.putOrTrap(key);
     if (added) {
-      Layout.setValue(self, leaf, value);
+      self.setValue(leaf, value);
       null;
     } else {
-      let old_value = Layout.getValue(self, leaf);
-      Layout.setValue(self, leaf, value);
+      let old_value = self.getValue(leaf);
+      self.setValue(leaf, value);
       ?old_value;
     };
   };
@@ -166,10 +166,10 @@ module {
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func replace(self : Map, key : Blob, value : Blob) : ?Blob {
-    switch (Trie.lookup(self, key)) {
+    switch (self.lookup(key)) {
       case null null;
       case (?(old_value, idx)) {
-        Layout.setValue(self, idx.toNat64(), value);
+        self.setValue(idx.toNat64(), value);
         ?old_value;
       };
     };
@@ -182,13 +182,13 @@ module {
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func getOrAddChecked(self : Map, key : Blob, value : Blob) : Result.Result<?Blob, { #LimitExceeded }> {
-    let ?(added, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
+    let ?(added, leaf) = self.put_(key) else return #err(#LimitExceeded);
     #ok(
       if (added) {
-        Layout.setValue(self, leaf, value);
+        self.setValue(leaf, value);
         null;
       } else {
-        ?Layout.getValue(self, leaf);
+        ?self.getValue(leaf);
       }
     );
   };
@@ -197,12 +197,12 @@ module {
   /// inserted) or the existing value (left untouched). Traps if the
   /// pointer-size limit is reached.
   public func getOrAdd(self : Map, key : Blob, value : Blob) : ?Blob {
-    let (added, leaf) = Trie.putOrTrap(self, key);
+    let (added, leaf) = self.putOrTrap(key);
     if (added) {
-      Layout.setValue(self, leaf, value);
+      self.setValue(leaf, value);
       null;
     } else {
-      ?Layout.getValue(self, leaf);
+      ?self.getValue(leaf);
     };
   };
 
@@ -212,7 +212,7 @@ module {
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func get(self : Map, key : Blob) : ?Blob = do ? {
-    Trie.lookup(self, key)!.0;
+    self.lookup(key)!.0;
   };
 
   /// `containsKey(self : Map, key : Blob) : Bool`
@@ -253,11 +253,11 @@ module {
   /// returns the "was-removed" boolean in the second slot, independently
   /// of `ret`, so `delete` can answer correctly without reading the value.
   func removeInternal(self : Map, key : Blob, ret : Bool) : (?Blob, Bool) {
-    let idx = Trie.keyToRootIndex(self, key);
-    let child = Layout.getChild(self, 0, idx);
+    let idx = self.keyToRootIndex(key);
+    let child = self.getChild(0, idx);
     let (value, removed, branch_root) = removeRec(self, key, child, self.root_bitlength, ret);
     if (branch_root != child) {
-      Layout.setChild(self, 0, idx, branch_root);
+      self.setChild(0, idx, branch_root);
     };
     (value, removed);
   };
@@ -270,36 +270,36 @@ module {
     if (node == 0) return (null, false, node);
     if (node & 1 == 1) {
       let leaf = node >> 1;
-      if (Layout.getKey(self, leaf) == key) {
-        let v = if (ret) ?Layout.getValue(self, leaf) else null;
+      if (self.getKey(leaf) == key) {
+        let v = if (ret) ?self.getValue(leaf) else null;
         // Zero the leaf so that the only non-zero bytes after the push are
         // the chain link (or none, when the list was empty — see
         // LinkedList.push). Symmetric with the per-slot `setChild(..., 0)`
         // for collapsed internal nodes in the `#onlyLeaf` branch below.
-        self.leaves_region.storeBlob(Layout.getLeafOffset(self, leaf), self.zero_leaf);
-        Trie.pushEmptyLeaf(self, leaf);
+        self.leaves_region.storeBlob(self.getLeafOffset(leaf), self.zero_leaf);
+        self.pushEmptyLeaf(leaf);
         return (v, true, 0 : Nat64);
       } else {
         return (null, false, node);
       };
     };
 
-    let idx = Trie.keyToIndex(self, key, pos);
-    let child = Layout.getChild(self, node, idx);
+    let idx = self.keyToIndex(key, pos);
+    let child = self.getChild(node, idx);
     let (value, removed, branch_root) = removeRec(self, key, child, pos +% self.bitlength, ret);
 
     // If the recursive call didn't change anything, neither did we.
     if (branch_root == child) return (value, removed, node);
 
-    Layout.setChild(self, node, idx, branch_root);
-    switch (Trie.scanChildren(self, node)) {
+    self.setChild(node, idx, branch_root);
+    switch (self.scanChildren(node)) {
       case (#onlyLeaf(leaf, slot)) {
         // Collapse: clear the surviving slot (so the pushed node is
         // all-zero when popped later — otherwise the leftover pointer
         // aliases the leaf through a phantom trie path) and bubble the
         // leaf up to the parent.
-        Layout.setChild(self, node, slot, 0);
-        Trie.pushEmptyNode(self, node);
+        self.setChild(node, slot, 0);
+        self.pushEmptyNode(node);
         (value, removed, leaf);
       };
       case _ (value, removed, node); // chain-link state or ≥2 children — keep `node`

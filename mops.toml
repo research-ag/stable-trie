@@ -8,7 +8,7 @@ license = "Apache-2.0"
 files = [ "**/*.mo", "**/*.md", "**/*.toml" ]
 
 [dependencies]
-core = "2.5.0"
+core = "2.6.2"
 
 [dev-dependencies]
 bench-helper = "0.0.3"
@@ -18,6 +18,9 @@ prng = "0.2.0"
 moc = "1.0.0"
 
 [toolchain]
-moc = "1.9.0"
-wasmtime = "44.0.1"
-pocket-ic = "9.0.3"
+moc = "2.0.0"
+wasmtime = "49.0.2"
+pocket-ic = "16.1.0"
+wasm-opt = "133"
+
+[optimize]

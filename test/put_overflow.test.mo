@@ -34,8 +34,9 @@
 // return `true`.
 
 import Blob "mo:core/Blob";
-import Nat8 "mo:core/Nat8";
 
+import Array "mo:core/Array";
+import Nat "mo:core/Nat";
 import Map "../src/Map";
 
 let m = Map.empty({
@@ -46,7 +47,7 @@ let m = Map.empty({
   value_size = 0;
 });
 
-func key(b0 : Nat, b1 : Nat) : Blob = Blob.fromArray([Nat8.fromNat(b0), Nat8.fromNat(b1)]);
+func key(b0 : Nat, b1 : Nat) : Blob = [b0.toNat8(), b1.toNat8()].toBlob();
 
 // Fill 32_512 leaves at depth 2 in slots 0..126.
 var b0 = 0;

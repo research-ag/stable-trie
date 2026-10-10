@@ -83,17 +83,17 @@ assert e.get(5) == null; // size is 5, so 5 is OOB
 assert e.get(99) == null;
 
 // Iteration by key (sorted): \01 → \02 → \03 → \04 → \05.
-assert Iter.toArray(e.keys()) == ["\01" : Blob, "\02", "\03", "\04", "\05"];
-assert Iter.toArray(e.reverseKeys()) == ["\05" : Blob, "\04", "\03", "\02", "\01"];
+assert e.keys().toArray() == (["\01", "\02", "\03", "\04", "\05"] : [Blob]);
+assert e.reverseKeys().toArray() == (["\05", "\04", "\03", "\02", "\01"] : [Blob]);
 
 // values / reverseValues — key-sorted order, value side.
 //   \01 → B, \02 → C, \03 → Z, \04 → E, \05 → D
-assert Iter.toArray(e.values()) == ["B" : Blob, "C", "Z", "E", "D"];
-assert Iter.toArray(e.reverseValues()) == ["D" : Blob, "E", "Z", "C", "B"];
+assert e.values().toArray() == (["B", "C", "Z", "E", "D"] : [Blob]);
+assert e.reverseValues().toArray() == (["D", "E", "Z", "C", "B"] : [Blob]);
 
 // `range(0, size())` iterates in INSERTION order — distinct from the
 // key-sorted views above.
-assert Iter.toArray(e.range(0, e.size())) == [
+assert e.range(0, e.size()).toArray() == [
   ("\03" : Blob, "Z" : Blob),
   ("\01", "B"),
   ("\02", "C"),
@@ -124,8 +124,8 @@ e.truncate(0);
 assert e.size() == 0;
 assert e.isEmpty();
 // Iterators on an empty enumeration yield no elements.
-assert Iter.toArray(e.values()) == ([] : [Blob]);
-assert Iter.toArray(e.reverseValues()) == ([] : [Blob]);
-assert Iter.toArray(e.keys()) == ([] : [Blob]);
-assert Iter.toArray(e.reverseKeys()) == ([] : [Blob]);
-assert Iter.toArray(e.range(0, 0)) == ([] : [(Blob, Blob)]);
+assert e.values().toArray() == ([] : [Blob]);
+assert e.reverseValues().toArray() == ([] : [Blob]);
+assert e.keys().toArray() == ([] : [Blob]);
+assert e.reverseKeys().toArray() == ([] : [Blob]);
+assert e.range(0, 0).toArray() == ([] : [(Blob, Blob)]);

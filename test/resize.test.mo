@@ -5,9 +5,9 @@
 
 import Blob "mo:core/Blob";
 import Iter "mo:core/Iter";
-import Nat8 "mo:core/Nat8";
 import Nat64 "mo:core/Nat64";
 import Nat_ "mo:core/Nat";
+import Array "mo:core/Array";
 import _Region "mo:core/Region"; // dot-notation on `nodes_region`/`leaves_region`
 
 import Map "../src/Map";
@@ -16,18 +16,18 @@ import Map "../src/Map";
 // share signatures for `size`, `add`, `get`, etc.). Enumeration's resize
 // is exercised in resize_enum.test.mo.
 
-func keyOf(i : Nat) : Blob = Blob.fromArray([
-  Nat8.fromNat(i % 256),
-  Nat8.fromNat((i / 256) % 256),
-  Nat8.fromNat((i / 65536) % 256),
-  Nat8.fromNat((i / 16777216) % 256),
+func keyOf(i : Nat) : Blob = Array.toBlob([
+  (i % 256).toNat8(),
+  ((i / 256) % 256).toNat8(),
+  ((i / 65536) % 256).toNat8(),
+  ((i / 16777216) % 256).toNat8(),
 ]);
 
-func valueOf(i : Nat) : Blob = Blob.fromArray([
-  Nat8.fromNat(i % 256),
-  Nat8.fromNat((i / 256) % 256),
-  Nat8.fromNat((i / 65536) % 256),
-  Nat8.fromNat((i / 16777216) % 256),
+func valueOf(i : Nat) : Blob = Array.toBlob([
+  (i % 256).toNat8(),
+  ((i / 256) % 256).toNat8(),
+  ((i / 65536) % 256).toNat8(),
+  ((i / 16777216) % 256).toNat8(),
 ]);
 
 // Drive an incremental resize to completion with a given batch size, so we
@@ -92,7 +92,7 @@ assert m.get(keyOf(N + 1)) == ?valueOf(N + 1);
 
 // Iteration still yields N+2 entries.
 do {
-  let entries = Iter.toArray(m.entries());
+  let entries = m.entries().toArray();
   assert entries.size() == N + 2;
 };
 
@@ -207,14 +207,14 @@ do {
     value_size = 1;
   });
   for (i in Nat_.range(0, 30)) {
-    bm.add(Blob.fromArray([Nat8.fromNat(i)]), Blob.fromArray([Nat8.fromNat(i)]));
+    bm.add([i.toNat8()].toBlob(), [i.toNat8()].toBlob());
   };
 
   var bm_now : Map.Map = bm;
   bm_now := resize(bm_now, 2, 1); // one node per stepResize call
   assert bm_now.size() == 30;
   for (i in Nat_.range(0, 30)) {
-    assert bm_now.get(Blob.fromArray([Nat8.fromNat(i)])) == ?Blob.fromArray([Nat8.fromNat(i)]);
+    assert bm_now.get([i.toNat8()].toBlob()) == ?[i.toNat8()].toBlob();
   };
 };
 
@@ -229,7 +229,7 @@ do {
     value_size = 1;
   });
   for (i in Nat_.range(0, 10)) {
-    lm.add(Blob.fromArray([Nat8.fromNat(i)]), Blob.fromArray([Nat8.fromNat(i)]));
+    lm.add([i.toNat8()].toBlob(), [i.toNat8()].toBlob());
   };
 
   // Single stepResize call with batch huge → done in one call.
@@ -276,7 +276,7 @@ do {
     value_size = 0;
   });
   for (i in Nat_.range(0, 200)) {
-    cm.add(Blob.fromArray([Nat8.fromNat(i % 256), Nat8.fromNat(i / 256)]), "");
+    cm.add([(i % 256).toNat8(), (i / 256).toNat8()].toBlob(), "");
   };
   // ps=1 caps leaf_count at 128. 200 > 128 → refuse.
   assert refused(cm.beginResize(1));
@@ -353,7 +353,7 @@ do {
   // Mix in some deletes so the leaves free list is non-empty across migrations.
   assert pm.delete(keyOf(10));
   assert pm.delete(keyOf(20));
-  let live = N3 - 2;
+  let live : Nat = N3 - 2;
 
   var p_now : Map.Map = pm;
 

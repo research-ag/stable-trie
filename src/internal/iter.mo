@@ -42,7 +42,7 @@ module {
           let (node, i) = stack[depth - 1];
           let max = if (depth > 1) self.aridity_ else self.root_aridity_;
           if (i < max) {
-            let child = Layout.getChild(self, node, i);
+            let child = self.getChild(node, i);
             if (child == 0) {
               stack[depth - 1] := (node, next_step(i));
               continue l;
@@ -66,15 +66,15 @@ module {
   };
 
   func entries_(self : Trie.StableTrie, dir : Dir) : Types.Iter<(Blob, Blob)> = makeIter(self, dir).map<Nat64, (Blob, Blob)>(
-    func(leaf) = (Layout.getKey(self, leaf), Layout.getValue(self, leaf))
+    func(leaf) = (self.getKey(leaf), self.getValue(leaf))
   );
 
   func vals_(self : Trie.StableTrie, dir : Dir) : Types.Iter<Blob> = makeIter(self, dir).map<Nat64, Blob>(
-    func(leaf) = Layout.getValue(self, leaf)
+    func(leaf) = self.getValue(leaf)
   );
 
   func keys_(self : Trie.StableTrie, dir : Dir) : Types.Iter<Blob> = makeIter(self, dir).map<Nat64, Blob>(
-    func(leaf) = Layout.getKey(self, leaf)
+    func(leaf) = self.getKey(leaf)
   );
 
   /// Iterate entries in forward (key-sorted) order.

@@ -37,12 +37,12 @@ module {
     let keys = Array.tabulate<Blob>(
       2 ** (n - 1),
       func(i) {
-        Blob.fromArray(
+        (
           Array.tabulate<Nat8>(
             key_size,
             func _ = Nat64.explode(rng.next()).7,
           )
-        );
+        ).toBlob();
       },
     );
 

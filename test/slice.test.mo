@@ -46,20 +46,20 @@ assert e.sliceToArray(5, 5) == []; // at the boundary
 // ─── range (lazy iterator) ────────────────────────────────────────────────
 
 // Same checks, but via the lazy iterator.
-assert Iter.toArray(e.range(0, 5)) == [
+assert e.range(0, 5).toArray() == [
   ("\00", "A"),
   ("\01", "B"),
   ("\02", "C"),
   ("\03", "D"),
   ("\04", "E"),
 ];
-assert Iter.toArray(e.range(1, 4)) == [("\01", "B"), ("\02", "C"), ("\03", "D")];
-assert Iter.toArray(e.range(2, 3)) == [("\02", "C")];
-assert Iter.toArray(e.range(4, 5)) == [("\04", "E")];
+assert e.range(1, 4).toArray() == [("\01", "B"), ("\02", "C"), ("\03", "D")];
+assert e.range(2, 3).toArray() == [("\02", "C")];
+assert e.range(4, 5).toArray() == [("\04", "E")];
 
-assert Iter.toArray(e.range(0, 0)) == [];
-assert Iter.toArray(e.range(3, 3)) == [];
-assert Iter.toArray(e.range(5, 5)) == [];
+assert e.range(0, 0).toArray() == [];
+assert e.range(3, 3).toArray() == [];
+assert e.range(5, 5).toArray() == [];
 
 // Range can be advanced one at a time.
 do {

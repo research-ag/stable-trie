@@ -110,8 +110,8 @@ module {
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func addChecked(self : Enumeration, key : Blob, value : Blob) : Result.Result<Nat, { #LimitExceeded }> {
-    let ?(_, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
-    Layout.setValue(self, leaf, value);
+    let ?(_, leaf) = self.put_(key) else return #err(#LimitExceeded);
+    self.setValue(leaf, value);
     #ok(leaf.toNat());
   };
 
@@ -120,8 +120,8 @@ module {
   /// overflow trap inside `putOrTrap` is rolled back by the surrounding
   /// IC message.
   public func add(self : Enumeration, key : Blob, value : Blob) : Nat {
-    let (_, leaf) = Trie.putOrTrap(self, key);
-    Layout.setValue(self, leaf, value);
+    let (_, leaf) = self.putOrTrap(key);
+    self.setValue(leaf, value);
     leaf.toNat();
   };
 
@@ -130,16 +130,16 @@ module {
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func insertChecked(self : Enumeration, key : Blob, value : Blob) : Result.Result<(Bool, Nat), { #LimitExceeded }> {
-    let ?(added, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
-    Layout.setValue(self, leaf, value);
+    let ?(added, leaf) = self.put_(key) else return #err(#LimitExceeded);
+    self.setValue(leaf, value);
     #ok(added, leaf.toNat());
   };
 
   /// Add `(key, value)`. Always writes. Returns `(was-new, index)`.
   /// Traps on pointer-size overflow.
   public func insert(self : Enumeration, key : Blob, value : Blob) : (Bool, Nat) {
-    let (added, leaf) = Trie.putOrTrap(self, key);
-    Layout.setValue(self, leaf, value);
+    let (added, leaf) = self.putOrTrap(key);
+    self.setValue(leaf, value);
     (added, leaf.toNat());
   };
 
@@ -151,12 +151,12 @@ module {
   ///
   /// Runtime: O(key_size) accesses to stable memory.
   public func lookupOrAddChecked(self : Enumeration, key : Blob, value : Blob) : Result.Result<(?Blob, Nat), { #LimitExceeded }> {
-    let ?(added, leaf) = Trie.put_(self, key) else return #err(#LimitExceeded);
+    let ?(added, leaf) = self.put_(key) else return #err(#LimitExceeded);
     let ret_value = if (added) {
-      Layout.setValue(self, leaf, value);
+      self.setValue(leaf, value);
       null;
     } else {
-      ?Layout.getValue(self, leaf);
+      ?self.getValue(leaf);
     };
     #ok(ret_value, leaf.toNat());
   };
@@ -167,12 +167,12 @@ module {
   /// returned; if it was new the value is stored and `(null, index)` is
   /// returned. Traps on pointer-size overflow.
   public func lookupOrAdd(self : Enumeration, key : Blob, value : Blob) : (?Blob, Nat) {
-    let (added, leaf) = Trie.putOrTrap(self, key);
+    let (added, leaf) = self.putOrTrap(key);
     let ret_value = if (added) {
-      Layout.setValue(self, leaf, value);
+      self.setValue(leaf, value);
       null;
     } else {
-      ?Layout.getValue(self, leaf);
+      ?self.getValue(leaf);
     };
     (ret_value, leaf.toNat());
   };
@@ -186,7 +186,7 @@ module {
   public func put(self : Enumeration, index : Nat, value : Blob) {
     let i = index.toNat64();
     if (i >= self.leaf_count) Prim.trap("Enumeration.put: index out of bounds");
-    Layout.setValue(self, i, value);
+    self.setValue(i, value);
   };
 
   // ─── Reading (by key) ─────────────────────────────────────────────────────
@@ -214,7 +214,7 @@ module {
   public func get(self : Enumeration, index : Nat) : ?(Blob, Blob) {
     let i = index.toNat64();
     if (i >= self.leaf_count) return null;
-    ?(Layout.getKey(self, i), Layout.getValue(self, i));
+    ?(self.getKey(i), self.getValue(i));
   };
 
   /// Read the entry at index `i`. Traps if `i >= size()`. Matches
@@ -224,7 +224,7 @@ module {
   public func at(self : Enumeration, index : Nat) : (Blob, Blob) {
     let i = index.toNat64();
     if (i >= self.leaf_count) Prim.trap("Enumeration.at: index out of bounds");
-    (Layout.getKey(self, i), Layout.getValue(self, i));
+    (self.getKey(i), self.getValue(i));
   };
 
   /// Return entries in index range `[left, right)` as an Array. Traps if
@@ -239,7 +239,7 @@ module {
       right - left,
       func(i) {
         let index = Nat64.fromIntWrap(i) +% l;
-        (Layout.getKey(self, index), Layout.getValue(self, index));
+        (self.getKey(index), self.getValue(index));
       },
     );
   };
@@ -257,7 +257,7 @@ module {
     {
       next = func() : ?(Blob, Blob) {
         if (i >= r) return null;
-        let entry = (Layout.getKey(self, i), Layout.getValue(self, i));
+        let entry = (self.getKey(i), self.getValue(i));
         i +%= 1;
         ?entry;
       };

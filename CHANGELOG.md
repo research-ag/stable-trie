@@ -5,6 +5,8 @@
 - Add new metrics to `toValue()`, rename existing ones.
 - Bug fix: prevent out-of-bound Region access in a rare edge case.
 - Updated documentation.
+- Bump `core` dependency from `2.5.0` to `2.6.2`.
+- Compile warning-free with moc 2.0.0 (dot notation, `.values()`); example migrated to moc 2.0.0.
 
 ## 0.1.3
 

@@ -175,7 +175,7 @@ module {
       offset_base;
       padding;
       empty_values = args.value_size == 0;
-      zero_leaf = Blob.fromArray(Array.tabulate<Nat8>(args.leaf_size, func(_) = 0));
+      zero_leaf = (Array.tabulate<Nat8>(args.leaf_size, func(_) = 0)).toBlob();
       empty_nodes_list = LinkedList.empty(offset_base, node_size, pointer_size_);
       empty_leaves_list = LinkedList.empty(0, leaf_size, pointer_size_);
       var leaf_count = 0 : Nat64;
@@ -234,7 +234,7 @@ module {
       };
     };
 
-    self.leaves_region.storeBlob(Layout.getLeafOffset(self, leaf), key);
+    self.leaves_region.storeBlob(self.getLeafOffset(leaf), key);
     ?((leaf << 1) | 1);
   };
 
@@ -247,7 +247,7 @@ module {
   /// "zero children" case is unreachable under the deletion invariants
   /// maintained by Map and Enumeration.
   public func scanChildren(self : StableTrie, node : Nat64) : ChildScan {
-    let blob = Layout.getRawNode(self, node);
+    let blob = self.getRawNode(node);
     let ps = self.pointer_size;
     var lone : Nat64 = 0;
     var lone_slot : Nat64 = 0;
@@ -315,7 +315,7 @@ module {
     var pos = self.root_bitlength;
     var node : Nat64 = 0;
     loop {
-      let child = Layout.getChild(self, node, idx);
+      let child = self.getChild(node, idx);
       if (child == 0 or child & 1 == 1) {
         return (node, idx, child, pos);
       };
@@ -377,7 +377,7 @@ module {
       return ?putOrTrap(self, key);
     };
 
-    let old_key = Layout.getKey(self, old_leaf >> 1);
+    let old_key = self.getKey(old_leaf >> 1);
     if (key == old_key) {
       // Pure overwrite — no allocation needed at all.
       return ?putOrTrap(self, key);
@@ -415,12 +415,12 @@ module {
 
     if (old_leaf == 0) {
       let ?leaf = newLeaf(self, key) else Runtime.trap("StableTrie: pointer size overflow");
-      Layout.setChild(self, node_, last_, leaf);
+      self.setChild(node_, last_, leaf);
       return (true, leaf >> 1);
     };
 
     let index = old_leaf >> 1;
-    let old_key = Layout.getKey(self, index);
+    let old_key = self.getKey(index);
     if (key == old_key) return (false, index);
 
     var pos = pos_;
@@ -428,7 +428,7 @@ module {
     var last = last_;
     label l loop {
       let ?add = newInternalNode(self) else Runtime.trap("StableTrie: pointer size overflow");
-      Layout.setChild(self, node, last, add);
+      self.setChild(node, last, add);
       node := add;
 
       let (a, b) = (keyToIndex(self, key, pos), keyToIndex(self, old_key, pos));
@@ -436,9 +436,9 @@ module {
       if (a == b) {
         last := a;
       } else {
-        Layout.setChild(self, node, b, old_leaf);
+        self.setChild(node, b, old_leaf);
         let ?leaf = newLeaf(self, key) else Runtime.trap("StableTrie: pointer size overflow");
-        Layout.setChild(self, node, a, leaf);
+        self.setChild(node, a, leaf);
         return (true, leaf >> 1);
       };
     };
@@ -448,7 +448,7 @@ module {
   /// Recursive walk for `removeLast`.
   func removeLastRec(self : StableTrie, key : Blob, node : Nat64, pos : Nat16) : Nat64 {
     let idx = keyToIndex(self, key, pos);
-    let child = Layout.getChild(self, node, idx);
+    let child = self.getChild(node, idx);
     let new_child = if (child & 1 == 1) {
       0 : Nat64;
     } else {
@@ -457,10 +457,10 @@ module {
 
     if (new_child == child) return node;
 
-    Layout.setChild(self, node, idx, new_child);
+    self.setChild(node, idx, new_child);
     switch (scanChildren(self, node)) {
       case (#onlyLeaf(leaf, slot)) {
-        Layout.setChild(self, node, slot, 0);
+        self.setChild(node, slot, 0);
         pushEmptyNode(self, node);
         leaf;
       };
@@ -474,18 +474,18 @@ module {
     if (self.leaf_count == 0) return null;
 
     let last_index = self.leaf_count -% 1;
-    let key = Layout.getKey(self, last_index);
-    let value = Layout.getValue(self, last_index);
+    let key = self.getKey(last_index);
+    let value = self.getValue(last_index);
 
     let root_idx = keyToRootIndex(self, key);
-    let root_child = Layout.getChild(self, 0, root_idx);
+    let root_child = self.getChild(0, root_idx);
     let new_root_child = if (root_child & 1 == 1) {
       0 : Nat64;
     } else {
       removeLastRec(self, key, root_child, self.root_bitlength);
     };
     if (new_root_child != root_child) {
-      Layout.setChild(self, 0, root_idx, new_root_child);
+      self.setChild(0, root_idx, new_root_child);
     };
 
     self.leaf_count -%= 1;
@@ -502,8 +502,8 @@ module {
     if (old_leaf == 0) return null;
     let index = old_leaf >> 1;
 
-    return if (Layout.getKey(self, index) == key) {
-      ?(Layout.getValue(self, index), nat64toNat(index));
+    return if (self.getKey(index) == key) {
+      ?(self.getValue(index), nat64toNat(index));
     } else {
       null;
     };
@@ -516,7 +516,7 @@ module {
 
     let (_, _, old_leaf, _) = find(self, key);
     if (old_leaf == 0) return false;
-    Layout.getKey(self, old_leaf >> 1) == key;
+    self.getKey(old_leaf >> 1) == key;
   };
 
   /// Return current memory stats. See `MemoryStats` for field meanings.

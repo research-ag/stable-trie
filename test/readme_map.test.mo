@@ -18,7 +18,7 @@ assert (m.swap("abc", "a") == null);
 assert (m.swap("aaa", "b") == null);
 assert (m.swap("abc", "c") == ?"a");
 
-assert Iter.toArray(m.entries()) == [("aaa", "b"), ("abc", "c")];
+assert m.entries().toArray() == [("aaa", "b"), ("abc", "c")];
 
 m.remove("abc");
 m.remove("aaa");
