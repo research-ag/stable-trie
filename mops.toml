@@ -11,7 +11,7 @@ files = [ "**/*.mo", "**/*.md", "**/*.toml" ]
 core = "2.6.2"
 
 [dev-dependencies]
-bench-helper = "0.0.3"
+bench-helper = "0.0.4"
 prng = "0.2.0"
 
 [requirements]
