@@ -1,17 +1,16 @@
 {
   "version": 3,
-  "mopsTomlDepsHash": "7dc136253681c0b62a2d28f5049d57fb76ea8b5392209fb4f9ae985c9dff7742",
+  "mopsTomlDepsHash": "cb304f9923e40d6fe7405c1f3e087f60af00dcd768a58a6fce8d6fa506d443b5",
   "localDepsHash": "cb8495415f770f7c78387c861137193e7a0e83fc0bd546de9ffc5287c574625e",
   "deps": {
     "core": "2.6.2",
-    "promtracker": "1.0.1",
+    "promtracker": "1.0.2",
     "stable-trie": "./.."
   },
   "graph": {
-    "core@2.5.0": {},
     "core@2.6.2": {},
-    "promtracker@1.0.1": {
-      "core": "2.5.0"
+    "promtracker@1.0.2": {
+      "core": "2.6.2"
     }
   },
   "hashes": {
@@ -74,30 +73,30 @@
       "core@2.6.2/src/pure/RealTimeQueue.mo": "1a80e071b0282c608ebaa26544dea6bd747915c8023d86b7da7614febf23c7a5",
       "core@2.6.2/src/pure/Set.mo": "a5317cfdf0b4aeaa19008d4d5dc3dc744cb631fc4de0d43f2d18360e56707e0a"
     },
-    "promtracker@1.0.1": {
-      "promtracker@1.0.1/LICENSE": "0351aa17e901e2f426698e6199237119a18c8ea1674877e0eb4d694ee9c4b938",
-      "promtracker@1.0.1/NOTICE": "2a2979e2cb91a7d903c3377ed8031a92e7fd467fd9ddb005f2ae2042ead1b4f1",
-      "promtracker@1.0.1/README.md": "b79b33239dd89733b96a1dec24dfcc30ea46072eb8d9c5c068a7dd9a9d18e8fd",
-      "promtracker@1.0.1/examples/README.md": "f6b4ecc30cf8421de8bb683ff310b34eacbbf3aefe19aea51ed0820572ca7ab4",
-      "promtracker@1.0.1/examples/mops.toml": "e5264d750d63ef8992934ceccad5a04f99ba7869adfc5277ac324ffaa833ad6c",
-      "promtracker@1.0.1/examples/src/migration.mo": "a9df9699af0fb01828ef36cb2305906752cf5abf1a9af8c9444f715c13b581cb",
-      "promtracker@1.0.1/examples/src/min.mo": "a99efe2381239adcd30b89a74b1c01bc8df46472416f66ffd3b170a7c603b129",
-      "promtracker@1.0.1/examples/src/mock-stream.mo": "d15d74d6ed280c35264b71bb5022f88afa23f5f60c5ebb38608e87bca7b110f1",
-      "promtracker@1.0.1/examples/src/nested.mo": "d17127c50bbd06c9d5f06740d6b78e3510000a0ba7c1ba12963b707ef691035d",
-      "promtracker@1.0.1/examples/src/no-pull.mo": "e09ab500164bd9bd98c5bd5f00972dde39c74257a710df04a7405e4142a607a7",
-      "promtracker@1.0.1/examples/src/package.mo": "7cd105548b481b3d987c5e286d42cf704d198510ef0fc6fdd133411b4bd4227b",
-      "promtracker@1.0.1/examples/src/uptime.mo": "e7ceba08c3fe9c7360e8af2d90bf4ef55a85b56b010035db8acd77b5b89c4a07",
-      "promtracker@1.0.1/mops.toml": "b2ebe3f827b92c6836979c725d20fd94a7bf38c2cb23bb420fbe6534966feb2c",
-      "promtracker@1.0.1/src/Http.mo": "825fd142f05449e45624de927d169c36f44b18301080d0457420a9cb827a2d41",
-      "promtracker@1.0.1/src/Label.mo": "5ee89f58f159474ece8e30d339db007c360b279a69ca332be9182ade283e319e",
-      "promtracker@1.0.1/src/Metrics.mo": "47a3266942e7a9e5a430cdb77cd1b5771f95ad99469f69c343313e8ec8bb5651",
-      "promtracker@1.0.1/src/Tracker.mo": "f05f95defd588debd6ff5ca5d7b990b289372bc5fa71b4807e16ee64789d9a63",
-      "promtracker@1.0.1/src/TrackerAPI.mo": "8c1a9b4105e34a6268b03a1d570627bbb8d58b9d3d2c1ddb6e6b6a0c7a3f2ee9",
-      "promtracker@1.0.1/src/internal/Types.mo": "b5e689968fa7d13e5a4734b91da94beea0af9c119145e1b461136035f7df4339",
-      "promtracker@1.0.1/src/lib.mo": "1b16d8594ce0846e47d4776a12759283ff673782d2f19ed897b8f22f39237be7",
-      "promtracker@1.0.1/src/mixins/http.mo": "2eb90f1dff105c7235b8aff3a925595e74d9cb8d6141e3010cb22db04f0d201b",
-      "promtracker@1.0.1/src/mixins/query.mo": "bdf0bcef00585d42df4ac10a1be1fd29ea40e128c0300f744b01a80e0b7d3d03",
-      "promtracker@1.0.1/src/mixins/uptime.mo": "b23b0b3095d86633eb14c1bd8b6140e30999b8fea2d6bc4c382f28ad539d0f1f"
+    "promtracker@1.0.2": {
+      "promtracker@1.0.2/LICENSE": "0351aa17e901e2f426698e6199237119a18c8ea1674877e0eb4d694ee9c4b938",
+      "promtracker@1.0.2/NOTICE": "2a2979e2cb91a7d903c3377ed8031a92e7fd467fd9ddb005f2ae2042ead1b4f1",
+      "promtracker@1.0.2/README.md": "1de5a78bbbf310c10265c2b79f2e71ed083522f398a9858964ef418b254852e2",
+      "promtracker@1.0.2/examples/README.md": "f6b4ecc30cf8421de8bb683ff310b34eacbbf3aefe19aea51ed0820572ca7ab4",
+      "promtracker@1.0.2/examples/mops.toml": "e3b8e01fe18db046949219f25b0f216b002f9eb1695d8fa73108dd95cee4acb7",
+      "promtracker@1.0.2/examples/src/migration.mo": "48e14db456b54037a2ea9d0d25a208dfd3c5e39453bf50ddeb4ad6bd4a6965c8",
+      "promtracker@1.0.2/examples/src/min.mo": "b573901e638cfb39e43ffde48a804c19e9932723f6f02d84598377c417cf24ba",
+      "promtracker@1.0.2/examples/src/mock-stream.mo": "a65b60d02060d26d220928f26dac9c64a5dd4074a74c9203996213d28bef2e22",
+      "promtracker@1.0.2/examples/src/nested.mo": "cea4aeaa44fd7c97ec759c5126d7b5c5153ac15eef2c96c517af169a988b858f",
+      "promtracker@1.0.2/examples/src/no-pull.mo": "85e1ea4d41114cd97bc42c4ba1bd11d1dc394509d3b38fbc75173b202ba655c9",
+      "promtracker@1.0.2/examples/src/package.mo": "c9fd0e8916ec0b09982ef676a96946874cc49b52c3d5b966f483699fb7b7a195",
+      "promtracker@1.0.2/examples/src/uptime.mo": "2c973cbbd0a793f507e85b39b61b9594214909febba6cab8dc77be044fe57091",
+      "promtracker@1.0.2/mops.toml": "e50bcfbd94fa51a2d9abc0a62783ea85ab94ee0783569ed7d2120d18659e3437",
+      "promtracker@1.0.2/src/Http.mo": "825fd142f05449e45624de927d169c36f44b18301080d0457420a9cb827a2d41",
+      "promtracker@1.0.2/src/Label.mo": "db5d820ca83b0c945234c5069061a43c3dd36aaed68cd67ad456e0f30b33c64c",
+      "promtracker@1.0.2/src/Metrics.mo": "8bfc4c194b0f275de5deeb1007e184f400ca96d65e29e57e8c2dcfa98d11285b",
+      "promtracker@1.0.2/src/Tracker.mo": "911c3308c8c0492ec4991559fb8fecef5b57d415a4881ab6047f26d00e25c4c9",
+      "promtracker@1.0.2/src/TrackerAPI.mo": "68a91173e87501356f3c646810efa3ea972d18652b2f8c69466ba5e481580c90",
+      "promtracker@1.0.2/src/internal/Types.mo": "b5e689968fa7d13e5a4734b91da94beea0af9c119145e1b461136035f7df4339",
+      "promtracker@1.0.2/src/lib.mo": "f5198321471fb2622d216ae397cf751ea4b45ef8b921a3cd5b6f86b0611f0bf8",
+      "promtracker@1.0.2/src/mixins/http.mo": "2eb90f1dff105c7235b8aff3a925595e74d9cb8d6141e3010cb22db04f0d201b",
+      "promtracker@1.0.2/src/mixins/query.mo": "bdf0bcef00585d42df4ac10a1be1fd29ea40e128c0300f744b01a80e0b7d3d03",
+      "promtracker@1.0.2/src/mixins/uptime.mo": "b23b0b3095d86633eb14c1bd8b6140e30999b8fea2d6bc4c382f28ad539d0f1f"
     }
   }
 }
