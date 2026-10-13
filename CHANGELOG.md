@@ -7,6 +7,7 @@
 - Updated documentation.
 - Bump `core` dependency from `2.5.0` to `2.6.2`.
 - Compile warning-free with moc 2.0.0 (dot notation, `.values()`); example migrated to moc 2.0.0.
+- Benchmarks: +5% (`Enumeration`) and +8% (`Map`) instructions due to the compiler switch to the 64-bit heap; the benchmark files were renamed.
 
 ## 0.1.3
 
