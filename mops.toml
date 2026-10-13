@@ -12,7 +12,7 @@ core = "2.6.2"
 
 [dev-dependencies]
 bench-helper = "0.0.4"
-prng = "0.2.0"
+prng = "0.3.1"
 
 [requirements]
 moc = "1.0.0"
