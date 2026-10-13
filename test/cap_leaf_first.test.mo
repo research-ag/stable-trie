@@ -22,8 +22,9 @@
 
 import Iter "mo:core/Iter";
 import Blob "mo:core/Blob";
-import Nat8 "mo:core/Nat8";
 
+import Array "mo:core/Array";
+import Nat "mo:core/Nat";
 import Map "../src/Map";
 
 let m = Map.empty({
@@ -34,7 +35,7 @@ let m = Map.empty({
   value_size = 1;
 });
 
-func key(b : Nat) : Blob = Blob.fromArray([Nat8.fromNat(b)]);
+func key(b : Nat) : Blob = [b.toNat8()].toBlob();
 
 // Fill all 128 leaf slots — one per root slot 0..127. Trapping `add`
 // is safe here because each one is a fresh key with empty target slot.
@@ -64,7 +65,7 @@ assert m.get(key(200)) == null;
 // Iteration still yields exactly the 128 originally-added entries in
 // ascending key order.
 do {
-  let entries = Iter.toArray(m.entries());
+  let entries = m.entries().toArray();
   assert entries.size() == 128;
   var j = 0;
   while (j < 128) {
@@ -95,7 +96,7 @@ assert m.node_count == 1;
 assert m.get(key(0)) == null;
 assert m.get(key(200)) == ?"x";
 do {
-  let entries = Iter.toArray(m.entries());
+  let entries = m.entries().toArray();
   assert entries.size() == m.size();
   // Spot-check sorted order: key(1) is first, key(200) is last.
   assert entries[0] == (key(1), "v");

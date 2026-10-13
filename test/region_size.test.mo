@@ -16,20 +16,20 @@
 // `LinkedList.pop` no matter how narrow the leaf is.
 
 import Blob "mo:core/Blob";
-import Nat8 "mo:core/Nat8";
 import Nat_ "mo:core/Nat";
 
+import Array "mo:core/Array";
 import Map "../src/Map";
 
 // 2-byte keys [i, i]: distinct in their low 13 bits and in their high 13
 // bits for i < 32, so they hit distinct root slots regardless of which
 // end of the key the root index is taken from — no internal nodes get
 // allocated, keeping the nodes page count deterministic.
-func k2(i : Nat) : Blob = Blob.fromArray([Nat8.fromNat(i), Nat8.fromNat(i)]);
+func k2(i : Nat) : Blob = [i.toNat8(), i.toNat8()].toBlob();
 
-func k4(i : Nat) : Blob = Blob.fromArray([
-  Nat8.fromNat(i % 256),
-  Nat8.fromNat((i / 256) % 256),
+func k4(i : Nat) : Blob = Array.toBlob([
+  (i % 256).toNat8(),
+  ((i / 256) % 256).toNat8(),
   0,
   0,
 ]);

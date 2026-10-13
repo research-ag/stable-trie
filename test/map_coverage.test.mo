@@ -76,12 +76,12 @@ assert m.size() == 6;
 //   \06 → F
 
 // keys / reverseKeys — iterate in ascending / descending key order.
-assert Iter.toArray(m.keys()) == ["\01" : Blob, "\02", "\03", "\04", "\05", "\06"];
-assert Iter.toArray(m.reverseKeys()) == ["\06" : Blob, "\05", "\04", "\03", "\02", "\01"];
+assert m.keys().toArray() == (["\01", "\02", "\03", "\04", "\05", "\06"] : [Blob]);
+assert m.reverseKeys().toArray() == (["\06", "\05", "\04", "\03", "\02", "\01"] : [Blob]);
 
 // values / reverseValues — same order, value side.
-assert Iter.toArray(m.values()) == ["W" : Blob, "B", "C", "D", "E", "F"];
-assert Iter.toArray(m.reverseValues()) == ["F" : Blob, "E", "D", "C", "B", "W"];
+assert m.values().toArray() == (["W", "B", "C", "D", "E", "F"] : [Blob]);
+assert m.reverseValues().toArray() == (["F", "E", "D", "C", "B", "W"] : [Blob]);
 
 // Clear and confirm isEmpty.
 m.remove("\01");
@@ -93,7 +93,7 @@ m.remove("\06");
 assert m.isEmpty();
 assert m.size() == 0;
 // Iterators on an empty map yield no elements.
-assert Iter.toArray(m.values()) == ([] : [Blob]);
-assert Iter.toArray(m.reverseValues()) == ([] : [Blob]);
-assert Iter.toArray(m.keys()) == ([] : [Blob]);
-assert Iter.toArray(m.reverseKeys()) == ([] : [Blob]);
+assert m.values().toArray() == ([] : [Blob]);
+assert m.reverseValues().toArray() == ([] : [Blob]);
+assert m.keys().toArray() == ([] : [Blob]);
+assert m.reverseKeys().toArray() == ([] : [Blob]);

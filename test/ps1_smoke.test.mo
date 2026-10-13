@@ -32,7 +32,7 @@ assert m.containsKey("\01");
 assert not m.containsKey("\03");
 
 // entries iteration in key order
-assert Iter.toArray(m.entries()) == [("\00", "A"), ("\01", "X"), ("\02", "C")];
+assert m.entries().toArray() == [("\00", "A"), ("\01", "X"), ("\02", "C")];
 
 // remove + free-list reuse
 m.remove("\01");

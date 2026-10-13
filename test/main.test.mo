@@ -25,10 +25,10 @@ func gen(n : Nat, size : Nat) : [Blob] {
     func(i) {
       if (i % 2 == 0) {
         prev := Array.tabulate<Nat8>(size, func(j) = Nat8.fromIntWrap(rng.next().toNat()));
-        Blob.fromArray(prev);
+        prev.toBlob();
       } else {
         let t = rng.next().toNat() % key_size;
-        Blob.fromArray(Array.tabulate<Nat8>(size, func(j) = if (j < t) prev[j] else Nat8.fromIntWrap(rng.next().toNat())));
+        (Array.tabulate<Nat8>(size, func(j) = if (j < t) prev[j] else Nat8.fromIntWrap(rng.next().toNat()))).toBlob();
       };
     },
   );
@@ -43,10 +43,10 @@ let keysAbsent = gen(n, key_size);
 let value_sizes = [0, 2];
 let bits = [2, 4, 16];
 let pointers = [2, 3, 4, 5, 6, 8];
-for (value_size in value_sizes.vals()) {
+for (value_size in value_sizes.values()) {
   let values = gen(n, value_size);
-  for (bit in bits.vals()) {
-    for (pointer in pointers.vals()) {
+  for (bit in bits.values()) {
+    for (pointer in pointers.values()) {
       let trie = StableTrie.empty({
         pointer_size = pointer;
         aridity = bit;
@@ -56,33 +56,33 @@ for (value_size in value_sizes.vals()) {
       });
 
       var i = 0;
-      for (key in keys.vals()) {
+      for (key in keys.values()) {
         assert trie.add(key, values[i]) == i;
         assert trie.size() == i + 1;
         i += 1;
       };
 
       i := 0;
-      for (key in keys.vals()) {
+      for (key in keys.values()) {
         assert trie.get(i) == ?(key, values[i]);
         i += 1;
       };
 
       i := 0;
 
-      for (key in keys.vals()) {
+      for (key in keys.values()) {
         assert (trie.lookup(key) == ?(values[i], i));
         i += 1;
       };
 
-      for (key in keysAbsent.vals()) {
+      for (key in keysAbsent.values()) {
         assert trie.lookup(key) == null;
       };
 
-      let vals = Iter.toArray(Iter.map<(Blob, Blob), Blob>(trie.entries(), func((a, _)) = a));
+      let vals = trie.entries().map<(Blob, Blob), Blob>(func((a, _)) = a).toArray();
       assert vals == sorted;
 
-      let revVals = Iter.toArray(Iter.map<(Blob, Blob), Blob>(trie.reverseEntries(), func((a, _)) = a));
+      let revVals = trie.reverseEntries().map<(Blob, Blob), Blob>(func((a, _)) = a).toArray();
       assert revVals == revSorted;
     };
   };
@@ -97,7 +97,7 @@ func pointerMaxSizeTest() {
     value_size = 0;
   });
   for (i in Nat.range(0, 32_000 + 1)) {
-    let key = Blob.fromArray([Nat8.fromIntWrap(i), Nat8.fromNat(i / 256)]);
+    let key = [Nat8.fromIntWrap(i), (i / 256).toNat8()].toBlob();
     if (trie.addChecked(key, "") != #ok(i)) {
       Debug.print(debug_show i);
       assert false;
@@ -116,13 +116,12 @@ func _profile() {
   let keys = Array.tabulate<Blob>(
     2 ** n,
     func(i) {
-      Blob.fromArray(Array.tabulate<Nat8>(key_size, func(j) = Nat8.fromIntWrap(rng.next().toNat())));
+      (Array.tabulate<Nat8>(key_size, func(j) = Nat8.fromIntWrap(rng.next().toNat()))).toBlob();
     },
   );
-  let _rows = Iter.map<Nat, (Text, Types.Iter<Text>)>(
-    children_number.vals(),
+  let _rows = children_number.values().map<Nat, (Text, Types.Iter<Text>)>(
     func(k) {
-      let first = Nat.toText(k);
+      let first = k.toText();
       let trie = StableTrie.empty({
         pointer_size = 8;
         aridity = k;
@@ -130,8 +129,7 @@ func _profile() {
         key_size;
         value_size = 0;
       });
-      let second = Iter.map<Nat, Text>(
-        Nat.range(0, n + 1),
+      let second = Nat.range(0, n + 1).map<Nat, Text>(
         func(i) {
           if (i == 0) {
             ignore trie.add(keys[0], "");
@@ -142,10 +140,10 @@ func _profile() {
           };
           "";
           // Nat.toText(trie.size() / 2 ** i);
-        },
+        }
       );
       (first, second);
-    },
+    }
   );
 };
 

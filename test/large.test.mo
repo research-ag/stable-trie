@@ -1,8 +1,8 @@
 // @testmode wasi
 
 import Debug "mo:core/Debug";
-import Float "mo:core/Float";
 import Region "mo:core/Region";
+import Int "mo:core/Int";
 import Seiran128 "mo:prng/Seiran128";
 
 import StableTrie "../src/Enumeration";
@@ -70,7 +70,7 @@ Debug.print("bytes per key: " # debug_show (s.total_bytes / (max * max)));
 let (leaves, nodes) = (s.used_leaf_count, s.used_node_count);
 Debug.print("leaves (=keys): " # debug_show leaves);
 Debug.print("nodes: " # debug_show nodes);
-Debug.print("nodes per leaf: " # debug_show (Float.fromInt(nodes) / Float.fromInt(leaves)));
-Debug.print("pointers per leaf: " # debug_show (Float.fromInt(nodes * k) / Float.fromInt(leaves)));
-Debug.print("children per node: " # debug_show (Float.fromInt(nodes + leaves) / Float.fromInt(nodes)));
-Debug.print("children utilization: " # debug_show (Float.fromInt(nodes + leaves) / Float.fromInt(nodes * k)));
+Debug.print("nodes per leaf: " # debug_show (nodes.toFloat() / leaves.toFloat()));
+Debug.print("pointers per leaf: " # debug_show ((nodes * k).toFloat() / leaves.toFloat()));
+Debug.print("children per node: " # debug_show ((nodes + leaves).toFloat() / nodes.toFloat()));
+Debug.print("children utilization: " # debug_show ((nodes + leaves).toFloat() / (nodes * k).toFloat()));

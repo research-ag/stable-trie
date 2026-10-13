@@ -1,9 +1,15 @@
 # Stable-trie changelog
 
-## 0.1.4
+## 0.2.0
 
-- Add new metrics to `toValue()`, rename existing ones.
+- Add new metrics to `toValue()`: `stable_trie_constant{constant="aridity"}` and `{constant="root_aridity"}`.
+- **Breaking:** Rename the `MemoryStats` field `byte_size` to `total_bytes`.
+- **Breaking:** Rename metrics in `toValue()`: `stable_trie_pointer_size`, `stable_trie_value_size` and `stable_trie_key_size` become `stable_trie_constant` with a `constant` label (`pointer_size`, `value_size`, `key_size`); `stable_trie_byte_size` becomes `stable_trie_total_bytes`.
 - Bug fix: prevent out-of-bound Region access in a rare edge case.
+- Updated documentation.
+- Bump `core` dependency from `2.5.0` to `2.6.2`.
+- Compile warning-free with moc 2.0.0 (dot notation, `.values()`); example migrated to moc 2.0.0.
+- Benchmarks: +5% (`Enumeration`) and +8% (`Map`) instructions due to the compiler switch to the 64-bit heap; the benchmark files were renamed.
 
 ## 0.1.3
 

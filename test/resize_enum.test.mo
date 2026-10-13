@@ -13,6 +13,7 @@ import Blob "mo:core/Blob";
 import Nat8 "mo:core/Nat8";
 import Nat_ "mo:core/Nat";
 
+import Array "mo:core/Array";
 import Enumeration "../src/Enumeration";
 
 let e = Enumeration.empty({
@@ -25,7 +26,7 @@ let e = Enumeration.empty({
 
 // Add 20 entries (well within ps=1's 128-leaf cap).
 for (i in Nat_.range(0, 20)) {
-  ignore e.add(Blob.fromArray([Nat8.fromNat(i)]), Blob.fromArray([Nat8.fromNat(i)]));
+  ignore e.add([i.toNat8()].toBlob(), [i.toNat8()].toBlob());
 };
 
 // removeLast a few times to populate empty_nodes_list (Enumeration's only
@@ -48,7 +49,7 @@ do {
 };
 assert e_now.size() == 17;
 for (i in Nat_.range(0, 17)) {
-  assert e_now.lookup(Blob.fromArray([Nat8.fromNat(i)])) == ?(Blob.fromArray([Nat8.fromNat(i)]), i);
+  assert e_now.lookup([i.toNat8()].toBlob()) == ?([i.toNat8()].toBlob(), i);
 };
 // Node free list survived the migration.
 assert e_now.memoryStats().used_node_count == stats_before.used_node_count;
@@ -64,13 +65,13 @@ do {
 };
 assert e_now.size() == 17;
 for (i in Nat_.range(0, 17)) {
-  assert e_now.lookup(Blob.fromArray([Nat8.fromNat(i)])) == ?(Blob.fromArray([Nat8.fromNat(i)]), i);
+  assert e_now.lookup([i.toNat8()].toBlob()) == ?([i.toNat8()].toBlob(), i);
 };
 
 // New adds after the round-trip work, and the previously-freed internal
 // nodes can be re-used.
-ignore e_now.add(Blob.fromArray([Nat8.fromNat(50)]), Blob.fromArray([0]));
-ignore e_now.add(Blob.fromArray([Nat8.fromNat(51)]), Blob.fromArray([0]));
+ignore e_now.add([(50 : Nat8)].toBlob(), Array.toBlob([0]));
+ignore e_now.add([(51 : Nat8)].toBlob(), Array.toBlob([0]));
 assert e_now.size() == 19;
 
 // ─── Refusal cases ─────────────────────────────────────────────────────────
@@ -103,14 +104,14 @@ do {
     key_size = 4;
     value_size = 4;
   });
-  func keyOfE(i : Nat) : Blob = Blob.fromArray([
-    Nat8.fromNat(i % 256),
-    Nat8.fromNat((i / 256) % 256),
+  func keyOfE(i : Nat) : Blob = Array.toBlob([
+    (i % 256).toNat8(),
+    ((i / 256) % 256).toNat8(),
     0,
     0,
   ]);
-  func valOfE(i : Nat) : Blob = Blob.fromArray([
-    Nat8.fromNat(i % 256),
+  func valOfE(i : Nat) : Blob = Array.toBlob([
+    (i % 256).toNat8(),
     0,
     0,
     0,

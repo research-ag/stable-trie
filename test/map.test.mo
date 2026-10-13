@@ -22,9 +22,9 @@ func gen(n : Nat, size : Nat) : [Blob] {
     func(i) {
       if (i % 2 == 0) {
         prev := Array.tabulate<Nat8>(size, func(j) = Nat8.fromIntWrap(rng.next().toNat()));
-        Blob.fromArray(prev);
+        prev.toBlob();
       } else {
-        Blob.fromArray(Array.tabulate<Nat8>(size, func(j) = if (j + 1 < size) prev[j] else if (prev[j] == 255) 0 else prev[j] + 1));
+        (Array.tabulate<Nat8>(size, func(j) = if (j + 1 < size) prev[j] else if (prev[j] == 255) 0 else prev[j] + 1)).toBlob();
       };
     },
   );
@@ -40,10 +40,10 @@ let keysAbsent = gen(n, key_size);
 let value_sizes = [3, 4];
 let bits = [2, 4, 16];
 let pointers = [2, 4, 5, 6, 8];
-for (value_size in value_sizes.vals()) {
+for (value_size in value_sizes.values()) {
   let values = gen(n, value_size);
-  for (bit in bits.vals()) {
-    for (pointer in pointers.vals()) {
+  for (bit in bits.values()) {
+    for (pointer in pointers.values()) {
       let trie = StableTrie.empty({
         pointer_size = pointer;
         aridity = bit;
@@ -53,7 +53,7 @@ for (value_size in value_sizes.vals()) {
       });
 
       var i = 0;
-      for (key in keys.vals()) {
+      for (key in keys.values()) {
         trie.add(key, values[i]);
         assert trie.size() == i + 1;
         i += 1;
@@ -61,7 +61,7 @@ for (value_size in value_sizes.vals()) {
       assert trie.memoryStats().total_leaf_count == n;
 
       i := 0;
-      for (key in delete_keys.vals()) {
+      for (key in delete_keys.values()) {
         trie.add(key, values[i]);
         assert trie.size() == keys.size() + i + 1;
         i += 1;
@@ -69,7 +69,7 @@ for (value_size in value_sizes.vals()) {
       assert trie.memoryStats().total_leaf_count == 2 * n;
 
       i := 0;
-      for (key in delete_keys.vals()) {
+      for (key in delete_keys.values()) {
         assert trie.take(key) == ?values[i];
         assert trie.size() == (2 * n - i - 1 : Nat);
         i += 1;
@@ -77,29 +77,29 @@ for (value_size in value_sizes.vals()) {
       assert trie.memoryStats().total_leaf_count == 2 * n;
 
       i := 0;
-      for (key in keys.vals()) {
+      for (key in keys.values()) {
         assert (trie.get(key) == ?values[i]);
         i += 1;
       };
 
-      for (key in keysAbsent.vals()) {
+      for (key in keysAbsent.values()) {
         assert trie.get(key) == null;
       };
 
-      for (key in delete_keys.vals()) {
+      for (key in delete_keys.values()) {
         assert trie.get(key) == null;
       };
 
       do {
-        let vals = Iter.toArray(Iter.map<(Blob, Blob), Blob>(trie.entries(), func((a, _)) = a));
+        let vals = trie.entries().map<(Blob, Blob), Blob>(func((a, _)) = a).toArray();
         assert vals == sorted;
 
-        let revVals = Iter.toArray(Iter.map<(Blob, Blob), Blob>(trie.reverseEntries(), func((a, _)) = a));
+        let revVals = trie.reverseEntries().map<(Blob, Blob), Blob>(func((a, _)) = a).toArray();
         assert revVals == revSorted;
       };
 
       i := 0;
-      for (key in keys.vals()) {
+      for (key in keys.values()) {
         assert trie.take(key) == ?values[i];
         i += 1;
       };
@@ -107,16 +107,16 @@ for (value_size in value_sizes.vals()) {
       assert trie.memoryStats().total_leaf_count == 2 * n;
 
       do {
-        let vals = Iter.toArray(Iter.map<(Blob, Blob), Blob>(trie.entries(), func((a, _)) = a));
+        let vals = trie.entries().map<(Blob, Blob), Blob>(func((a, _)) = a).toArray();
         assert vals == [];
 
-        let revVals = Iter.toArray(Iter.map<(Blob, Blob), Blob>(trie.reverseEntries(), func((a, _)) = a));
+        let revVals = trie.reverseEntries().map<(Blob, Blob), Blob>(func((a, _)) = a).toArray();
         assert revVals == [];
       };
 
       let before = trie.memoryStats();
       i := 0;
-      for (key in keys.vals()) {
+      for (key in keys.values()) {
         trie.add(key, values[i]);
         i += 1;
       };
@@ -135,17 +135,17 @@ do {
     key_size = 1;
     value_size = 0;
   });
-  let keys = Array.tabulate<Blob>(256, func(i) = Blob.fromArray([i.toNat8()]));
-  for (key in keys.vals()) {
+  let keys = Array.tabulate<Blob>(256, func(i) = [i.toNat8()].toBlob());
+  for (key in keys.values()) {
     trie.add(key, "");
   };
-  for (key in keys.vals()) {
+  for (key in keys.values()) {
     assert trie.get(key) == ?"";
   };
-  for (key in keys.vals()) {
+  for (key in keys.values()) {
     trie.remove(key);
   };
-  for (key in keys.vals()) {
+  for (key in keys.values()) {
     assert trie.get(key) == null;
   };
 };

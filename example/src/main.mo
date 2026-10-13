@@ -17,12 +17,13 @@ import Blob "mo:core/Blob";
 import Nat8 "mo:core/Nat8";
 import Principal "mo:core/Principal";
 
+import Nat "mo:core/Nat";
 import PT "mo:promtracker";
 import Http "mo:promtracker/mixins/http";
 
 import Enumeration "mo:stable-trie/Enumeration";
 
-persistent actor Main {
+actor Main {
 
   // ─── Storage ──────────────────────────────────────────────────────────
   //
@@ -44,17 +45,17 @@ persistent actor Main {
   });
 
   func encodePrincipal(p : Principal) : Blob {
-    let pb = Principal.toBlob(p);
+    let pb = p.toBlob();
     let n = pb.size();
     assert n <= 29;
-    Blob.fromArray(
+    (
       Array.tabulate<Nat8>(
         30,
         func(i) {
-          if (i == 0) Nat8.fromNat(n) else if (i <= n) pb[i - 1] else 0;
+          if (i == 0) n.toNat8() else if (i <= n) pb[i - 1] else 0;
         },
       )
-    );
+    ).toBlob();
   };
 
   // ─── Public API ───────────────────────────────────────────────────────

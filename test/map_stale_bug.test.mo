@@ -81,5 +81,5 @@ assert m.size() == 3;
 // no phantom path through the cleared slot. Without the fix, this assert
 // would fail (entries.size() == 4, size() == 3) because ("\80", "X") would
 // be yielded twice.
-let entries = Iter.toArray(m.entries());
+let entries = m.entries().toArray();
 assert entries.size() == m.size();

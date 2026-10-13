@@ -6,14 +6,14 @@
 // equality checks on memoryStats elsewhere in the suite.
 
 import Blob "mo:core/Blob";
-import Nat8 "mo:core/Nat8";
 import Nat_ "mo:core/Nat";
 
+import Array "mo:core/Array";
 import Map "../src/Map";
 
-func k4(i : Nat) : Blob = Blob.fromArray([
-  Nat8.fromNat(i % 256),
-  Nat8.fromNat((i / 256) % 256),
+func k4(i : Nat) : Blob = Array.toBlob([
+  (i % 256).toNat8(),
+  ((i / 256) % 256).toNat8(),
   0,
   0,
 ]);
@@ -72,7 +72,7 @@ do {
     ignore m.delete(k4(i));
   };
   let s3 = m.memoryStats();
-  assert s3.used_leaf_count == s2.used_leaf_count - 50;
+  assert s3.used_leaf_count == (s2.used_leaf_count - 50 : Nat);
   assert s3.total_leaf_count == s2.total_leaf_count; // high-water unchanged
   assert s3.nodes_region_pages == s2.nodes_region_pages;
   assert s3.leaves_region_pages == s2.leaves_region_pages;

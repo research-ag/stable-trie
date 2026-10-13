@@ -31,8 +31,9 @@
 
 import Iter "mo:core/Iter";
 import Blob "mo:core/Blob";
-import Nat8 "mo:core/Nat8";
 
+import Array "mo:core/Array";
+import Nat "mo:core/Nat";
 import Map "../src/Map";
 
 let m = Map.empty({
@@ -45,15 +46,15 @@ let m = Map.empty({
 
 // Helper: build an 8-byte key from (root-slot-prefix-byte, last-byte).
 // `prefix` is the first byte; bytes 1..6 are zero; `last` is byte 7.
-func key(prefix : Nat, last : Nat) : Blob = Blob.fromArray([
-  Nat8.fromNat(prefix),
+func key(prefix : Nat, last : Nat) : Blob = Array.toBlob([
+  prefix.toNat8(),
   0,
   0,
   0,
   0,
   0,
   0,
-  Nat8.fromNat(last),
+  last.toNat8(),
 ]);
 
 // Three root slots, derived from the top 2 bits of byte 0:
@@ -99,7 +100,7 @@ assert m.get(key(0x40, 0x01)) == null;
 // Iteration still yields exactly the 5 live entries in ascending key
 // order.
 do {
-  let entries = Iter.toArray(m.entries());
+  let entries = m.entries().toArray();
   assert entries.size() == 5;
   assert entries[0] == (key(0x00, 0x00), "a");
   assert entries[1] == (key(0x00, 0x01), "b");
@@ -135,7 +136,7 @@ assert m.get(key(0x40, 0x01)) == ?"f";
 
 // Final invariant: iteration matches the new live set.
 do {
-  let entries = Iter.toArray(m.entries());
+  let entries = m.entries().toArray();
   assert entries.size() == m.size();
   assert entries[0] == (key(0x00, 0x00), "a"); // `b` removed
   assert entries[1] == (key(0x40, 0x00), "e");

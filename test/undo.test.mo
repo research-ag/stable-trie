@@ -22,10 +22,10 @@ func genKeys(seed : Nat64, n : Nat, size : Nat) : [Blob] {
     func(i) {
       if (i % 2 == 0) {
         prev := Array.tabulate<Nat8>(size, func(_) = Nat8.fromIntWrap(rng.next().toNat()));
-        Blob.fromArray(prev);
+        prev.toBlob();
       } else {
         let t = rng.next().toNat() % size;
-        Blob.fromArray(Array.tabulate<Nat8>(size, func(j) = if (j < t) prev[j] else Nat8.fromIntWrap(rng.next().toNat())));
+        (Array.tabulate<Nat8>(size, func(j) = if (j < t) prev[j] else Nat8.fromIntWrap(rng.next().toNat()))).toBlob();
       };
     },
   );
@@ -66,10 +66,10 @@ let configs : [(Nat, Nat, ?Nat)] = [
 ];
 
 func entriesInOrder(t : StableTrie.Enumeration) : [Blob] {
-  Iter.toArray(Iter.map<(Blob, Blob), Blob>(t.entries(), func((k, _)) = k));
+  t.entries().map<(Blob, Blob), Blob>(func((k, _)) = k).toArray();
 };
 
-for ((pointer_size, aridity, root_aridity) in configs.vals()) {
+for ((pointer_size, aridity, root_aridity) in configs.values()) {
   let trie = StableTrie.empty({
     pointer_size;
     aridity;
@@ -209,14 +209,14 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
   // ---------- 6. interleaved add/undo: undo last, re-add a different key ----------
   do {
     let before = trie.memoryStats();
-    let last_idx = keys.size() - 1;
+    let last_idx : Nat = keys.size() - 1;
 
     assert trie.removeLast() == ?(keys[last_idx], raw_vals[last_idx]);
     assert trie.size() == last_idx;
 
     // After undo, the next add reclaims the same leaf index.
-    let new_key = Blob.fromArray(Array.tabulate<Nat8>(key_size, func(j) = Nat8.fromNat(j + 17)));
-    let new_val = Blob.fromArray(Array.tabulate<Nat8>(value_size, func(j) = Nat8.fromNat(j + 99)));
+    let new_key = (Array.tabulate<Nat8>(key_size, func(j) = (j + 17).toNat8())).toBlob();
+    let new_val = (Array.tabulate<Nat8>(value_size, func(j) = (j + 99).toNat8())).toBlob();
 
     // If the synthetic new_key happens to collide with an existing one, skip
     // this part (avoids a false negative on small key_size).
@@ -251,7 +251,7 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
     var i = 0;
     while (i < pop_n) {
       let cur_size = trie.size();
-      let last = cur_size - 1;
+      let last : Nat = cur_size - 1;
       switch (trie.removeLast()) {
         case (?(k, v)) {
           popped[i] := (k, v);
@@ -267,7 +267,7 @@ for ((pointer_size, aridity, root_aridity) in configs.vals()) {
     // Re-add them in original order. They get the same indices.
     i := 0;
     while (i < pop_n) {
-      let target_index = keys.size() - pop_n + i;
+      let target_index : Nat = keys.size() - pop_n + i;
       let (k, v) = popped[pop_n - 1 - i];
       assert trie.add(k, v) == target_index;
       i += 1;
@@ -319,7 +319,7 @@ do {
     };
     k := 0;
     while (k < half) {
-      let target = unique_ks.size() - half + k;
+      let target : Nat = unique_ks.size() - half + k;
       assert trie.add(unique_ks[target], vs[target]) == target;
       k += 1;
     };

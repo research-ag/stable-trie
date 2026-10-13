@@ -16,17 +16,20 @@ jobs:
         with:
           node-version: latest
       - uses: caffeinelabs/setup-mops@v1
-      - run: |
-          mops toolchain init
-          mops install
-      - run: mops test
-      - run: mops bench
+      - run: mops install --locked
+      - run: mops test --locked
+      - name: Make sure pocket-ic is installed
+        run: mops toolchain bin pocket-ic
+
+      - name: Make sure wasm-opt is installed
+        run: mops toolchain bin wasm-opt
+
+      - run: mops bench --locked
       - name: Build example canister
         working-directory: example
         run: |
-          mops toolchain init
-          mops install
-          mops build
+          mops install --locked
+          mops build --locked
 
   fmt:
     name: Formatting Check
