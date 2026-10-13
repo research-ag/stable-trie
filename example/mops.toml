@@ -4,7 +4,7 @@ main = "src/main.mo"
 [dependencies]
 stable-trie = "../"
 # Replace with:
-# stable-trie = "0.1.4"
+# stable-trie = "0.2.0"
 promtracker = "1.0.2"
 core = "2.6.2"
 

@@ -450,15 +450,15 @@ mops bench
 This is the benchmark to compare different versions of stable-trie.
 For comparison of stable-trie against other data structures see the section Comparisons above.
 
-From 0.1.3 to 0.1.4 the instruction counts went up by 5% (`Enumeration`) and 8%
+From 0.1.3 to 0.2.0 the instruction counts went up by 5% (`Enumeration`) and 8%
 (`Map`) because the measurement setup changed, not the code: moc 1.9.0 with
 legacy persistence (32-bit heap, copying GC) became moc 2.0.0 with enhanced
 orthogonal persistence (64-bit heap, incremental GC), measured with wasm-opt.
-The 0.1.3 code measured with the new setup costs the same as the 0.1.4 code.
+The 0.1.3 code measured with the new setup costs the same as the 0.2.0 code.
 The Heap table now shows each cell's allocation, which 0.1.3 reported in the
-Garbage Collection table. The benchmark files were renamed in 0.1.4
+Garbage Collection table. The benchmark files were renamed in 0.2.0
 (`main.bench.mo` to `enumeration.bench.mo`, `map.bench.mo` to
-`map-ops.bench.mo`), so mops.one does not compare 0.1.4 with 0.1.3.
+`map-ops.bench.mo`), so mops.one does not compare 0.2.0 with 0.1.3.
 
 ## Formatting
 
